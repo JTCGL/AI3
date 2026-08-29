@@ -5,6 +5,7 @@ project(AI3 VERSION 0.1.0 LANGUAGES CXX)
 include(FetchContent)
 
 option(AI3_TERMUX "Build for the Termux Unix userspace" OFF)
+option(AI3_BUILD_TESTS "Build AI3 tests" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,6 +25,13 @@ FetchContent_Declare(
     SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
     GIT_TAG a96677bdf6b4acb84af4ec294e5f60a4e8cbbe03
+    GIT_SHALLOW FALSE
+)
+
+FetchContent_Declare(
+    doctest
+    GIT_REPOSITORY https://github.com/doctest/doctest.git
+    GIT_TAG 1da23a3e8119ec5cce4f9388e91b065e20bf06f5
     GIT_SHALLOW FALSE
 )
 
@@ -58,8 +66,36 @@ target_include_directories(ai3_imgui PUBLIC
 )
 target_link_libraries(ai3_imgui PUBLIC SDL3::SDL3 ${AI3_GLES_LIBRARY})
 
-add_executable(ai3 src/main.cpp)
-target_link_libraries(ai3 PRIVATE ai3_imgui ${AI3_ANDROID_SHMEM_LIBRARY})
+add_library(ai3_options STATIC src/app/command_line.cpp)
+target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-enable_testing()
-add_test(NAME ai3_build_smoke COMMAND ${CMAKE_COMMAND} -E echo "AI3 application built successfully")
+add_executable(ai3
+    src/main.cpp
+    src/app/application.cpp
+    src/platform/sdl_gl_platform.cpp
+    src/ui/editor_ui.cpp
+    src/ui/imgui_layer.cpp
+)
+target_include_directories(ai3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(ai3 PRIVATE ai3_imgui ${AI3_ANDROID_SHMEM_LIBRARY})
+target_link_libraries(ai3 PRIVATE ai3_options)
+
+function(ai3_enable_warnings target)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endfunction()
+
+ai3_enable_warnings(ai3)
+ai3_enable_warnings(ai3_options)
+
+if(AI3_BUILD_TESTS)
+    FetchContent_MakeAvailable(doctest)
+    enable_testing()
+    add_executable(ai3_tests tests/command_line_test.cpp)
+    target_link_libraries(ai3_tests PRIVATE ai3_options doctest::doctest)
+    ai3_enable_warnings(ai3_tests)
+    add_test(NAME ai3_unit_tests COMMAND ai3_tests)
+    add_test(NAME ai3_smoke_test COMMAND ai3 --smoke-test)
+    set_tests_properties(ai3_smoke_test PROPERTIES LABELS display TIMEOUT 30)
+endif()

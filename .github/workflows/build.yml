@@ -24,4 +24,5 @@ jobs:
       - name: Configure, build, and test
         env:
           AI3_PRESET: linux-gcc-debug
-        run: bash scripts/check.sh
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a bash scripts/check.sh

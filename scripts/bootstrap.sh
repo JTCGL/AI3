@@ -5,14 +5,33 @@ log() {
     printf '[AI3 bootstrap] %s\n' "$*"
 }
 
+verify_commands() {
+    local missing=()
+    local command_name
+
+    for command_name in "$@"; do
+        if ! command -v "${command_name}" >/dev/null 2>&1; then
+            missing+=("${command_name}")
+        fi
+    done
+
+    if (( ${#missing[@]} > 0 )); then
+        printf 'AI3 bootstrap did not provide required commands: %s\n' "${missing[*]}" >&2
+        exit 1
+    fi
+}
+
 if [[ -n "${PREFIX:-}" && "${PREFIX}" == *"com.termux"* ]]; then
     log "Detected Termux."
     log "Enabling the Termux X11 package repository if necessary."
     pkg install -y x11-repo
 
     packages=(
+        bash
         clang
         cmake
+        coreutils
+        findutils
         ninja
         git
         pkg-config
@@ -29,6 +48,8 @@ if [[ -n "${PREFIX:-}" && "${PREFIX}" == *"com.termux"* ]]; then
     log "Installing/updating AI3 prerequisites: ${packages[*]}"
     pkg install -y "${packages[@]}"
 
+    # Termux ships clang-format in the clang package and ctest in cmake.
+    verify_commands bash clang clang-format cmake ctest find git ninja pkg-config sort
     log "Termux prerequisites are ready."
     exit 0
 fi
@@ -49,9 +70,11 @@ if command -v apt-get >/dev/null 2>&1; then
         ninja-build
         git
         pkg-config
+        clang-format
         libegl1-mesa-dev
         libgles2-mesa-dev
         xorg-dev
+        xvfb
     )
 
     log "Detected Debian/Ubuntu-style Linux."
