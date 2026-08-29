@@ -40,5 +40,6 @@ class EditorUi
     bool show_id_stack_ = false;
     bool show_about_ = false;
     bool show_ai3_diagnostics_ = false;
+    ObjectId scene_root_ = no_object;
 };
 } // namespace ai3

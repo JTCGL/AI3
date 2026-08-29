@@ -10,5 +10,7 @@ These instructions extend `src/AGENTS.md` and the repository root instructions.
 - Store orientations as `glm::quat`. Human-facing Euler values are degrees using intrinsic XYZ and must
   use the centralized scene conversion helpers.
 - The editor model remains the owner of object identity and authoritative transforms.
+- Procedural primitive meshes are derived from editor-owned semantic parameters and must never become
+  authoritative scene data.
 - Add only math and scene behavior required by an implemented editor feature; do not grow this layer into
   an ECS, asset system, or serialization framework.

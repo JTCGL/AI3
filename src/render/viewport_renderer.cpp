@@ -1,7 +1,7 @@
 #include "render/viewport_renderer.h"
 
-#include "scene/cube_mesh.h"
 #include "scene/scene_math.h"
+#include "scene/sphere_mesh.h"
 
 #include <GLES3/gl3.h>
 
@@ -125,7 +125,6 @@ ViewportRenderer::ViewportRenderer()
         if (mvp_location_ < 0 || model_location_ < 0)
             throw std::runtime_error("Viewport shader uniforms are unavailable");
 
-        const CubeMesh mesh = make_cube_mesh();
         glGenVertexArrays(1, &vertex_array_);
         glGenBuffers(1, &vertex_buffer_);
         glGenBuffers(1, &index_buffer_);
@@ -133,10 +132,7 @@ ViewportRenderer::ViewportRenderer()
             throw std::runtime_error("Viewport mesh resource creation failed");
         glBindVertexArray(vertex_array_);
         glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(mesh.vertices), mesh.vertices.data(), GL_STATIC_DRAW);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(mesh.indices), mesh.indices.data(),
-                     GL_STATIC_DRAW);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex),
                               reinterpret_cast<const void*>(offsetof(MeshVertex, position)));
@@ -245,15 +241,23 @@ void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camer
     const glm::mat4 view_projection = camera.projection_matrix(static_cast<float>(size_.width) /
                                                                static_cast<float>(size_.height)) *
                                       camera.view_matrix();
-    for (const SceneObject& object : scene.objects())
+    for (const SceneObject* object : scene.visible_spheres())
     {
-        if (!object.enabled || !object.visible || object.renderable != RenderableKind::cube)
-            continue;
-        const glm::mat4 model = compose_transform(object.transform);
+        const SphereMesh mesh = make_sphere_mesh(object->sphere.radius_meters);
+        glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
+        glBufferData(GL_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(mesh.vertices.size() * sizeof(MeshVertex)),
+                     mesh.vertices.data(), GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                     static_cast<GLsizeiptr>(mesh.indices.size() * sizeof(std::uint32_t)),
+                     mesh.indices.data(), GL_DYNAMIC_DRAW);
+        const glm::mat4 model = compose_transform(object->transform);
         const glm::mat4 mvp = view_projection * model;
         glUniformMatrix4fv(mvp_location_, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(model_location_, 1, GL_FALSE, glm::value_ptr(model));
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, nullptr);
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.indices.size()), GL_UNSIGNED_INT,
+                       nullptr);
     }
     glBindVertexArray(0);
     glUseProgram(0);

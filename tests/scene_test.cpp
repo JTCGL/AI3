@@ -1,10 +1,10 @@
 #include <doctest/doctest.h>
 
-#include "scene/cube_mesh.h"
 #include "scene/length_units.h"
 #include "scene/orbit_camera.h"
 #include "scene/render_target_size.h"
 #include "scene/scene_math.h"
+#include "scene/sphere_mesh.h"
 #include "scene/world_coordinates.h"
 
 #include <glm/geometric.hpp>
@@ -128,13 +128,35 @@ TEST_CASE("orbit camera uses Z as its stable up axis")
             CHECK(std::isfinite(view[column][row]));
 }
 
-TEST_CASE("procedural cube has complete indexed faces")
+TEST_CASE("procedural sphere is deterministic and has valid indexed geometry")
 {
-    const ai3::CubeMesh mesh = ai3::make_cube_mesh();
-    CHECK(mesh.vertices.size() == 24);
-    CHECK(mesh.indices.size() == 36);
-    for (std::uint16_t index : mesh.indices)
+    const ai3::SphereMesh mesh = ai3::make_sphere_mesh(1.0F);
+    const ai3::SphereMesh repeated = ai3::make_sphere_mesh(1.0F);
+    CHECK(mesh.vertices.size() == 425);
+    CHECK(mesh.indices.size() == 2304);
+    CHECK(repeated.indices == mesh.indices);
+    for (std::uint32_t index : mesh.indices)
         CHECK(index < mesh.vertices.size());
+    for (std::size_t index = 0; index < mesh.vertices.size(); ++index)
+    {
+        CHECK(glm::length(mesh.vertices[index].position) == doctest::Approx(1.0F));
+        CHECK(mesh.vertices[index].position.x ==
+              doctest::Approx(repeated.vertices[index].position.x));
+        CHECK(mesh.vertices[index].position.y ==
+              doctest::Approx(repeated.vertices[index].position.y));
+        CHECK(mesh.vertices[index].position.z ==
+              doctest::Approx(repeated.vertices[index].position.z));
+    }
+}
+
+TEST_CASE("sphere radius changes generated geometry bounds")
+{
+    const ai3::SphereMesh small = ai3::make_sphere_mesh(1.0F);
+    const ai3::SphereMesh large = ai3::make_sphere_mesh(2.5F);
+    REQUIRE(small.vertices.size() == large.vertices.size());
+    for (std::size_t index = 0; index < small.vertices.size(); ++index)
+        CHECK(glm::length(large.vertices[index].position) ==
+              doctest::Approx(glm::length(small.vertices[index].position) * 2.5F));
 }
 
 TEST_CASE("render target policy converts logical content to framebuffer pixels")

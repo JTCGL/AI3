@@ -72,15 +72,15 @@ The first scene vertical slice keeps four responsibilities distinct:
 
 - `editor` owns object identity, hierarchy, selection, visibility, and authoritative transforms without a
   display dependency;
-- `scene` owns GLM-backed transform composition, the orbit camera, procedural cube data, and framebuffer
+- `scene` owns GLM-backed transform composition, the orbit camera, procedural primitive data, and framebuffer
   sizing policy without ImGui or graphics APIs;
 - `render` owns the single concrete OpenGL ES 3 viewport renderer and its shader, mesh, and offscreen
   framebuffer resources;
 - `ui` presents the rendered texture and translates viewport-local mouse input into camera changes.
 
 The Viewport attachment follows the ImGui content region converted through the backend-provided framebuffer
-scale. It is resized only when the resulting pixel dimensions change. The existing cube object is the sole
-renderable and its editor-model transform drives its model matrix directly.
+scale. It is resized only when the resulting pixel dimensions change. Renderable objects and their semantic
+parameters are supplied by the editor model and each object transform drives its model matrix directly.
 
 This milestone intentionally defers object picking/manipulation, pan and fly controls, gizmos, lighting and
 material systems, asset loading, serialization, undo/redo, ECS, and a renderer abstraction. Orbit and zoom
@@ -96,3 +96,15 @@ Authoritative orientations are normalized `glm::quat` values. Human-facing rotat
 degrees using intrinsic XYZ rotations (local X, then local Y, then local Z), with positive angles following
 the right-hand rule. Quaternion/Euler conversion is centralized in scene math; an Euler result is one
 equivalent representation and is not assumed to be globally unique.
+
+## Object lifecycle and semantic primitives
+
+Scenes begin empty and create objects through the display-independent `EditorState` lifecycle API. Object
+IDs are stable, scene-owned, monotonically allocated identities and are not reused after deletion. Deleting
+a parent recursively deletes its descendants; selection is cleared when its object is in that subtree.
+
+The first semantic primitive is a sphere whose authoritative radius is stored in meters. Procedural vertex
+and index data is deterministic derived data in the headless scene layer. The UI edits radius through the
+active display-length conversion, while the concrete GLES3 renderer enumerates all enabled and visible
+spheres and generates geometry from their current semantic radii. Neither UI nor renderer owns object
+identity or primitive parameters.

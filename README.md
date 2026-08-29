@@ -28,7 +28,8 @@ localization, GLM, and unit-test targets, but does not define the graphical `ai3
 Run `../build/AI3/termux-clang-debug/ai3` on Termux or
 `../build/AI3/linux-gcc-debug/ai3` on desktop Linux. The application creates an
 SDL3-managed OpenGL ES 3 context and presents a docked editor shell with a Scene Graph,
-Viewport placeholder, Object Inspector, and Console. The View menu controls editor panels,
+rendered Viewport, Object Inspector, and Console. The Edit menu creates spheres and deletes the selected
+object; sphere radius is edited in the active display unit while remaining stored in meters. The View menu controls editor panels,
 the Window menu can restore the default layout and show AI3 scale/locale diagnostics. The Help menu switches
 between external English and Spanish UTF-8 locale resources at runtime, while stable internal window IDs
 preserve docking. Dear ImGui diagnostics remain available from Help.
@@ -53,9 +54,11 @@ linked statically as an application-owned FetchContent dependency.
 
 The application is divided into run-loop policy (`src/app`), project-owned editor state (`src/editor`),
 SDL/GLES ownership (`src/platform`), ImGui lifecycle and editor-shell drawing (`src/ui`), and a thin
-process entry point. The editor state is independent of ImGui and currently contains only dummy hierarchy,
-selection, panel, property, and console data. The Termux X11 rationale is recorded in
+process entry point. The editor state is independent of ImGui and owns object lifecycle, hierarchy,
+selection, primitive semantics, transforms, panel state, and console data. The Termux X11 rationale is recorded in
 [ADR 0001](docs/decisions/0001-termux-x11-backend.md).
 
 Core/domain targets are intentionally independent of SDL, Dear ImGui, and GLES. Platform, rendering, and UI
 targets may depend on those core targets; dependencies must not point back outward from core into graphics.
+Scene objects use stable monotonic IDs and public create/delete APIs, with recursive descendant deletion.
+Sphere parameters are semantic editor state; procedural meshes are derived in the headless scene layer.
