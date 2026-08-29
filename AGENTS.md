@@ -28,6 +28,15 @@ bash scripts/check.sh
 
 The same verification path should be used locally and by GitHub Actions wherever practical.
 
+### Termux resource safety
+- Keep the Termux build preset at one parallel job.
+- Run local build and verification commands serially in the foreground.
+- Do not leave background build, check, or CI polling processes running.
+- Do not use long-lived `gh --watch` commands from Termux.
+- After pushing a pull-request update, stop and leave CI monitoring to the user or reviewer unless
+  the user explicitly requests a separate CI check.
+- Preserve the normal GitHub Actions workflow; these constraints apply to local Termux agent work.
+
 ## Repository workflow
 - Treat main as the known-good branch.
 - Do substantial implementation on short-lived feature branches.

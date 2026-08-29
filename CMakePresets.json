@@ -42,7 +42,7 @@
     {
       "name": "termux-clang-debug",
       "configurePreset": "termux-clang-debug",
-      "jobs": 2
+      "jobs": 1
     },
     {
       "name": "linux-gcc-debug",

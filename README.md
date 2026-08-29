@@ -30,7 +30,7 @@ Termux's compiler still targets Android's Bionic environment, but SDL must selec
 its Unix/X11 backend rather than its Android application backend when AI3 runs
 through Termux:X11. The preset suppresses SDL's Android Activity conditionals,
 links Termux's shared-memory compatibility library, and disables non-X11 Unix
-video backends. The Termux build preset is limited to two parallel jobs. SDL is
+video backends. The Termux build preset is limited to one build job. SDL is
 linked statically as an application-owned FetchContent dependency.
 
 The application is divided into run-loop policy (`src/app`), project-owned editor state (`src/editor`),

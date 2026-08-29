@@ -29,13 +29,14 @@ void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
     ImGui::DockBuilderSetNodePos(dockspace_id, viewport.WorkPos);
     ImGui::DockBuilderSetNodeSize(dockspace_id, viewport.WorkSize);
 
-    ImGuiID center = dockspace_id;
+    ImGuiID upper = dockspace_id;
+    const ImGuiID bottom =
+        ImGui::DockBuilderSplitNode(upper, ImGuiDir_Down, 0.27F, nullptr, &upper);
+    ImGuiID center = upper;
     const ImGuiID left =
         ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.20F, nullptr, &center);
     const ImGuiID right =
         ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.24F, nullptr, &center);
-    const ImGuiID bottom =
-        ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.27F, nullptr, &center);
     ImGui::DockBuilderDockWindow("Scene Graph", left);
     ImGui::DockBuilderDockWindow("Viewport", center);
     ImGui::DockBuilderDockWindow("Object Inspector", right);

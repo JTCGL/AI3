@@ -83,7 +83,11 @@ void EditorState::add_console_message(std::string message)
 
 void EditorState::clear_console() { console_messages_.clear(); }
 
-void EditorState::request_layout_reset() { layout_reset_requested_ = true; }
+void EditorState::request_layout_reset()
+{
+    panel_visibility_.fill(true);
+    layout_reset_requested_ = true;
+}
 
 bool EditorState::consume_layout_reset_request()
 {

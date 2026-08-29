@@ -47,11 +47,20 @@ TEST_CASE("panel visibility and console behavior are explicit")
     CHECK(state.console_messages() == std::vector<std::string>{"test message"});
 }
 
-TEST_CASE("layout reset requests are consumed once")
+TEST_CASE("layout reset restores core panels and is consumed once")
 {
     ai3::EditorState state;
+    state.set_panel_visible(ai3::EditorPanel::scene_graph, false);
+    state.set_panel_visible(ai3::EditorPanel::viewport, false);
+    state.set_panel_visible(ai3::EditorPanel::object_inspector, false);
+    state.set_panel_visible(ai3::EditorPanel::console, false);
+
     CHECK_FALSE(state.consume_layout_reset_request());
     state.request_layout_reset();
+    CHECK(state.panel_visible(ai3::EditorPanel::scene_graph));
+    CHECK(state.panel_visible(ai3::EditorPanel::viewport));
+    CHECK(state.panel_visible(ai3::EditorPanel::object_inspector));
+    CHECK(state.panel_visible(ai3::EditorPanel::console));
     CHECK(state.consume_layout_reset_request());
     CHECK_FALSE(state.consume_layout_reset_request());
 }
