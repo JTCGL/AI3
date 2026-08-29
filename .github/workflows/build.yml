@@ -10,8 +10,26 @@ permissions:
   contents: read
 
 jobs:
-  linux-gcc:
-    name: Linux GCC Build
+  headless:
+    name: Headless Core
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install headless prerequisites
+        env:
+          AI3_BOOTSTRAP_HEADLESS: "1"
+        run: bash scripts/bootstrap.sh
+
+      - name: Configure, build, and test
+        env:
+          AI3_PRESET: headless-debug
+        run: bash scripts/check.sh
+
+  linux-gcc-graphical:
+    name: Linux GCC Graphical
     runs-on: ubuntu-latest
 
     steps:
