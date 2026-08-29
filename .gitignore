@@ -1,0 +1,12 @@
+# AI3 builds are intentionally out of tree.
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# Editors and local tooling.
+.vscode/
+.idea/
+*.swp
+*~
