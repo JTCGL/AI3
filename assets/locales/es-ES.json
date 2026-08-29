@@ -38,6 +38,9 @@
     "diagnostics.active_locale": "Configuración regional activa: {locale}",
     "diagnostics.content_scale": "Escala de contenido SDL: {scale}",
     "diagnostics.ui_scale": "Escala efectiva de la interfaz: {scale}",
-    "diagnostics.font": "Perfil / tamaño de fuente: {profile} / {size} px"
+    "diagnostics.font": "Perfil / tamaño de fuente: {profile} / {size} px",
+    "diagnostics.viewport_size": "Destino de renderizado de vista: {width} x {height} px",
+    "diagnostics.renderer_ready": "Renderizador de vista: listo",
+    "diagnostics.gl_info": "OpenGL ES: {description}"
   }
 }

@@ -1,6 +1,8 @@
 #pragma once
 #include "editor/editor_state.h"
 #include "localization/localization.h"
+#include "render/viewport_renderer.h"
+#include "scene/orbit_camera.h"
 
 #include <string>
 #include <string_view>
@@ -24,6 +26,8 @@ class EditorUi
     std::string window_title(std::string_view key, std::string_view stable_id) const;
 
     EditorState state_;
+    OrbitCamera camera_;
+    ViewportRenderer viewport_renderer_;
     Localization& localization_;
     float content_scale_ = 1.0F;
     float ui_scale_ = 1.0F;

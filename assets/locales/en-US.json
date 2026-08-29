@@ -38,6 +38,9 @@
     "diagnostics.active_locale": "Active locale: {locale}",
     "diagnostics.content_scale": "SDL content scale: {scale}",
     "diagnostics.ui_scale": "Effective UI scale: {scale}",
-    "diagnostics.font": "Font profile / size: {profile} / {size} px"
+    "diagnostics.font": "Font profile / size: {profile} / {size} px",
+    "diagnostics.viewport_size": "Viewport render target: {width} x {height} px",
+    "diagnostics.renderer_ready": "Viewport renderer: ready",
+    "diagnostics.gl_info": "OpenGL ES: {description}"
   }
 }

@@ -233,37 +233,24 @@ void EditorUi::draw_viewport()
     {
         const std::string title = window_title("panel.viewport", "ai3_viewport");
         ImGui::Begin(title.c_str(), &visible);
-        const SceneObject* selected = state_.find_object(state_.selection());
-        ImGui::TextUnformatted(localization_.text("viewport.heading").c_str());
-        const std::string selection =
-            selected == nullptr ? localization_.text("viewport.none") : selected->name;
-        const std::string selection_text =
-            localization_.format("viewport.selection", {{"selection", selection}});
-        ImGui::TextUnformatted(selection_text.c_str());
         const ImVec2 region = ImGui::GetContentRegionAvail();
-        const std::string width = decimal(region.x, 0);
-        const std::string height = decimal(region.y, 0);
-        const std::string available_text =
-            localization_.format("viewport.available", {{"width", width}, {"height", height}});
-        ImGui::TextUnformatted(available_text.c_str());
-
-        const ImVec2 top_left = ImGui::GetCursorScreenPos();
-        const ImVec2 bottom_right = {top_left.x + region.x,
-                                     top_left.y +
-                                         std::max(region.y - ImGui::GetTextLineHeight(), 1.0F)};
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRectFilled(top_left, bottom_right, IM_COL32(28, 31, 38, 255));
-        const float grid_step = 32.0F * ui_scale_;
-        for (float x = top_left.x; x < bottom_right.x; x += grid_step)
-            draw_list->AddLine({x, top_left.y}, {x, bottom_right.y}, IM_COL32(55, 59, 68, 255));
-        for (float y = top_left.y; y < bottom_right.y; y += grid_step)
-            draw_list->AddLine({top_left.x, y}, {bottom_right.x, y}, IM_COL32(55, 59, 68, 255));
-        const char* placeholder = localization_.text("viewport.deferred").c_str();
-        const ImVec2 text_size = ImGui::CalcTextSize(placeholder);
-        draw_list->AddText({(top_left.x + bottom_right.x - text_size.x) * 0.5F,
-                            (top_left.y + bottom_right.y - text_size.y) * 0.5F},
-                           IM_COL32(190, 194, 204, 255), placeholder);
-        ImGui::Dummy({region.x, std::max(region.y - ImGui::GetTextLineHeight(), 1.0F)});
+        if (region.x > 0.0F && region.y > 0.0F)
+        {
+            const ImVec2 framebuffer_scale = ImGui::GetIO().DisplayFramebufferScale;
+            const RenderTargetSize requested =
+                render_target_size(region.x, region.y, framebuffer_scale.x, framebuffer_scale.y);
+            viewport_renderer_.render(state_, camera_, requested);
+            ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
+                         {0.0F, 1.0F}, {1.0F, 0.0F});
+            if (ImGui::IsItemHovered())
+            {
+                ImGuiIO& io = ImGui::GetIO();
+                if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+                    camera_.orbit(io.MouseDelta.x * 0.25F, -io.MouseDelta.y * 0.25F);
+                if (io.MouseWheel != 0.0F)
+                    camera_.zoom(io.MouseWheel);
+            }
+        }
         ImGui::End();
     }
     state_.set_panel_visible(EditorPanel::viewport, visible);
@@ -330,6 +317,16 @@ void EditorUi::draw(bool& running)
         ImGui::TextUnformatted(content_scale.c_str());
         ImGui::TextUnformatted(ui_scale.c_str());
         ImGui::TextUnformatted(font.c_str());
+        const RenderTargetSize render_size = viewport_renderer_.size();
+        const std::string viewport_size = localization_.format(
+            "diagnostics.viewport_size", {{"width", std::to_string(render_size.width)},
+                                          {"height", std::to_string(render_size.height)}});
+        const std::string renderer_status = localization_.text("diagnostics.renderer_ready");
+        const std::string gl_info = localization_.format(
+            "diagnostics.gl_info", {{"description", viewport_renderer_.gl_description()}});
+        ImGui::TextUnformatted(viewport_size.c_str());
+        ImGui::TextUnformatted(renderer_status.c_str());
+        ImGui::TextUnformatted(gl_info.c_str());
         ImGui::End();
     }
 
