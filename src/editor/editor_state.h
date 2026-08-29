@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
 
 #include <array>
@@ -14,8 +15,9 @@ constexpr ObjectId no_object = 0;
 
 struct Transform
 {
+    // Positions are world-space meters. Orientations are canonical quaternions.
     glm::vec3 position{0.0F};
-    glm::vec3 rotation{0.0F};
+    glm::quat orientation{1.0F, 0.0F, 0.0F, 0.0F};
     glm::vec3 scale{1.0F};
 };
 

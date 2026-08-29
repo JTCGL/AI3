@@ -9,6 +9,7 @@
     "menu.window": "Ventana",
     "menu.help": "Ayuda",
     "menu.language": "Idioma",
+    "menu.display_units": "Unidades de visualización",
     "action.quit": "Salir",
     "action.reset_layout": "Restablecer disposición",
     "action.clear": "Limpiar",
@@ -27,6 +28,7 @@
     "inspector.visible": "Visible",
     "inspector.transform": "Transformación",
     "inspector.position": "Posición",
+    "inspector.position_with_unit": "Posición ({unit})",
     "inspector.rotation": "Rotación",
     "inspector.scale": "Escala",
     "viewport.heading": "Vista del editor AI3",
@@ -41,6 +43,13 @@
     "diagnostics.font": "Perfil / tamaño de fuente: {profile} / {size} px",
     "diagnostics.viewport_size": "Destino de renderizado de vista: {width} x {height} px",
     "diagnostics.renderer_ready": "Renderizador de vista: listo",
-    "diagnostics.gl_info": "OpenGL ES: {description}"
+    "diagnostics.gl_info": "OpenGL ES: {description}",
+    "diagnostics.world_coordinates": "Mundo: mano derecha, Z arriba (+X derecha, +Y adelante, +Z arriba)",
+    "diagnostics.canonical_length": "Unidad de longitud canónica: metro",
+    "diagnostics.display_length": "Unidad de longitud mostrada: {unit}",
+    "unit.millimeter": "Milímetros (mm)",
+    "unit.centimeter": "Centímetros (cm)",
+    "unit.meter": "Metros (m)",
+    "unit.kilometer": "Kilómetros (km)"
   }
 }

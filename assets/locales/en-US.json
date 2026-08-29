@@ -9,6 +9,7 @@
     "menu.window": "Window",
     "menu.help": "Help",
     "menu.language": "Language",
+    "menu.display_units": "Display Units",
     "action.quit": "Quit",
     "action.reset_layout": "Reset Layout",
     "action.clear": "Clear",
@@ -27,6 +28,7 @@
     "inspector.visible": "Visible",
     "inspector.transform": "Transform",
     "inspector.position": "Position",
+    "inspector.position_with_unit": "Position ({unit})",
     "inspector.rotation": "Rotation",
     "inspector.scale": "Scale",
     "viewport.heading": "AI3 Editor Viewport",
@@ -41,6 +43,13 @@
     "diagnostics.font": "Font profile / size: {profile} / {size} px",
     "diagnostics.viewport_size": "Viewport render target: {width} x {height} px",
     "diagnostics.renderer_ready": "Viewport renderer: ready",
-    "diagnostics.gl_info": "OpenGL ES: {description}"
+    "diagnostics.gl_info": "OpenGL ES: {description}",
+    "diagnostics.world_coordinates": "World: right-handed, Z-up (+X right, +Y forward, +Z up)",
+    "diagnostics.canonical_length": "Canonical length unit: meter",
+    "diagnostics.display_length": "Display length unit: {unit}",
+    "unit.millimeter": "Millimeters (mm)",
+    "unit.centimeter": "Centimeters (cm)",
+    "unit.meter": "Meters (m)",
+    "unit.kilometer": "Kilometers (km)"
   }
 }

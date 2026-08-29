@@ -1,6 +1,8 @@
 #include "ui/editor_ui.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "scene/length_units.h"
+#include "scene/scene_math.h"
 #include "ui/ui_identity.h"
 
 #include <glm/gtc/type_ptr.hpp>
@@ -21,6 +23,18 @@ struct PanelMenuEntry
     const char* stable_id;
     EditorPanel panel;
 };
+
+struct LengthUnitEntry
+{
+    LengthUnit unit;
+    const char* localization_key;
+};
+
+constexpr std::array<LengthUnitEntry, 4> length_unit_entries = {
+    {{LengthUnit::millimeter, "unit.millimeter"},
+     {LengthUnit::centimeter, "unit.centimeter"},
+     {LengthUnit::meter, "unit.meter"},
+     {LengthUnit::kilometer, "unit.kilometer"}}};
 
 constexpr std::array<PanelMenuEntry, 4> panel_menu_entries = {
     {{"panel.scene_graph", "ai3_scene_graph", EditorPanel::scene_graph},
@@ -99,6 +113,18 @@ void EditorUi::draw_main_menu(bool& running)
                 const std::string label = window_title(entry.key, entry.stable_id);
                 if (ImGui::MenuItem(label.c_str(), nullptr, &visible))
                     state_.set_panel_visible(entry.panel, visible);
+            }
+            ImGui::Separator();
+            if (ImGui::BeginMenu(localization_.text("menu.display_units").c_str()))
+            {
+                for (const LengthUnitEntry& entry : length_unit_entries)
+                {
+                    const bool selected = display_length_unit_ == entry.unit;
+                    if (ImGui::MenuItem(localization_.text(entry.localization_key).c_str(), nullptr,
+                                        selected))
+                        display_length_unit_ = entry.unit;
+                }
+                ImGui::EndMenu();
             }
             ImGui::EndMenu();
         }
@@ -211,16 +237,31 @@ void EditorUi::draw_object_inspector()
                 stable_imgui_label(localization_.text("inspector.transform"), "transform");
             if (ImGui::CollapsingHeader(transform_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
             {
-                const std::string position_label =
-                    stable_imgui_label(localization_.text("inspector.position"), "position");
+                const std::string position_text = localization_.format(
+                    "inspector.position_with_unit",
+                    {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+                const std::string position_label = stable_imgui_label(position_text, "position");
                 const std::string rotation_label =
                     stable_imgui_label(localization_.text("inspector.rotation"), "rotation");
                 const std::string scale_label =
                     stable_imgui_label(localization_.text("inspector.scale"), "scale");
-                ImGui::DragFloat3(position_label.c_str(),
-                                  glm::value_ptr(object->transform.position), 0.1F);
-                ImGui::DragFloat3(rotation_label.c_str(),
-                                  glm::value_ptr(object->transform.rotation), 0.5F);
+                glm::vec3 displayed_position{
+                    length_from_meters(object->transform.position.x, display_length_unit_),
+                    length_from_meters(object->transform.position.y, display_length_unit_),
+                    length_from_meters(object->transform.position.z, display_length_unit_)};
+                const float position_speed = length_from_meters(0.1F, display_length_unit_);
+                if (ImGui::DragFloat3(position_label.c_str(), glm::value_ptr(displayed_position),
+                                      position_speed))
+                    object->transform.position = {
+                        length_to_meters(displayed_position.x, display_length_unit_),
+                        length_to_meters(displayed_position.y, display_length_unit_),
+                        length_to_meters(displayed_position.z, display_length_unit_)};
+                glm::vec3 displayed_rotation =
+                    euler_degrees_from_orientation(object->transform.orientation);
+                if (ImGui::DragFloat3(rotation_label.c_str(), glm::value_ptr(displayed_rotation),
+                                      0.5F))
+                    object->transform.orientation =
+                        orientation_from_euler_degrees(displayed_rotation);
                 ImGui::DragFloat3(scale_label.c_str(), glm::value_ptr(object->transform.scale),
                                   0.05F, 0.01F, 100.0F);
             }
@@ -321,6 +362,12 @@ void EditorUi::draw(bool& running)
         ImGui::TextUnformatted(content_scale.c_str());
         ImGui::TextUnformatted(ui_scale.c_str());
         ImGui::TextUnformatted(font.c_str());
+        ImGui::TextUnformatted(localization_.text("diagnostics.world_coordinates").c_str());
+        ImGui::TextUnformatted(localization_.text("diagnostics.canonical_length").c_str());
+        const std::string display_unit =
+            localization_.format("diagnostics.display_length",
+                                 {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+        ImGui::TextUnformatted(display_unit.c_str());
         const RenderTargetSize render_size = viewport_renderer_.size();
         const std::string viewport_size = localization_.format(
             "diagnostics.viewport_size", {{"width", std::to_string(render_size.width)},

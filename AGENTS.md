@@ -36,6 +36,16 @@ Do not introduce desktop OpenGL, Vulkan, GLAD, a renderer abstraction, or multi-
 - Avoid fixed pixel measurements in editor UI code when a scaled logical value or content-region measurement is appropriate.
 - DPI behavior must not break persisted docking layouts or make localization depend on a specific display scale.
 
+## Spatial conventions
+- AI3 world space is right-handed: +X is right, +Y is forward, and +Z is up.
+- Scene lengths are stored in meters. Display-unit conversion must not change stored scene values.
+- Store authoritative orientations as `glm::quat`; human-facing Euler angles use degrees and the
+  documented intrinsic XYZ convention.
+- Positive rotations follow the right-hand rule. Centralize quaternion/Euler conversion rather than
+  scattering angle conversions through scene or UI code.
+- Convert external coordinate systems and units at import/export boundaries; do not alter AI3's internal
+  convention.
+
 ## Build and dependency policy
 - Use CMake and Ninja.
 - Keep all builds out of the source tree.
