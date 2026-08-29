@@ -18,6 +18,7 @@ if [[ -n "${PREFIX:-}" && "${PREFIX}" == *"com.termux"* ]]; then
         pkg-config
         mesa
         mesa-dev
+        libandroid-shmem
         libx11
         libxext
         libxrandr
