@@ -1,4 +1,6 @@
 #pragma once
+#include "editor/editor_state.h"
+
 namespace ai3
 {
 class EditorUi
@@ -7,7 +9,14 @@ class EditorUi
     void draw(bool& running);
 
     private:
-    bool show_hello_ = true;
+    void draw_main_menu(bool& running);
+    void draw_scene_graph();
+    void draw_scene_node(ObjectId id);
+    void draw_viewport();
+    void draw_object_inspector();
+    void draw_console();
+
+    EditorState state_;
     bool show_demo_ = false;
     bool show_metrics_ = false;
     bool show_debug_log_ = false;

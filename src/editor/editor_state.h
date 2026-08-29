@@ -1,0 +1,72 @@
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+namespace ai3
+{
+using ObjectId = std::uint32_t;
+constexpr ObjectId no_object = 0;
+
+struct Transform
+{
+    std::array<float, 3> position = {0.0F, 0.0F, 0.0F};
+    std::array<float, 3> rotation = {0.0F, 0.0F, 0.0F};
+    std::array<float, 3> scale = {1.0F, 1.0F, 1.0F};
+};
+
+struct SceneObject
+{
+    ObjectId id = no_object;
+    ObjectId parent = no_object;
+    std::string name;
+    std::string type;
+    bool enabled = true;
+    bool visible = true;
+    Transform transform;
+};
+
+enum class EditorPanel : std::size_t
+{
+    scene_graph,
+    viewport,
+    object_inspector,
+    console,
+    count
+};
+
+class EditorState
+{
+    public:
+    EditorState();
+
+    const std::vector<SceneObject>& objects() const;
+    SceneObject* find_object(ObjectId id);
+    const SceneObject* find_object(ObjectId id) const;
+    std::vector<ObjectId> children_of(ObjectId parent) const;
+
+    ObjectId selection() const;
+    bool select(ObjectId id);
+    void clear_selection();
+
+    bool panel_visible(EditorPanel panel) const;
+    void set_panel_visible(EditorPanel panel, bool visible);
+
+    const std::vector<std::string>& console_messages() const;
+    void add_console_message(std::string message);
+    void clear_console();
+
+    void request_layout_reset();
+    bool consume_layout_reset_request();
+
+    private:
+    std::vector<SceneObject> objects_;
+    ObjectId selection_ = no_object;
+    std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,
+                                                                                        true, true};
+    std::vector<std::string> console_messages_;
+    bool layout_reset_requested_ = false;
+};
+} // namespace ai3

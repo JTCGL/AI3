@@ -69,6 +69,9 @@ target_link_libraries(ai3_imgui PUBLIC SDL3::SDL3 ${AI3_GLES_LIBRARY})
 add_library(ai3_options STATIC src/app/command_line.cpp)
 target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+add_library(ai3_editor STATIC src/editor/editor_state.cpp)
+target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
 add_executable(ai3
     src/main.cpp
     src/app/application.cpp
@@ -78,7 +81,7 @@ add_executable(ai3
 )
 target_include_directories(ai3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3 PRIVATE ai3_imgui ${AI3_ANDROID_SHMEM_LIBRARY})
-target_link_libraries(ai3 PRIVATE ai3_options)
+target_link_libraries(ai3 PRIVATE ai3_options ai3_editor)
 
 function(ai3_enable_warnings target)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -88,12 +91,13 @@ endfunction()
 
 ai3_enable_warnings(ai3)
 ai3_enable_warnings(ai3_options)
+ai3_enable_warnings(ai3_editor)
 
 if(AI3_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
     enable_testing()
-    add_executable(ai3_tests tests/command_line_test.cpp)
-    target_link_libraries(ai3_tests PRIVATE ai3_options doctest::doctest)
+    add_executable(ai3_tests tests/command_line_test.cpp tests/editor_state_test.cpp)
+    target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor doctest::doctest)
     ai3_enable_warnings(ai3_tests)
     add_test(NAME ai3_unit_tests COMMAND ai3_tests)
     add_test(NAME ai3_smoke_test COMMAND ai3 --smoke-test)
