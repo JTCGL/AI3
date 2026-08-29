@@ -10,6 +10,14 @@ AI3 is a C++17 application project. Phase one targets:
 
 Do not introduce desktop OpenGL, Vulkan, GLAD, a renderer abstraction, or multi-viewport support unless the project requirements are explicitly changed.
 
+## Scope discipline
+- Implement only functionality explicitly requested by the current task, issue, or approved follow-up.
+- Do not anticipate later milestones or add optional features merely because they appear useful.
+- Treat language such as "optional", "desirable", "nice to have", or "if useful" as deferred unless the user explicitly approves that work for the current milestone.
+- When future architecture is obvious but not yet specified, add only the minimum seam required by the current task and leave later behavior unimplemented.
+- If completing the requested work appears to require broader functionality, stop and surface that dependency instead of silently expanding scope.
+- Existing provisional behavior from earlier milestones may be replaced later when its dedicated design milestone arrives; do not harden provisional choices into permanent architecture without explicit approval.
+
 ## User-facing text and localization
 - All new user-facing editor text must go through the project localization/string system once that system exists.
 - Do not introduce new hard-coded user-facing labels directly in ImGui widgets except while implementing or testing the localization layer itself.
