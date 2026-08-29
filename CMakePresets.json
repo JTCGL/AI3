@@ -20,7 +20,14 @@
       "name": "termux-clang-debug",
       "inherits": "base-debug",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "clang++"
+        "AI3_TERMUX": "ON",
+        "CMAKE_C_FLAGS": "-U__ANDROID__",
+        "CMAKE_CXX_FLAGS": "-U__ANDROID__",
+        "CMAKE_SYSTEM_NAME": "Linux",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "SDL_KMSDRM": "OFF",
+        "SDL_WAYLAND": "OFF",
+        "SDL_X11": "ON"
       }
     },
     {
@@ -34,7 +41,8 @@
   "buildPresets": [
     {
       "name": "termux-clang-debug",
-      "configurePreset": "termux-clang-debug"
+      "configurePreset": "termux-clang-debug",
+      "jobs": 2
     },
     {
       "name": "linux-gcc-debug",
