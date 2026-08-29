@@ -1,0 +1,27 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  linux-gcc:
+    name: Linux GCC Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install host prerequisites
+        run: bash scripts/bootstrap.sh
+
+      - name: Configure, build, and test
+        env:
+          AI3_PRESET: linux-gcc-debug
+        run: bash scripts/check.sh
