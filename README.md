@@ -1,6 +1,7 @@
 # AI3
 
-AI3 is a C++ project targeting OpenGL ES 3 through SDL3, with Dear ImGui (docking branch) for the user interface.
+AI3 is a C++ project targeting OpenGL ES 3 through SDL3, with Dear ImGui (docking branch) for the user
+interface and GLM as its canonical vector and matrix math library.
 
 The initial supported build targets are:
 

@@ -12,6 +12,7 @@
 - C++17
 - CMake
 - Ninja
+- GLM fetched by CMake as the canonical vector and matrix math library
 - SDL3 fetched by CMake
 - Dear ImGui docking branch lineage fetched by CMake
 - Dear ImGui SDL3 platform backend
@@ -67,8 +68,8 @@ The first scene vertical slice keeps four responsibilities distinct:
 
 - `editor` owns object identity, hierarchy, selection, visibility, and authoritative transforms without a
   display dependency;
-- `scene` owns the small math, orbit camera, procedural cube data, and framebuffer sizing policy without
-  ImGui or graphics APIs;
+- `scene` owns GLM-backed transform composition, the orbit camera, procedural cube data, and framebuffer
+  sizing policy without ImGui or graphics APIs;
 - `render` owns the single concrete OpenGL ES 3 viewport renderer and its shader, mesh, and offscreen
   framebuffer resources;
 - `ui` presents the rendered texture and translates viewport-local mouse input into camera changes.

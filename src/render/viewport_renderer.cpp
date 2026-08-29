@@ -5,6 +5,8 @@
 
 #include <GLES3/gl3.h>
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include <cstddef>
 #include <stdexcept>
 #include <string>
@@ -240,18 +242,17 @@ void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camer
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(program_);
     glBindVertexArray(vertex_array_);
-    const Mat4 view_projection =
-        multiply(camera.projection_matrix(static_cast<float>(size_.width) /
-                                          static_cast<float>(size_.height)),
-                 camera.view_matrix());
+    const glm::mat4 view_projection = camera.projection_matrix(static_cast<float>(size_.width) /
+                                                               static_cast<float>(size_.height)) *
+                                      camera.view_matrix();
     for (const SceneObject& object : scene.objects())
     {
         if (!object.enabled || !object.visible || object.renderable != RenderableKind::cube)
             continue;
-        const Mat4 model = compose_transform(object.transform);
-        const Mat4 mvp = multiply(view_projection, model);
-        glUniformMatrix4fv(mvp_location_, 1, GL_FALSE, mvp.data());
-        glUniformMatrix4fv(model_location_, 1, GL_FALSE, model.data());
+        const glm::mat4 model = compose_transform(object.transform);
+        const glm::mat4 mvp = view_projection * model;
+        glUniformMatrix4fv(mvp_location_, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniformMatrix4fv(model_location_, 1, GL_FALSE, glm::value_ptr(model));
         glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, nullptr);
     }
     glBindVertexArray(0);

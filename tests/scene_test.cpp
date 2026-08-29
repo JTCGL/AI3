@@ -5,14 +5,15 @@
 #include "scene/render_target_size.h"
 #include "scene/scene_math.h"
 
+#include <glm/vec4.hpp>
+
 TEST_CASE("transform composition applies scale rotation and translation")
 {
     ai3::Transform transform;
     transform.position = {3.0F, 4.0F, 5.0F};
     transform.rotation = {0.0F, 0.0F, 90.0F};
     transform.scale = {2.0F, 1.0F, 1.0F};
-    const ai3::Vec3 point =
-        ai3::transform_point(ai3::compose_transform(transform), {1.0F, 0.0F, 0.0F});
+    const glm::vec3 point{ai3::compose_transform(transform) * glm::vec4{1.0F, 0.0F, 0.0F, 1.0F}};
     CHECK(point.x == doctest::Approx(3.0F));
     CHECK(point.y == doctest::Approx(6.0F));
     CHECK(point.z == doctest::Approx(5.0F));
@@ -28,9 +29,15 @@ TEST_CASE("orbit camera clamps interaction and produces finite matrices")
     CHECK(camera.distance() == doctest::Approx(1.5F));
     camera.zoom(-100.0F);
     CHECK(camera.distance() == doctest::Approx(30.0F));
-    const ai3::Mat4 projection = camera.projection_matrix(16.0F / 9.0F);
-    CHECK(projection.values[0] > 0.0F);
-    CHECK(projection.values[5] > projection.values[0]);
+    const glm::vec3 camera_in_view_space{camera.view_matrix() * glm::vec4{camera.position(), 1.0F}};
+    CHECK(camera_in_view_space.x == doctest::Approx(0.0F).epsilon(0.0001));
+    CHECK(camera_in_view_space.y == doctest::Approx(0.0F).epsilon(0.0001));
+    CHECK(camera_in_view_space.z == doctest::Approx(0.0F).epsilon(0.0001));
+    const glm::vec3 target_in_view_space{camera.view_matrix() * glm::vec4{0.0F, 0.0F, 0.0F, 1.0F}};
+    CHECK(target_in_view_space.z == doctest::Approx(-30.0F).epsilon(0.0001));
+    const glm::mat4 projection = camera.projection_matrix(16.0F / 9.0F);
+    CHECK(projection[0][0] > 0.0F);
+    CHECK(projection[1][1] > projection[0][0]);
 }
 
 TEST_CASE("procedural cube has complete indexed faces")
