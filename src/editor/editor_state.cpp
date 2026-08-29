@@ -19,8 +19,8 @@ EditorState::EditorState()
                 {7, 5, "Child B", "Mesh", true, true, {}, RenderableKind::none}}),
       console_messages_({{"console.initialized", {}}, {"console.ready", {}}})
 {
-    objects_[1].transform.position = {0.0F, 2.0F, 5.0F};
-    objects_[2].transform.position = {2.0F, 4.0F, 1.0F};
+    objects_[1].transform.position = {0.0F, 5.0F, 2.0F};
+    objects_[2].transform.position = {2.0F, 1.0F, 4.0F};
 }
 
 const std::vector<SceneObject>& EditorState::objects() const { return objects_; }

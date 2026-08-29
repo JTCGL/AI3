@@ -81,3 +81,14 @@ renderable and its editor-model transform drives its model matrix directly.
 This milestone intentionally defers object picking/manipulation, pan and fly controls, gizmos, lighting and
 material systems, asset loading, serialization, undo/redo, ECS, and a renderer abstraction. Orbit and zoom
 are the only direct viewport interactions.
+
+## Spatial foundation
+
+AI3 uses a right-handed, Z-up world: +X is right, +Y is forward, and +Z is up. Scene lengths are stored in
+meters. The editor defaults to meters and can present millimeters, centimeters, meters, or kilometers
+without rescaling stored data.
+
+Authoritative orientations are normalized `glm::quat` values. Human-facing rotation values are Euler
+degrees using intrinsic XYZ rotations (local X, then local Y, then local Z), with positive angles following
+the right-hand rule. Quaternion/Euler conversion is centralized in scene math; an Euler result is one
+equivalent representation and is not assumed to be globally unique.

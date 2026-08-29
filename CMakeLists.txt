@@ -86,6 +86,7 @@ target_link_libraries(ai3_editor PUBLIC glm::glm)
 
 add_library(ai3_scene STATIC
     src/scene/cube_mesh.cpp
+    src/scene/length_units.cpp
     src/scene/orbit_camera.cpp
     src/scene/render_target_size.cpp
     src/scene/scene_math.cpp

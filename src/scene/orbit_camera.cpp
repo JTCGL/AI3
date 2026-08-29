@@ -1,5 +1,7 @@
 #include "scene/orbit_camera.h"
 
+#include "scene/world_coordinates.h"
+
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/trigonometric.hpp>
@@ -14,14 +16,11 @@ glm::vec3 OrbitCamera::position() const
     const float yaw = glm::radians(yaw_degrees_);
     const float pitch = glm::radians(pitch_degrees_);
     const float horizontal_distance = distance_ * std::cos(pitch);
-    return target_ + glm::vec3{horizontal_distance * std::sin(yaw), distance_ * std::sin(pitch),
-                               horizontal_distance * std::cos(yaw)};
+    return target_ + glm::vec3{horizontal_distance * std::sin(yaw),
+                               -horizontal_distance * std::cos(yaw), distance_ * std::sin(pitch)};
 }
 
-glm::mat4 OrbitCamera::view_matrix() const
-{
-    return glm::lookAt(position(), target_, {0.0F, 1.0F, 0.0F});
-}
+glm::mat4 OrbitCamera::view_matrix() const { return glm::lookAt(position(), target_, world_up); }
 
 glm::mat4 OrbitCamera::projection_matrix(float aspect_ratio) const
 {

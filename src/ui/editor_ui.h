@@ -2,6 +2,7 @@
 #include "editor/editor_state.h"
 #include "localization/localization.h"
 #include "render/viewport_renderer.h"
+#include "scene/length_units.h"
 #include "scene/orbit_camera.h"
 
 #include <string>
@@ -29,6 +30,7 @@ class EditorUi
     OrbitCamera camera_;
     ViewportRenderer viewport_renderer_;
     Localization& localization_;
+    LengthUnit display_length_unit_ = default_display_length_unit;
     float content_scale_ = 1.0F;
     float ui_scale_ = 1.0F;
     float font_size_ = 16.0F;
