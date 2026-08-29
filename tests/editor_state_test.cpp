@@ -14,7 +14,8 @@ TEST_CASE("dummy scene hierarchy supports lookup and selection")
     CHECK(state.select(4));
     CHECK(state.selection() == 4);
     CHECK(state.console_messages().size() == initial_messages + 1);
-    CHECK(state.console_messages().back() == "Selected Cube.");
+    CHECK(state.console_messages().back().key == "console.selected");
+    CHECK(state.console_messages().back().argument == "Cube");
     CHECK_FALSE(state.select(4));
     CHECK_FALSE(state.select(999));
     CHECK(state.console_messages().size() == initial_messages + 1);
@@ -43,8 +44,10 @@ TEST_CASE("panel visibility and console behavior are explicit")
     CHECK_FALSE(state.console_messages().empty());
     state.clear_console();
     CHECK(state.console_messages().empty());
-    state.add_console_message("test message");
-    CHECK(state.console_messages() == std::vector<std::string>{"test message"});
+    state.add_console_message("test.message", "argument");
+    REQUIRE(state.console_messages().size() == 1);
+    CHECK(state.console_messages()[0].key == "test.message");
+    CHECK(state.console_messages()[0].argument == "argument");
 }
 
 TEST_CASE("layout reset restores core panels and is consumed once")

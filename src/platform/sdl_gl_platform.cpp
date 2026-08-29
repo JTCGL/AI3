@@ -70,4 +70,11 @@ void SdlGlPlatform::swap_window() const
     if (!SDL_GL_SwapWindow(window_))
         throw SdlError("SDL_GL_SwapWindow failed");
 }
+float SdlGlPlatform::display_scale() const
+{
+    const float scale = SDL_GetWindowDisplayScale(window_);
+    if (scale <= 0.0F)
+        throw SdlError("SDL_GetWindowDisplayScale failed");
+    return scale;
+}
 } // namespace ai3

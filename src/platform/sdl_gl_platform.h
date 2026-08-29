@@ -18,6 +18,7 @@ class SdlGlPlatform
     SdlGlPlatform& operator=(const SdlGlPlatform&) = delete;
     SDL_Window* window() const { return window_; }
     SDL_GLContext gl_context() const { return gl_context_; }
+    float display_scale() const;
     void swap_window() const;
 
     private:

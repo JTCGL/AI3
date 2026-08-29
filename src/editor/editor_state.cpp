@@ -17,7 +17,7 @@ EditorState::EditorState()
                 {5, 1, "Group", "Group", true, true, {}},
                 {6, 5, "Child A", "Mesh", true, true, {}},
                 {7, 5, "Child B", "Mesh", true, true, {}}}),
-      console_messages_({"AI3 editor initialized.", "Editor shell is ready."})
+      console_messages_({{"console.initialized", {}}, {"console.ready", {}}})
 {
     objects_[1].transform.position = {0.0F, 2.0F, 5.0F};
     objects_[2].transform.position = {2.0F, 4.0F, 1.0F};
@@ -58,7 +58,7 @@ bool EditorState::select(ObjectId id)
     if (object == nullptr || selection_ == id)
         return false;
     selection_ = id;
-    add_console_message("Selected " + object->name + ".");
+    add_console_message("console.selected", object->name);
     return true;
 }
 
@@ -74,11 +74,14 @@ void EditorState::set_panel_visible(EditorPanel panel, bool visible)
     panel_visibility_.at(panel_index(panel)) = visible;
 }
 
-const std::vector<std::string>& EditorState::console_messages() const { return console_messages_; }
-
-void EditorState::add_console_message(std::string message)
+const std::vector<ConsoleMessage>& EditorState::console_messages() const
 {
-    console_messages_.push_back(std::move(message));
+    return console_messages_;
+}
+
+void EditorState::add_console_message(std::string key, std::string argument)
+{
+    console_messages_.push_back({std::move(key), std::move(argument)});
 }
 
 void EditorState::clear_console() { console_messages_.clear(); }
