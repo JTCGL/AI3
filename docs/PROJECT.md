@@ -45,3 +45,18 @@ Viewport placeholder, Object Inspector, and Console from that shared state. Dock
 first-use or explicit reset operation; normal Dear ImGui `.ini` persistence owns later user arrangements.
 
 Scene rendering, ECS, serialization, undo/redo, asset management, and plugin frameworks remain deferred.
+
+## Localization and DPI foundation
+
+The next editor-wide infrastructure milestone establishes:
+- external UTF-8 locale resources,
+- stable localization keys with English fallback,
+- runtime locale switching,
+- a clear separation between translation capability and font-glyph coverage,
+- SDL3-driven DPI/content-scale awareness,
+- scale-aware Dear ImGui fonts and style metrics,
+- stable docking/window identities across both language and DPI changes.
+
+Initial glyph coverage may remain Latin-focused, but the localization architecture must not assume ASCII or
+prevent later Cyrillic/CJK font profiles. Font-atlas rebuilding or font replacement for larger glyph sets is
+a separate concern from string lookup and locale switching.
