@@ -14,6 +14,17 @@ Configure, build, and test with the preset for your platform:
 bash scripts/check.sh
 ```
 
+The canonical display-independent configuration needs no SDL, Dear ImGui, EGL/GLES, X11, or Wayland
+development packages:
+
+```sh
+AI3_PRESET=headless-debug bash scripts/check.sh
+```
+
+Equivalently, run `cmake --preset headless-debug`, `cmake --build --preset headless-debug`, and
+`ctest --preset headless-debug`. This configuration builds the options, editor model, scene/math, units,
+localization, GLM, and unit-test targets, but does not define the graphical `ai3` executable or smoke test.
+
 Run `../build/AI3/termux-clang-debug/ai3` on Termux or
 `../build/AI3/linux-gcc-debug/ai3` on desktop Linux. The application creates an
 SDL3-managed OpenGL ES 3 context and presents a docked editor shell with a Scene Graph,
@@ -45,3 +56,6 @@ SDL/GLES ownership (`src/platform`), ImGui lifecycle and editor-shell drawing (`
 process entry point. The editor state is independent of ImGui and currently contains only dummy hierarchy,
 selection, panel, property, and console data. The Termux X11 rationale is recorded in
 [ADR 0001](docs/decisions/0001-termux-x11-backend.md).
+
+Core/domain targets are intentionally independent of SDL, Dear ImGui, and GLES. Platform, rendering, and UI
+targets may depend on those core targets; dependencies must not point back outward from core into graphics.

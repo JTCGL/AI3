@@ -36,6 +36,13 @@
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "g++"
       }
+    },
+    {
+      "name": "headless-debug",
+      "inherits": "base-debug",
+      "cacheVariables": {
+        "AI3_HEADLESS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -47,6 +54,11 @@
     {
       "name": "linux-gcc-debug",
       "configurePreset": "linux-gcc-debug"
+    },
+    {
+      "name": "headless-debug",
+      "configurePreset": "headless-debug",
+      "jobs": 1
     }
   ],
   "testPresets": [
@@ -60,6 +72,13 @@
     {
       "name": "linux-gcc-debug",
       "configurePreset": "linux-gcc-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "headless-debug",
+      "configurePreset": "headless-debug",
       "output": {
         "outputOnFailure": true
       }

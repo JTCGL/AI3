@@ -22,6 +22,10 @@
 
 ## Build policy
 Build directories must live outside the source tree. CMake presets define the canonical developer configurations.
+`headless-debug` is the canonical core configuration and builds all display-independent libraries and tests
+without fetching SDL or Dear ImGui, discovering EGL/GLES, or defining the graphical executable. Core/domain
+targets must remain independent of SDL, Dear ImGui, and GLES; platform, rendering, and UI layers depend inward
+on them. Pure feature logic belongs in headless-testable targets whenever practical.
 
 ## First application milestone
 The first real application feature must:

@@ -56,6 +56,10 @@ Do not introduce desktop OpenGL, Vulkan, GLAD, a renderer abstraction, or multi-
 - Compile imgui_demo.cpp so the Dear ImGui demo and diagnostic windows remain available.
 - Prefer system EGL/GLES headers and libraries; do not vendor generated GL loaders for GLES3.
 - Do not vendor SDL3 or Dear ImGui source into this repository.
+- Keep core/domain targets buildable and testable without SDL, Dear ImGui, EGL/GLES, or a display system.
+- UI, render, and platform layers may depend inward on core/domain layers; core/domain layers must not
+  depend outward on SDL, Dear ImGui, or GLES. Place pure feature logic in headless-testable targets whenever
+  practical.
 
 ## Verification
 Before declaring work complete, run:
