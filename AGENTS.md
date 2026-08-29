@@ -40,6 +40,8 @@ Do not introduce desktop OpenGL, Vulkan, GLAD, a renderer abstraction, or multi-
 - Use CMake and Ninja.
 - Keep all builds out of the source tree.
 - Use CMake FetchContent for SDL3 and Dear ImGui.
+- Use GLM as the canonical library for vectors, matrices, transforms, projections, and view math.
+- Allow compiler/toolchain-selected SIMD baselines; do not force ISA flags or use `-march=native`.
 - Pin third-party dependencies to known-good immutable revisions. Dear ImGui must come from docking-branch lineage.
 - Compile imgui_demo.cpp so the Dear ImGui demo and diagnostic windows remain available.
 - Prefer system EGL/GLES headers and libraries; do not vendor generated GL loaders for GLES3.

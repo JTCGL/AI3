@@ -3,6 +3,8 @@
 #include "imgui_internal.h"
 #include "ui/ui_identity.h"
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -215,10 +217,12 @@ void EditorUi::draw_object_inspector()
                     stable_imgui_label(localization_.text("inspector.rotation"), "rotation");
                 const std::string scale_label =
                     stable_imgui_label(localization_.text("inspector.scale"), "scale");
-                ImGui::DragFloat3(position_label.c_str(), object->transform.position.data(), 0.1F);
-                ImGui::DragFloat3(rotation_label.c_str(), object->transform.rotation.data(), 0.5F);
-                ImGui::DragFloat3(scale_label.c_str(), object->transform.scale.data(), 0.05F, 0.01F,
-                                  100.0F);
+                ImGui::DragFloat3(position_label.c_str(),
+                                  glm::value_ptr(object->transform.position), 0.1F);
+                ImGui::DragFloat3(rotation_label.c_str(),
+                                  glm::value_ptr(object->transform.rotation), 0.5F);
+                ImGui::DragFloat3(scale_label.c_str(), glm::value_ptr(object->transform.scale),
+                                  0.05F, 0.01F, 100.0F);
             }
         }
         ImGui::End();

@@ -21,6 +21,10 @@ set(SDL_OPENGL OFF CACHE BOOL "" FORCE)
 set(SDL_OPENGLES ON CACHE BOOL "" FORCE)
 set(SDL_VULKAN OFF CACHE BOOL "" FORCE)
 
+set(GLM_BUILD_LIBRARY OFF CACHE BOOL "" FORCE)
+set(GLM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLM_BUILD_INSTALL OFF CACHE BOOL "" FORCE)
+
 FetchContent_Declare(
     SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -35,6 +39,13 @@ FetchContent_Declare(
     GIT_SHALLOW FALSE
 )
 
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 8d1fd52e5ab5590e2c81768ace50c72bae28f2ed
+    GIT_SHALLOW FALSE
+)
+
 # This immutable revision is from Dear ImGui's docking branch.
 FetchContent_Declare(
     imgui
@@ -43,7 +54,7 @@ FetchContent_Declare(
     GIT_SHALLOW FALSE
 )
 
-FetchContent_MakeAvailable(SDL3 imgui)
+FetchContent_MakeAvailable(SDL3 glm imgui)
 
 find_library(AI3_GLES_LIBRARY NAMES GLESv3 GLESv2 REQUIRED)
 if(AI3_TERMUX)
@@ -71,6 +82,7 @@ target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_library(ai3_editor STATIC src/editor/editor_state.cpp)
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(ai3_editor PUBLIC glm::glm)
 
 add_library(ai3_scene STATIC
     src/scene/cube_mesh.cpp

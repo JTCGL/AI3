@@ -1,31 +1,31 @@
 #include "scene/orbit_camera.h"
 
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/trigonometric.hpp>
+
 #include <algorithm>
 #include <cmath>
 
 namespace ai3
 {
-namespace
+glm::vec3 OrbitCamera::position() const
 {
-constexpr float pi = 3.14159265358979323846F;
-float radians(float degrees) { return degrees * pi / 180.0F; }
-} // namespace
-
-Vec3 OrbitCamera::position() const
-{
-    const float yaw = radians(yaw_degrees_);
-    const float pitch = radians(pitch_degrees_);
+    const float yaw = glm::radians(yaw_degrees_);
+    const float pitch = glm::radians(pitch_degrees_);
     const float horizontal_distance = distance_ * std::cos(pitch);
-    return {target_.x + horizontal_distance * std::sin(yaw),
-            target_.y + distance_ * std::sin(pitch),
-            target_.z + horizontal_distance * std::cos(yaw)};
+    return target_ + glm::vec3{horizontal_distance * std::sin(yaw), distance_ * std::sin(pitch),
+                               horizontal_distance * std::cos(yaw)};
 }
 
-Mat4 OrbitCamera::view_matrix() const { return look_at(position(), target_, {0.0F, 1.0F, 0.0F}); }
-
-Mat4 OrbitCamera::projection_matrix(float aspect_ratio) const
+glm::mat4 OrbitCamera::view_matrix() const
 {
-    return perspective(radians(50.0F), aspect_ratio, 0.1F, 100.0F);
+    return glm::lookAt(position(), target_, {0.0F, 1.0F, 0.0F});
+}
+
+glm::mat4 OrbitCamera::projection_matrix(float aspect_ratio) const
+{
+    return glm::perspective(glm::radians(50.0F), aspect_ratio, 0.1F, 100.0F);
 }
 
 void OrbitCamera::orbit(float yaw_delta_degrees, float pitch_delta_degrees)
