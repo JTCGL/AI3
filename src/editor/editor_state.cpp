@@ -10,13 +10,13 @@ std::size_t panel_index(EditorPanel panel) { return static_cast<std::size_t>(pan
 } // namespace
 
 EditorState::EditorState()
-    : objects_({{1, no_object, "Scene", "Scene", true, true, {}},
-                {2, 1, "Camera", "Camera", true, true, {}},
-                {3, 1, "Light", "Light", true, true, {}},
-                {4, 1, "Cube", "Mesh", true, true, {}},
-                {5, 1, "Group", "Group", true, true, {}},
-                {6, 5, "Child A", "Mesh", true, true, {}},
-                {7, 5, "Child B", "Mesh", true, true, {}}}),
+    : objects_({{1, no_object, "Scene", "Scene", true, true, {}, RenderableKind::none},
+                {2, 1, "Camera", "Camera", true, true, {}, RenderableKind::none},
+                {3, 1, "Light", "Light", true, true, {}, RenderableKind::none},
+                {4, 1, "Cube", "Mesh", true, true, {}, RenderableKind::cube},
+                {5, 1, "Group", "Group", true, true, {}, RenderableKind::none},
+                {6, 5, "Child A", "Mesh", true, true, {}, RenderableKind::none},
+                {7, 5, "Child B", "Mesh", true, true, {}, RenderableKind::none}}),
       console_messages_({{"console.initialized", {}}, {"console.ready", {}}})
 {
     objects_[1].transform.position = {0.0F, 2.0F, 5.0F};

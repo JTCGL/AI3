@@ -72,6 +72,15 @@ target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_library(ai3_editor STATIC src/editor/editor_state.cpp)
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+add_library(ai3_scene STATIC
+    src/scene/cube_mesh.cpp
+    src/scene/orbit_camera.cpp
+    src/scene/render_target_size.cpp
+    src/scene/scene_math.cpp
+)
+target_include_directories(ai3_scene PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(ai3_scene PUBLIC ai3_editor)
+
 add_library(ai3_localization STATIC
     src/localization/localization.cpp
     src/localization/resource_locator.cpp
@@ -85,12 +94,13 @@ add_executable(ai3
     src/main.cpp
     src/app/application.cpp
     src/platform/sdl_gl_platform.cpp
+    src/render/viewport_renderer.cpp
     src/ui/editor_ui.cpp
     src/ui/imgui_layer.cpp
 )
 target_include_directories(ai3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3 PRIVATE ai3_imgui ${AI3_ANDROID_SHMEM_LIBRARY})
-target_link_libraries(ai3 PRIVATE ai3_options ai3_editor)
+target_link_libraries(ai3 PRIVATE ai3_options ai3_editor ai3_scene)
 target_link_libraries(ai3 PRIVATE ai3_localization)
 
 add_custom_target(ai3_resources ALL
@@ -109,6 +119,7 @@ endfunction()
 ai3_enable_warnings(ai3)
 ai3_enable_warnings(ai3_options)
 ai3_enable_warnings(ai3_editor)
+ai3_enable_warnings(ai3_scene)
 ai3_enable_warnings(ai3_localization)
 
 if(AI3_BUILD_TESTS)
@@ -118,9 +129,10 @@ if(AI3_BUILD_TESTS)
         tests/command_line_test.cpp
         tests/editor_state_test.cpp
         tests/localization_test.cpp
+        tests/scene_test.cpp
         tests/ui_identity_test.cpp
     )
-    target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor ai3_localization doctest::doctest)
+    target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor ai3_scene ai3_localization doctest::doctest)
     ai3_enable_warnings(ai3_tests)
     add_test(NAME ai3_unit_tests COMMAND ai3_tests)
     add_test(NAME ai3_resource_copy_test

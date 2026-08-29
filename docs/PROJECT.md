@@ -60,3 +60,23 @@ The next editor-wide infrastructure milestone establishes:
 Initial glyph coverage may remain Latin-focused, but the localization architecture must not assume ASCII or
 prevent later Cyrillic/CJK font profiles. Font-atlas rebuilding or font replacement for larger glyph sets is
 a separate concern from string lookup and locale switching.
+
+## Basic interactive scene milestone
+
+The first scene vertical slice keeps four responsibilities distinct:
+
+- `editor` owns object identity, hierarchy, selection, visibility, and authoritative transforms without a
+  display dependency;
+- `scene` owns the small math, orbit camera, procedural cube data, and framebuffer sizing policy without
+  ImGui or graphics APIs;
+- `render` owns the single concrete OpenGL ES 3 viewport renderer and its shader, mesh, and offscreen
+  framebuffer resources;
+- `ui` presents the rendered texture and translates viewport-local mouse input into camera changes.
+
+The Viewport attachment follows the ImGui content region converted through the backend-provided framebuffer
+scale. It is resized only when the resulting pixel dimensions change. The existing cube object is the sole
+renderable and its editor-model transform drives its model matrix directly.
+
+This milestone intentionally defers object picking/manipulation, pan and fly controls, gizmos, lighting and
+material systems, asset loading, serialization, undo/redo, ECS, and a renderer abstraction. Orbit and zoom
+are the only direct viewport interactions.

@@ -7,6 +7,7 @@ TEST_CASE("dummy scene hierarchy supports lookup and selection")
     ai3::EditorState state;
     REQUIRE(state.find_object(4) != nullptr);
     CHECK(state.find_object(4)->name == "Cube");
+    CHECK(state.find_object(4)->renderable == ai3::RenderableKind::cube);
     CHECK(state.children_of(ai3::no_object) == std::vector<ai3::ObjectId>{1});
     CHECK(state.children_of(5) == std::vector<ai3::ObjectId>{6, 7});
 

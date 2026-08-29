@@ -6,3 +6,5 @@ These instructions extend `src/AGENTS.md` and the repository root instructions.
 - Model only behavior required by the current editor milestone; do not introduce ECS, persistence,
   undo/redo, asset, or plugin abstractions.
 - Keep dummy scene data explicit and deterministic so it can be tested without a display.
+- Keep object identity, hierarchy, selection, renderable classification, and authoritative transforms here;
+  renderers may consume this state but must not duplicate it.

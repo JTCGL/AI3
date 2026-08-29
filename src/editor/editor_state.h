@@ -17,6 +17,12 @@ struct Transform
     std::array<float, 3> scale = {1.0F, 1.0F, 1.0F};
 };
 
+enum class RenderableKind
+{
+    none,
+    cube
+};
+
 struct SceneObject
 {
     ObjectId id = no_object;
@@ -26,6 +32,7 @@ struct SceneObject
     bool enabled = true;
     bool visible = true;
     Transform transform;
+    RenderableKind renderable = RenderableKind::none;
 };
 
 struct ConsoleMessage
