@@ -49,9 +49,11 @@ if command -v apt-get >/dev/null 2>&1; then
         ninja-build
         git
         pkg-config
+        clang-format
         libegl1-mesa-dev
         libgles2-mesa-dev
         xorg-dev
+        xvfb
     )
 
     log "Detected Debian/Ubuntu-style Linux."

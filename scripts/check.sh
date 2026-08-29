@@ -11,6 +11,12 @@ fi
 
 printf '[AI3 check] Using preset: %s\n' "${preset}"
 
+bash scripts/format.sh --check
 cmake --preset "${preset}"
 cmake --build --preset "${preset}"
-ctest --preset "${preset}"
+if [[ -n "${DISPLAY:-}" ]]; then
+    ctest --preset "${preset}"
+else
+    printf '[AI3 check] DISPLAY is unset; running display-independent tests only.\n'
+    ctest --preset "${preset}" --exclude-regex ai3_smoke_test
+fi
