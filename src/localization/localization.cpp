@@ -80,9 +80,16 @@ class JsonReader
             output.push_back(static_cast<char>(0xc0 | (codepoint >> 6)));
             output.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
         }
-        else
+        else if (codepoint <= 0xffff)
         {
             output.push_back(static_cast<char>(0xe0 | (codepoint >> 12)));
+            output.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+            output.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+        }
+        else
+        {
+            output.push_back(static_cast<char>(0xf0 | (codepoint >> 18)));
+            output.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3f)));
             output.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
             output.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
         }
@@ -151,8 +158,24 @@ class JsonReader
                 result.push_back('\t');
                 break;
             case 'u':
-                append_utf8(result, read_hex4());
+            {
+                unsigned codepoint = read_hex4();
+                if (codepoint >= 0xd800 && codepoint <= 0xdbff)
+                {
+                    if (position_ + 2 > input_.size() || input_[position_] != '\\' ||
+                        input_[position_ + 1] != 'u')
+                        fail("high surrogate without low surrogate");
+                    position_ += 2;
+                    const unsigned low = read_hex4();
+                    if (low < 0xdc00 || low > 0xdfff)
+                        fail("high surrogate without low surrogate");
+                    codepoint = 0x10000 + ((codepoint - 0xd800) << 10) + (low - 0xdc00);
+                }
+                else if (codepoint >= 0xdc00 && codepoint <= 0xdfff)
+                    fail("lone low surrogate");
+                append_utf8(result, codepoint);
                 break;
+            }
             default:
                 fail("invalid JSON escape");
             }
@@ -212,6 +235,11 @@ Localization::Localization(std::filesystem::path locale_directory)
     }
     std::sort(locales_.begin(), locales_.end(), [](const LocaleData& left, const LocaleData& right)
               { return left.info.id < right.info.id; });
+    for (std::size_t index = 1; index < locales_.size(); ++index)
+    {
+        if (locales_[index - 1].info.id == locales_[index].info.id)
+            throw std::runtime_error("duplicate locale ID: " + locales_[index].info.id);
+    }
     for (const LocaleData& locale : locales_)
         locale_info_.push_back(locale.info);
     fallback_ = find_locale("en-US");
@@ -264,6 +292,49 @@ const std::string& Localization::text(std::string_view key) const
         return fallback_value->second;
     const std::string key_string(key);
     return missing_keys_.try_emplace(key_string, "[missing: " + key_string + "]").first->second;
+}
+
+std::string Localization::format(std::string_view key, FormatArguments arguments) const
+{
+    const std::string& pattern = text(key);
+    std::string result;
+    result.reserve(pattern.size());
+    for (std::size_t position = 0; position < pattern.size();)
+    {
+        if (pattern[position] == '{')
+        {
+            if (position + 1 < pattern.size() && pattern[position + 1] == '{')
+            {
+                result.push_back('{');
+                position += 2;
+                continue;
+            }
+            const std::size_t close = pattern.find('}', position + 1);
+            if (close == std::string::npos || close == position + 1)
+                return "[format error: " + std::string(key) + "]";
+            const std::string_view placeholder(pattern.data() + position + 1, close - position - 1);
+            const auto argument =
+                std::find_if(arguments.begin(), arguments.end(),
+                             [&](const auto& candidate) { return candidate.first == placeholder; });
+            if (argument == arguments.end())
+                return "[format error: " + std::string(key) + "]";
+            result.append(argument->second);
+            position = close + 1;
+            continue;
+        }
+        if (pattern[position] == '}')
+        {
+            if (position + 1 < pattern.size() && pattern[position + 1] == '}')
+            {
+                result.push_back('}');
+                position += 2;
+                continue;
+            }
+            return "[format error: " + std::string(key) + "]";
+        }
+        result.push_back(pattern[position++]);
+    }
+    return result;
 }
 
 const std::string& Localization::active_locale() const { return active_->info.id; }

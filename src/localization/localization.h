@@ -1,9 +1,11 @@
 #pragma once
 
 #include <filesystem>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace ai3
@@ -18,6 +20,8 @@ struct LocaleInfo
 class Localization
 {
     public:
+    using FormatArguments = std::initializer_list<std::pair<std::string_view, std::string_view>>;
+
     struct LocaleData
     {
         LocaleInfo info;
@@ -28,6 +32,7 @@ class Localization
 
     bool set_locale(std::string_view locale, std::string* error = nullptr);
     const std::string& text(std::string_view key) const;
+    std::string format(std::string_view key, FormatArguments arguments) const;
     const std::string& active_locale() const;
     const std::string& font_profile() const;
     const std::vector<LocaleInfo>& available_locales() const;

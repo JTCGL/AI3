@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <array>
 #include <cstdio>
+#include <iomanip>
+#include <sstream>
 
 namespace ai3
 {
@@ -23,6 +25,13 @@ constexpr std::array<PanelMenuEntry, 4> panel_menu_entries = {
      {"panel.viewport", "ai3_viewport", EditorPanel::viewport},
      {"panel.object_inspector", "ai3_object_inspector", EditorPanel::object_inspector},
      {"panel.console", "ai3_console", EditorPanel::console}}};
+
+std::string decimal(float value, int precision)
+{
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(precision) << value;
+    return stream.str();
+}
 
 void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
 {
@@ -186,7 +195,9 @@ void EditorUi::draw_object_inspector()
                 stable_imgui_label(localization_.text("inspector.name"), "inspector_name");
             if (ImGui::InputText(name_label.c_str(), name, sizeof(name)))
                 object->name = name;
-            ImGui::Text(localization_.text("inspector.type").c_str(), object->type.c_str());
+            const std::string type_text =
+                localization_.format("inspector.type", {{"type", object->type}});
+            ImGui::TextUnformatted(type_text.c_str());
             const std::string enabled_label =
                 stable_imgui_label(localization_.text("inspector.enabled"), "inspector_enabled");
             ImGui::Checkbox(enabled_label.c_str(), &object->enabled);
@@ -224,11 +235,17 @@ void EditorUi::draw_viewport()
         ImGui::Begin(title.c_str(), &visible);
         const SceneObject* selected = state_.find_object(state_.selection());
         ImGui::TextUnformatted(localization_.text("viewport.heading").c_str());
-        ImGui::Text(localization_.text("viewport.selection").c_str(),
-                    selected == nullptr ? localization_.text("viewport.none").c_str()
-                                        : selected->name.c_str());
+        const std::string selection =
+            selected == nullptr ? localization_.text("viewport.none") : selected->name;
+        const std::string selection_text =
+            localization_.format("viewport.selection", {{"selection", selection}});
+        ImGui::TextUnformatted(selection_text.c_str());
         const ImVec2 region = ImGui::GetContentRegionAvail();
-        ImGui::Text(localization_.text("viewport.available").c_str(), region.x, region.y);
+        const std::string width = decimal(region.x, 0);
+        const std::string height = decimal(region.y, 0);
+        const std::string available_text =
+            localization_.format("viewport.available", {{"width", width}, {"height", height}});
+        ImGui::TextUnformatted(available_text.c_str());
 
         const ImVec2 top_left = ImGui::GetCursorScreenPos();
         const ImVec2 bottom_right = {top_left.x + region.x,
@@ -268,7 +285,11 @@ void EditorUi::draw_console()
             if (message.argument.empty())
                 ImGui::TextUnformatted(localization_.text(message.key).c_str());
             else
-                ImGui::Text(localization_.text(message.key).c_str(), message.argument.c_str());
+            {
+                const std::string text =
+                    localization_.format(message.key, {{"object", message.argument}});
+                ImGui::TextUnformatted(text.c_str());
+            }
         }
         ImGui::EndChild();
         ImGui::End();
@@ -296,12 +317,19 @@ void EditorUi::draw(bool& running)
     {
         const std::string title = window_title("diagnostics.title", "ai3_diagnostics");
         ImGui::Begin(title.c_str(), &show_ai3_diagnostics_);
-        ImGui::Text(localization_.text("diagnostics.active_locale").c_str(),
-                    localization_.active_locale().c_str());
-        ImGui::Text(localization_.text("diagnostics.content_scale").c_str(), content_scale_);
-        ImGui::Text(localization_.text("diagnostics.ui_scale").c_str(), ui_scale_);
-        ImGui::Text(localization_.text("diagnostics.font").c_str(),
-                    localization_.font_profile().c_str(), font_size_);
+        const std::string active_locale = localization_.format(
+            "diagnostics.active_locale", {{"locale", localization_.active_locale()}});
+        const std::string content_scale = localization_.format(
+            "diagnostics.content_scale", {{"scale", decimal(content_scale_, 2)}});
+        const std::string ui_scale =
+            localization_.format("diagnostics.ui_scale", {{"scale", decimal(ui_scale_, 2)}});
+        const std::string font =
+            localization_.format("diagnostics.font", {{"profile", localization_.font_profile()},
+                                                      {"size", decimal(font_size_, 1)}});
+        ImGui::TextUnformatted(active_locale.c_str());
+        ImGui::TextUnformatted(content_scale.c_str());
+        ImGui::TextUnformatted(ui_scale.c_str());
+        ImGui::TextUnformatted(font.c_str());
         ImGui::End();
     }
 

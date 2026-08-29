@@ -32,7 +32,12 @@ int TemporaryLocales::sequence_ = 0;
 
 const char* english = R"({
   "locale":"en-US", "name":"English", "font_profile":"latin",
-  "strings":{"greeting":"Hello", "fallback":"English fallback", "utf8":"café"}
+  "strings":{
+    "greeting":"Hello", "fallback":"English fallback", "utf8":"café",
+    "welcome":"Hello, {name}!", "escaped":"Use {{name}}", "unclosed":"Bad {name",
+    "empty":"Bad {}", "unknown":"Bad {missing}", "stray":"Bad } brace",
+    "supplementary":"\uD83D\uDE00"
+  }
 })";
 } // namespace
 
@@ -52,6 +57,28 @@ TEST_CASE("locale files load UTF-8 strings and switch at runtime")
     CHECK(localization.text("greeting") == "Hola");
     CHECK(localization.text("utf8") == "acción");
     CHECK(localization.text("fallback") == "English fallback");
+}
+
+TEST_CASE("named interpolation never exposes translation strings as printf formats")
+{
+    TemporaryLocales files;
+    files.write("en-US.json", english);
+    ai3::Localization localization(files.path());
+
+    CHECK(localization.format("welcome", {{"name", "AI3"}}) == "Hello, AI3!");
+    CHECK(localization.format("escaped", {}) == "Use {name}");
+    CHECK(localization.format("unclosed", {{"name", "AI3"}}) == "[format error: unclosed]");
+    CHECK(localization.format("empty", {}) == "[format error: empty]");
+    CHECK(localization.format("unknown", {{"name", "AI3"}}) == "[format error: unknown]");
+    CHECK(localization.format("stray", {}) == "[format error: stray]");
+}
+
+TEST_CASE("JSON Unicode escapes combine valid surrogate pairs")
+{
+    TemporaryLocales files;
+    files.write("en-US.json", english);
+    ai3::Localization localization(files.path());
+    CHECK(localization.text("supplementary") == "\xF0\x9F\x98\x80");
 }
 
 TEST_CASE("unknown locales and keys fail visibly without changing locale")
@@ -78,6 +105,28 @@ TEST_CASE("malformed and incomplete locale resources are rejected")
         R"({"locale":"es-ES","name":"Español","font_profile":"latin","strings":{"a":"b"}})");
     CHECK_THROWS_WITH(ai3::Localization(no_fallback.path()),
                       "required fallback locale en-US is missing");
+}
+
+TEST_CASE("JSON Unicode escapes reject lone surrogates")
+{
+    for (const char* escaped : {"\\uD83D", "\\uDE00", "\\uD83D\\u0041"})
+    {
+        TemporaryLocales files;
+        files.write(
+            "en-US.json",
+            std::string(
+                R"({"locale":"en-US","name":"English","font_profile":"latin","strings":{"bad":")") +
+                escaped + R"("}})");
+        CHECK_THROWS_AS(ai3::Localization(files.path()), std::runtime_error);
+    }
+}
+
+TEST_CASE("duplicate locale IDs are rejected")
+{
+    TemporaryLocales files;
+    files.write("one.json", english);
+    files.write("two.json", english);
+    CHECK_THROWS_WITH(ai3::Localization(files.path()), "duplicate locale ID: en-US");
 }
 
 TEST_CASE("resource paths prefer assets beside the executable")

@@ -93,11 +93,12 @@ target_link_libraries(ai3 PRIVATE ai3_imgui ${AI3_ANDROID_SHMEM_LIBRARY})
 target_link_libraries(ai3 PRIVATE ai3_options ai3_editor)
 target_link_libraries(ai3 PRIVATE ai3_localization)
 
-add_custom_command(TARGET ai3 POST_BUILD
+add_custom_target(ai3_resources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_CURRENT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:ai3>/assets
     COMMENT "Copying AI3 runtime resources"
 )
+add_dependencies(ai3 ai3_resources)
 
 function(ai3_enable_warnings target)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -122,6 +123,12 @@ if(AI3_BUILD_TESTS)
     target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor ai3_localization doctest::doctest)
     ai3_enable_warnings(ai3_tests)
     add_test(NAME ai3_unit_tests COMMAND ai3_tests)
+    add_test(NAME ai3_resource_copy_test
+        COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_ASSETS=${CMAKE_CURRENT_SOURCE_DIR}/assets
+            -DBUILT_ASSETS=$<TARGET_FILE_DIR:ai3>/assets
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/resource_copy_test.cmake
+    )
     add_test(NAME ai3_smoke_test COMMAND ai3 --smoke-test)
     set_tests_properties(ai3_smoke_test PROPERTIES LABELS display TIMEOUT 30)
 endif()
