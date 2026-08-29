@@ -36,3 +36,12 @@ The first real application feature must:
 10. Pass the repository verification command and GitHub CI.
 
 Desktop OpenGL, Vulkan, renderer abstraction, and ImGui multi-viewport support are explicitly deferred.
+
+## Editor shell milestone
+
+The visible editor shell adds a project-owned, display-independent state model for a fixed dummy scene,
+selection, object properties, panel visibility, and console messages. Dear ImGui draws the Scene Graph,
+Viewport placeholder, Object Inspector, and Console from that shared state. Dock layout construction is a
+first-use or explicit reset operation; normal Dear ImGui `.ini` persistence owns later user arrangements.
+
+Scene rendering, ECS, serialization, undo/redo, asset management, and plugin frameworks remain deferred.

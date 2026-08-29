@@ -15,8 +15,10 @@ bash scripts/check.sh
 
 Run `../build/AI3/termux-clang-debug/ai3` on Termux or
 `../build/AI3/linux-gcc-debug/ai3` on desktop Linux. The application creates an
-SDL3-managed OpenGL ES 3 context and provides a dockspace, a Hello World window,
-and menu access to Dear ImGui demo and diagnostic windows.
+SDL3-managed OpenGL ES 3 context and presents a docked editor shell with a Scene Graph,
+Viewport placeholder, Object Inspector, and Console. The View menu controls editor panels,
+the Window menu can restore the default layout, and Dear ImGui diagnostics remain available
+from Help.
 
 Run `ai3 --smoke-test` with a reachable X server to initialize the real SDL/GLES/ImGui stack, render three
 hidden frames, and exit. `scripts/check.sh` runs this integration test when `DISPLAY` is set and always runs
@@ -31,6 +33,8 @@ links Termux's shared-memory compatibility library, and disables non-X11 Unix
 video backends. The Termux build preset is limited to two parallel jobs. SDL is
 linked statically as an application-owned FetchContent dependency.
 
-The application is divided into run-loop policy (`src/app`), SDL/GLES ownership (`src/platform`), ImGui
-lifecycle and editor-shell drawing (`src/ui`), and a thin process entry point. The Termux X11 rationale is
-recorded in [ADR 0001](docs/decisions/0001-termux-x11-backend.md).
+The application is divided into run-loop policy (`src/app`), project-owned editor state (`src/editor`),
+SDL/GLES ownership (`src/platform`), ImGui lifecycle and editor-shell drawing (`src/ui`), and a thin
+process entry point. The editor state is independent of ImGui and currently contains only dummy hierarchy,
+selection, panel, property, and console data. The Termux X11 rationale is recorded in
+[ADR 0001](docs/decisions/0001-termux-x11-backend.md).
