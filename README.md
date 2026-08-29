@@ -17,8 +17,14 @@ Run `../build/AI3/termux-clang-debug/ai3` on Termux or
 `../build/AI3/linux-gcc-debug/ai3` on desktop Linux. The application creates an
 SDL3-managed OpenGL ES 3 context and presents a docked editor shell with a Scene Graph,
 Viewport placeholder, Object Inspector, and Console. The View menu controls editor panels,
-the Window menu can restore the default layout, and Dear ImGui diagnostics remain available
-from Help.
+the Window menu can restore the default layout and show AI3 scale/locale diagnostics. The Help menu switches
+between external English and Spanish UTF-8 locale resources at runtime, while stable internal window IDs
+preserve docking. Dear ImGui diagnostics remain available from Help.
+
+SDL3 window display scale drives font-atlas size, ImGui style metrics, and deliberate editor drawing metrics.
+Scale changes are applied at runtime. The current embedded font uses a Latin-focused profile; UTF-8 translation
+support is intentionally independent from broader future glyph/font coverage. Locale selection is not yet
+persisted because the project does not otherwise have a settings system. See [ADR 0002](docs/decisions/0002-localization-and-ui-scale.md).
 
 Run `ai3 --smoke-test` with a reachable X server to initialize the real SDL/GLES/ImGui stack, render three
 hidden frames, and exit. `scripts/check.sh` runs this integration test when `DISPLAY` is set and always runs

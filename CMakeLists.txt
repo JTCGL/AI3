@@ -72,6 +72,15 @@ target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_library(ai3_editor STATIC src/editor/editor_state.cpp)
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+add_library(ai3_localization STATIC
+    src/localization/localization.cpp
+    src/localization/resource_locator.cpp
+)
+target_include_directories(ai3_localization PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_definitions(ai3_localization PRIVATE
+    AI3_SOURCE_RESOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
+)
+
 add_executable(ai3
     src/main.cpp
     src/app/application.cpp
@@ -82,6 +91,14 @@ add_executable(ai3
 target_include_directories(ai3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3 PRIVATE ai3_imgui ${AI3_ANDROID_SHMEM_LIBRARY})
 target_link_libraries(ai3 PRIVATE ai3_options ai3_editor)
+target_link_libraries(ai3 PRIVATE ai3_localization)
+
+add_custom_target(ai3_resources ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets $<TARGET_FILE_DIR:ai3>/assets
+    COMMENT "Copying AI3 runtime resources"
+)
+add_dependencies(ai3 ai3_resources)
 
 function(ai3_enable_warnings target)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -92,14 +109,26 @@ endfunction()
 ai3_enable_warnings(ai3)
 ai3_enable_warnings(ai3_options)
 ai3_enable_warnings(ai3_editor)
+ai3_enable_warnings(ai3_localization)
 
 if(AI3_BUILD_TESTS)
     FetchContent_MakeAvailable(doctest)
     enable_testing()
-    add_executable(ai3_tests tests/command_line_test.cpp tests/editor_state_test.cpp)
-    target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor doctest::doctest)
+    add_executable(ai3_tests
+        tests/command_line_test.cpp
+        tests/editor_state_test.cpp
+        tests/localization_test.cpp
+        tests/ui_identity_test.cpp
+    )
+    target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor ai3_localization doctest::doctest)
     ai3_enable_warnings(ai3_tests)
     add_test(NAME ai3_unit_tests COMMAND ai3_tests)
+    add_test(NAME ai3_resource_copy_test
+        COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_ASSETS=${CMAKE_CURRENT_SOURCE_DIR}/assets
+            -DBUILT_ASSETS=$<TARGET_FILE_DIR:ai3>/assets
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/resource_copy_test.cmake
+    )
     add_test(NAME ai3_smoke_test COMMAND ai3 --smoke-test)
     set_tests_properties(ai3_smoke_test PROPERTIES LABELS display TIMEOUT 30)
 endif()

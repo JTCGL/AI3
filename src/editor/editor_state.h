@@ -28,6 +28,12 @@ struct SceneObject
     Transform transform;
 };
 
+struct ConsoleMessage
+{
+    std::string key;
+    std::string argument;
+};
+
 enum class EditorPanel : std::size_t
 {
     scene_graph,
@@ -54,8 +60,8 @@ class EditorState
     bool panel_visible(EditorPanel panel) const;
     void set_panel_visible(EditorPanel panel, bool visible);
 
-    const std::vector<std::string>& console_messages() const;
-    void add_console_message(std::string message);
+    const std::vector<ConsoleMessage>& console_messages() const;
+    void add_console_message(std::string key, std::string argument = {});
     void clear_console();
 
     void request_layout_reset();
@@ -66,7 +72,7 @@ class EditorState
     ObjectId selection_ = no_object;
     std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,
                                                                                         true, true};
-    std::vector<std::string> console_messages_;
+    std::vector<ConsoleMessage> console_messages_;
     bool layout_reset_requested_ = false;
 };
 } // namespace ai3

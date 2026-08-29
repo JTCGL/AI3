@@ -5,10 +5,28 @@ AI3 is a C++17 application project. Phase one targets:
 - Termux on ARM64 using Clang.
 - Desktop Linux on x86-64 using GCC.
 - OpenGL ES 3.0 only.
-- SDL3 for windowing, input, and GL context management.
+- SDL3 for windowing, input, GL context management, and DPI/display integration.
 - Dear ImGui from the docking branch, using imgui_impl_sdl3 and imgui_impl_opengl3 with IMGUI_IMPL_OPENGL_ES3.
 
 Do not introduce desktop OpenGL, Vulkan, GLAD, a renderer abstraction, or multi-viewport support unless the project requirements are explicitly changed.
+
+## User-facing text and localization
+- All new user-facing editor text must go through the project localization/string system once that system exists.
+- Do not introduce new hard-coded user-facing labels directly in ImGui widgets except while implementing or testing the localization layer itself.
+- Diagnostic, developer-only, assertion, and low-level error text may remain direct literals when localization would add no user value.
+- Localization resources must be external UTF-8 data files and must not assume ASCII internally.
+- English is the required fallback locale. Missing keys must fail visibly in development and fall back predictably rather than silently producing empty UI text.
+- Runtime locale switching should update the UI without requiring application restart when the active font atlas already covers the required glyphs.
+- Do not conflate translation support with font-glyph coverage. The string system must remain Unicode/UTF-8 capable even when the current ImGui font atlas supports only a smaller character repertoire.
+
+## DPI and UI scaling
+- AI3 must remain DPI aware on every supported platform.
+- Use SDL3 display/window scaling information as the platform source of truth; do not hard-code assumptions that 1 logical pixel equals 1 physical pixel.
+- Dear ImGui style, fonts, and editor layout must scale coherently with display DPI/content scale.
+- Font size changes caused by DPI changes must trigger the appropriate ImGui font-atlas rebuild or font reload path.
+- Runtime movement between displays with different scale factors must be handled where SDL3 exposes the relevant events/state.
+- Avoid fixed pixel measurements in editor UI code when a scaled logical value or content-region measurement is appropriate.
+- DPI behavior must not break persisted docking layouts or make localization depend on a specific display scale.
 
 ## Build and dependency policy
 - Use CMake and Ninja.
