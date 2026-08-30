@@ -18,7 +18,14 @@ Activity. See [ADR 0001](decisions/0001-termux-x11-backend.md).
 
 ## Build and dependency boundaries
 
-The canonical verification entry point is `bash scripts/check.sh`. Verification requires CMake 3.25 or newer
+The canonical verification entry point is `bash scripts/check.sh`. Existing development checkouts can safely
+synchronize to `origin/main` and run that verification with the repository-owned orchestration command:
+
+- Termux: `cd ~/Projects/AI3 && bash scripts/sync-and-check.sh`
+- T5600: `cd ~/Documents/Projects/AI3 && bash scripts/sync-and-check.sh`
+
+The synchronization command refuses a dirty working tree, updates `main` only by fast-forward, and delegates
+all formatting, configuration, build, and test behavior to `check.sh`. Verification requires CMake 3.25 or newer
 and defines source formatting with clang-format 21.x; the scripts validate both contracts before using the
 tools. CMake presets keep builds outside the source tree. The `headless-debug` preset builds the options,
 editor, scene, localization, and test targets without fetching SDL or Dear ImGui, discovering EGL/GLES, or
