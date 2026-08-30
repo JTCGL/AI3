@@ -1,0 +1,173 @@
+#include <doctest/doctest.h>
+
+#include "scene/scene_math.h"
+#include "scene/viewport_view.h"
+
+#include <glm/geometric.hpp>
+#include <glm/vec4.hpp>
+
+namespace
+{
+void check_matrix(const glm::mat4& actual, const glm::mat4& expected, float epsilon = 0.0001F)
+{
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row)
+            CHECK(actual[column][row] == doctest::Approx(expected[column][row]).epsilon(epsilon));
+}
+
+void check_vec3(const glm::vec3& actual, const glm::vec3& expected, float epsilon = 0.0001F)
+{
+    CHECK(actual.x == doctest::Approx(expected.x).epsilon(epsilon));
+    CHECK(actual.y == doctest::Approx(expected.y).epsilon(epsilon));
+    CHECK(actual.z == doctest::Approx(expected.z).epsilon(epsilon));
+}
+
+ai3::ObjectId create_camera(ai3::EditorState& scene, const ai3::Transform& transform = {},
+                            ai3::PerspectiveCamera camera = {},
+                            ai3::ObjectId parent = ai3::no_object)
+{
+    ai3::CreateObject object{"Camera", parent, transform};
+    object.category = ai3::ObjectCategory::camera;
+    object.camera_kind = ai3::CameraKind::perspective;
+    object.perspective_camera = camera;
+    return scene.create_object(object);
+}
+} // namespace
+
+TEST_CASE("orbit viewport resolves its view and aspect-dependent projection")
+{
+    ai3::EditorState scene;
+    ai3::ViewportView viewport;
+    const ai3::ResolvedViewportView wide = viewport.resolve(scene, 16.0F / 9.0F);
+    const ai3::ResolvedViewportView square = viewport.resolve(scene, 1.0F);
+
+    check_matrix(wide.view, viewport.orbit().view_matrix());
+    check_matrix(wide.projection, viewport.orbit().projection_matrix(16.0F / 9.0F));
+    CHECK(wide.projection[0][0] < square.projection[0][0]);
+    CHECK(wide.projection[1][1] == doctest::Approx(square.projection[1][1]));
+}
+
+TEST_CASE("orbit state survives scene-camera selection")
+{
+    ai3::EditorState scene;
+    const ai3::ObjectId camera = create_camera(scene);
+    ai3::ViewportView viewport;
+    viewport.orbit().orbit(17.0F, -9.0F);
+    viewport.orbit().zoom(2.0F);
+    const float yaw = viewport.orbit().yaw_degrees();
+    const float pitch = viewport.orbit().pitch_degrees();
+    const float distance = viewport.orbit().distance();
+
+    REQUIRE(viewport.use_scene_camera(scene, camera));
+    viewport.resolve(scene, 1.0F);
+    viewport.use_orbit();
+    CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(yaw));
+    CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(pitch));
+    CHECK(viewport.orbit().distance() == doctest::Approx(distance));
+}
+
+TEST_CASE("scene-camera view uses current authoritative world transform")
+{
+    ai3::EditorState scene;
+    ai3::Transform camera_transform;
+    camera_transform.position = {3.0F, 4.0F, 5.0F};
+    camera_transform.orientation = ai3::orientation_from_euler_degrees({20.0F, -15.0F, 35.0F});
+    const ai3::ObjectId camera = create_camera(scene, camera_transform);
+    ai3::ViewportView viewport;
+    REQUIRE(viewport.use_scene_camera(scene, camera));
+
+    ai3::ResolvedViewportView resolved = viewport.resolve(scene, 1.0F);
+    check_vec3(glm::vec3{resolved.view * glm::vec4{scene.world_position(camera), 1.0F}},
+               glm::vec3{0.0F});
+    const glm::vec3 forward = scene.world_orientation(camera) * glm::vec3{0.0F, 0.0F, -1.0F};
+    check_vec3(glm::normalize(glm::vec3{resolved.view * glm::vec4{forward, 0.0F}}),
+               {0.0F, 0.0F, -1.0F});
+
+    scene.find_object(camera)->transform.position = {-2.0F, 7.0F, 1.0F};
+    resolved = viewport.resolve(scene, 1.0F);
+    check_vec3(glm::vec3{resolved.view * glm::vec4{scene.world_position(camera), 1.0F}},
+               glm::vec3{0.0F});
+}
+
+TEST_CASE("parented scene-camera view uses resolved parent transform")
+{
+    ai3::EditorState scene;
+    ai3::Transform parent_transform;
+    parent_transform.position = {10.0F, -3.0F, 2.0F};
+    parent_transform.orientation = ai3::orientation_from_euler_degrees({0.0F, 0.0F, 90.0F});
+    const ai3::ObjectId parent =
+        scene.create_object(ai3::CreateObject{"Parent", ai3::no_object, parent_transform});
+    ai3::Transform local;
+    local.position = {2.0F, 0.0F, 1.0F};
+    local.orientation = ai3::orientation_from_euler_degrees({25.0F, 0.0F, 0.0F});
+    const ai3::ObjectId camera = create_camera(scene, local, {}, parent);
+    ai3::ViewportView viewport;
+    REQUIRE(viewport.use_scene_camera(scene, camera));
+
+    const ai3::ResolvedViewportView first = viewport.resolve(scene, 1.0F);
+    const glm::vec3 first_world_position = scene.world_position(camera);
+    check_vec3(glm::vec3{first.view * glm::vec4{scene.world_position(camera), 1.0F}},
+               glm::vec3{0.0F});
+    scene.find_object(parent)->transform.position.x += 4.0F;
+    const ai3::ResolvedViewportView moved = viewport.resolve(scene, 1.0F);
+    CHECK(glm::length(glm::vec3{moved.view * glm::vec4{first_world_position, 1.0F}}) > 1.0F);
+    check_vec3(glm::vec3{moved.view * glm::vec4{scene.world_position(camera), 1.0F}},
+               glm::vec3{0.0F});
+}
+
+TEST_CASE("scene-camera projection uses live semantic parameters and viewport aspect")
+{
+    ai3::EditorState scene;
+    const ai3::ObjectId camera = create_camera(scene, {}, {60.0F, 0.25F, 250.0F});
+    ai3::ViewportView viewport;
+    REQUIRE(viewport.use_scene_camera(scene, camera));
+    const glm::mat4 square = viewport.resolve(scene, 1.0F).projection;
+    const glm::mat4 wide = viewport.resolve(scene, 2.0F).projection;
+    CHECK(wide[0][0] == doctest::Approx(square[0][0] * 0.5F));
+    CHECK(wide[1][1] == doctest::Approx(square[1][1]));
+
+    REQUIRE(scene.set_perspective_camera(camera, {35.0F, 1.0F, 40.0F}));
+    const glm::mat4 changed = viewport.resolve(scene, 1.0F).projection;
+    CHECK(changed[1][1] != doctest::Approx(square[1][1]));
+    CHECK(changed[2][2] != doctest::Approx(square[2][2]));
+    CHECK(changed[3][2] != doctest::Approx(square[3][2]));
+}
+
+TEST_CASE("invalid view sources are rejected and deleted camera falls back to orbit")
+{
+    ai3::EditorState scene;
+    const ai3::ObjectId object = scene.create_object(ai3::CreateObject{"Object"});
+    const ai3::ObjectId sphere = scene.create_sphere("Sphere");
+    const ai3::ObjectId camera = create_camera(scene);
+    ai3::ViewportView viewport;
+    CHECK_FALSE(viewport.use_scene_camera(scene, ai3::no_object));
+    CHECK_FALSE(viewport.use_scene_camera(scene, object));
+    CHECK_FALSE(viewport.use_scene_camera(scene, sphere));
+    CHECK(viewport.source() == ai3::ViewSource::orbit);
+
+    REQUIRE(viewport.use_scene_camera(scene, camera));
+    REQUIRE(scene.delete_object(camera));
+    const ai3::ResolvedViewportView resolved = viewport.resolve(scene, 1.0F);
+    CHECK(viewport.source() == ai3::ViewSource::orbit);
+    CHECK(viewport.scene_camera_id() == ai3::no_object);
+    check_matrix(resolved.view, viewport.orbit().view_matrix());
+}
+
+TEST_CASE("scene and viewport reset produce deterministic default orbit state")
+{
+    ai3::EditorState scene;
+    const ai3::ObjectId camera = create_camera(scene);
+    ai3::ViewportView viewport;
+    viewport.orbit().orbit(10.0F, 20.0F);
+    viewport.orbit().zoom(3.0F);
+    REQUIRE(viewport.use_scene_camera(scene, camera));
+
+    scene.reset_scene();
+    viewport.reset();
+    CHECK(scene.objects().empty());
+    CHECK(viewport.source() == ai3::ViewSource::orbit);
+    CHECK(viewport.scene_camera_id() == ai3::no_object);
+    CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(35.0F));
+    CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(20.0F));
+    CHECK(viewport.orbit().distance() == doctest::Approx(6.0F));
+}

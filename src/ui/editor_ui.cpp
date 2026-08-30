@@ -72,9 +72,10 @@ void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
 }
 } // namespace
 
-EditorUi::EditorUi(Localization& localization, float content_scale, float ui_scale, float font_size)
-    : localization_(localization), content_scale_(content_scale), ui_scale_(ui_scale),
-      font_size_(font_size)
+EditorUi::EditorUi(EditorState& state, ViewportView& viewport_view, Localization& localization,
+                   float content_scale, float ui_scale, float font_size)
+    : state_(state), viewport_view_(viewport_view), localization_(localization),
+      content_scale_(content_scale), ui_scale_(ui_scale), font_size_(font_size)
 {
 }
 
@@ -100,7 +101,7 @@ void EditorUi::draw_main_menu(bool& running)
             {
                 state_.reset_scene();
                 viewport_renderer_.clear_geometry_cache();
-                camera_.reset();
+                viewport_view_.reset();
             }
             ImGui::Separator();
             if (ImGui::MenuItem(localization_.text("action.quit").c_str()))
@@ -386,22 +387,53 @@ void EditorUi::draw_viewport()
     {
         const std::string title = window_title("panel.viewport", "ai3_viewport");
         ImGui::Begin(title.c_str(), &visible);
+        const std::string source_label =
+            stable_imgui_label(localization_.text("viewport.view_source"), "viewport_view_source");
+        const SceneObject* current_camera = state_.find_object(viewport_view_.scene_camera_id());
+        const std::string current_source =
+            viewport_view_.source() == ViewSource::orbit || current_camera == nullptr
+                ? localization_.text("viewport.view_orbit")
+                : current_camera->name;
+        if (ImGui::BeginCombo(source_label.c_str(), current_source.c_str()))
+        {
+            const bool orbit_selected = viewport_view_.source() == ViewSource::orbit;
+            if (ImGui::Selectable(localization_.text("viewport.view_orbit").c_str(),
+                                  orbit_selected))
+                viewport_view_.use_orbit();
+            for (const SceneObject* camera : state_.cameras(CameraKind::perspective))
+            {
+                ImGui::PushID(reinterpret_cast<void*>(static_cast<std::uintptr_t>(camera->id)));
+                const bool selected = viewport_view_.source() == ViewSource::perspective_camera &&
+                                      viewport_view_.scene_camera_id() == camera->id;
+                if (ImGui::Selectable(camera->name.c_str(), selected))
+                    viewport_view_.use_scene_camera(state_, camera->id);
+                ImGui::PopID();
+            }
+            ImGui::EndCombo();
+        }
         const ImVec2 region = ImGui::GetContentRegionAvail();
         if (region.x > 0.0F && region.y > 0.0F)
         {
             const ImVec2 framebuffer_scale = ImGui::GetIO().DisplayFramebufferScale;
             const RenderTargetSize requested =
                 render_target_size(region.x, region.y, framebuffer_scale.x, framebuffer_scale.y);
-            viewport_renderer_.render(state_, camera_, requested);
+            const float aspect_ratio =
+                static_cast<float>(requested.width) / static_cast<float>(requested.height);
+            const ResolvedViewportView resolved = viewport_view_.resolve(state_, aspect_ratio);
+            viewport_renderer_.render(state_, resolved, requested);
             ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
                          {0.0F, 1.0F}, {1.0F, 0.0F});
             if (ImGui::IsItemHovered())
             {
                 ImGuiIO& io = ImGui::GetIO();
-                if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
-                    camera_.orbit(io.MouseDelta.x * 0.25F, -io.MouseDelta.y * 0.25F);
-                if (io.MouseWheel != 0.0F)
-                    camera_.zoom(io.MouseWheel);
+                if (viewport_view_.source() == ViewSource::orbit)
+                {
+                    if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+                        viewport_view_.orbit().orbit(io.MouseDelta.x * 0.25F,
+                                                     -io.MouseDelta.y * 0.25F);
+                    if (io.MouseWheel != 0.0F)
+                        viewport_view_.orbit().zoom(io.MouseWheel);
+                }
             }
         }
         ImGui::End();

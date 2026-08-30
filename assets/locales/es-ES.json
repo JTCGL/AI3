@@ -55,6 +55,8 @@
     "viewport.heading": "Vista del editor AI3",
     "viewport.selection": "Selección: {selection}",
     "viewport.none": "Ninguna",
+    "viewport.view_source": "Vista",
+    "viewport.view_orbit": "Órbita",
     "viewport.available": "Disponible: {width} x {height}",
     "viewport.deferred": "El renderizado de la escena está aplazado",
     "diagnostics.title": "Diagnóstico de AI3",

@@ -45,6 +45,7 @@ add_library(ai3_scene STATIC
     src/scene/render_target_size.cpp
     src/scene/scene_math.cpp
     src/scene/sphere_mesh.cpp
+    src/scene/viewport_view.cpp
 )
 target_include_directories(ai3_scene PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3_scene PUBLIC ai3_editor)
@@ -152,6 +153,7 @@ if(AI3_BUILD_TESTS)
         tests/localization_test.cpp
         tests/scene_test.cpp
         tests/ui_identity_test.cpp
+        tests/viewport_view_test.cpp
     )
     target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor ai3_scene ai3_localization doctest::doctest)
     ai3_enable_warnings(ai3_tests)

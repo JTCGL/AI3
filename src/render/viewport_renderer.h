@@ -1,8 +1,8 @@
 #pragma once
 
 #include "editor/editor_state.h"
-#include "scene/orbit_camera.h"
 #include "scene/render_target_size.h"
+#include "scene/resolved_view.h"
 
 #include <cstdint>
 #include <string>
@@ -18,7 +18,7 @@ class ViewportRenderer
     ViewportRenderer(const ViewportRenderer&) = delete;
     ViewportRenderer& operator=(const ViewportRenderer&) = delete;
 
-    void render(const EditorState& scene, const OrbitCamera& camera, RenderTargetSize size);
+    void render(const EditorState& scene, const ResolvedViewportView& view, RenderTargetSize size);
     void synchronize_geometry_cache(const EditorState& scene);
     void clear_geometry_cache();
     std::uint32_t texture() const { return color_texture_; }
