@@ -15,7 +15,11 @@ During implementation, the active brief defines the approved milestone boundary 
 applicable `AGENTS.md` instructions or established architectural decisions. Repository implementation and tests
 remain authoritative when documentation conflicts.
 
-After completion, lasting current architectural truth belongs in [`../PROJECT.md`](../PROJECT.md) or an ADR,
-roadmap changes belong in [`../ROADMAP.md`](../ROADMAP.md), and the concise result belongs in
-[`../MILESTONES.md`](../MILESTONES.md). The detailed brief may remain as historical reference, but it must not
-supersede those current documents.
+Before a milestone is merge-ready, reconcile the brief with the final approved scope and any explicitly agreed
+scope corrections introduced during implementation, review, or runtime testing. Reconcile the other affected
+documentation layers at the same boundary: lasting current architectural truth belongs in
+[`../PROJECT.md`](../PROJECT.md), durable decisions and rationale belong in an ADR, roadmap changes belong in
+[`../ROADMAP.md`](../ROADMAP.md), and the concise completed result belongs in
+[`../MILESTONES.md`](../MILESTONES.md). Update applicable `AGENTS.md` files only for newly established future
+development rules. The detailed brief may remain as historical reference, but it must not supersede current
+documentation or the final implementation and tests.
