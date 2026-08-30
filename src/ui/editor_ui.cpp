@@ -403,7 +403,7 @@ void EditorUi::draw_viewport()
             for (const SceneObject* camera : state_.cameras(CameraKind::perspective))
             {
                 ImGui::PushID(reinterpret_cast<void*>(static_cast<std::uintptr_t>(camera->id)));
-                const bool selected = viewport_view_.source() == ViewSource::perspective_camera &&
+                const bool selected = viewport_view_.source() == ViewSource::scene_camera &&
                                       viewport_view_.scene_camera_id() == camera->id;
                 if (ImGui::Selectable(camera->name.c_str(), selected))
                     viewport_view_.use_scene_camera(state_, camera->id);

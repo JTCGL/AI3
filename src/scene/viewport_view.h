@@ -9,7 +9,7 @@ namespace ai3
 enum class ViewSource
 {
     orbit,
-    perspective_camera
+    scene_camera
 };
 
 // Display-independent state for one editor viewport. Scene-camera matrices are always derived

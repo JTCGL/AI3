@@ -59,6 +59,7 @@ TEST_CASE("orbit state survives scene-camera selection")
     const float distance = viewport.orbit().distance();
 
     REQUIRE(viewport.use_scene_camera(scene, camera));
+    CHECK(viewport.source() == ai3::ViewSource::scene_camera);
     viewport.resolve(scene, 1.0F);
     viewport.use_orbit();
     CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(yaw));
@@ -115,12 +116,13 @@ TEST_CASE("parented scene-camera view uses resolved parent transform")
                glm::vec3{0.0F});
 }
 
-TEST_CASE("scene-camera projection uses live semantic parameters and viewport aspect")
+TEST_CASE("generic scene-camera source dispatches the current perspective subtype")
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene, {}, {60.0F, 0.25F, 250.0F});
     ai3::ViewportView viewport;
     REQUIRE(viewport.use_scene_camera(scene, camera));
+    CHECK(viewport.source() == ai3::ViewSource::scene_camera);
     const glm::mat4 square = viewport.resolve(scene, 1.0F).projection;
     const glm::mat4 wide = viewport.resolve(scene, 2.0F).projection;
     CHECK(wide[0][0] == doctest::Approx(square[0][0] * 0.5F));
@@ -146,6 +148,7 @@ TEST_CASE("invalid view sources are rejected and deleted camera falls back to or
     CHECK(viewport.source() == ai3::ViewSource::orbit);
 
     REQUIRE(viewport.use_scene_camera(scene, camera));
+    CHECK(viewport.source() == ai3::ViewSource::scene_camera);
     REQUIRE(scene.delete_object(camera));
     const ai3::ResolvedViewportView resolved = viewport.resolve(scene, 1.0F);
     CHECK(viewport.source() == ai3::ViewSource::orbit);

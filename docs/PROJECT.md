@@ -153,9 +153,10 @@ the authoritative resolved world matrix. Consumers must not independently traver
 ## Viewport and view architecture
 
 The application owns the display-independent state for the editor's single viewport alongside the scene;
-Dear ImGui receives references and acts only as presenter/controller. A viewport selects either its preserved
-Orbit construction state or one Perspective Camera scene-object ID. This selection is viewport-specific and
-does not establish a global active camera.
+Dear ImGui receives references and acts only as presenter/controller. A viewport's source is either Orbit or
+Scene Camera, with the latter retaining one scene-object ID. This selection is viewport-specific and does not
+establish a global active camera. Perspective Camera is the only currently supported Scene Camera subtype;
+validation and resolution are localized behind an explicit `CameraKind` dispatch in the view layer.
 
 Orbit is one way to construct a resolved view, not a renderer camera type. When a scene camera is selected,
 the viewport derives matrices from the camera's authoritative resolved world position and orientation, its
