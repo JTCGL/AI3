@@ -90,4 +90,10 @@ The same verification path should be used locally and by GitHub Actions wherever
 Spend model effort on design, implementation, debugging, tests, and review. Prefer deterministic repository tooling for environment setup, formatting, building, and routine shell work.
 Do not silently change established architecture. Record deliberate architectural changes in project documentation.
 
+At the start of a milestone implementation, normally inspect the applicable `AGENTS.md` files,
+`docs/PROJECT.md`, `docs/ROADMAP.md`, relevant ADRs, `docs/MILESTONES.md`, the active brief under
+`docs/milestones/`, relevant implementation and tests, and recent Git history. Repository implementation and
+tests are authoritative when documentation conflicts. Keep current truth, rationale, future plans, and history
+in their respective documentation layers rather than repeating the complete project story in prompts or files.
+
 More local AGENTS.md files may add directory-specific rules.
