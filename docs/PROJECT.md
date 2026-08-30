@@ -18,10 +18,11 @@ Activity. See [ADR 0001](decisions/0001-termux-x11-backend.md).
 
 ## Build and dependency boundaries
 
-The canonical verification entry point is `bash scripts/check.sh`. CMake presets keep builds outside the
-source tree. The `headless-debug` preset builds the options, editor, scene, localization, and test targets
-without fetching SDL or Dear ImGui, discovering EGL/GLES, or defining the graphical executable and smoke
-test.
+The canonical verification entry point is `bash scripts/check.sh`. Verification requires CMake 3.25 or newer
+and defines source formatting with clang-format 21.x; the scripts validate both contracts before using the
+tools. CMake presets keep builds outside the source tree. The `headless-debug` preset builds the options,
+editor, scene, localization, and test targets without fetching SDL or Dear ImGui, discovering EGL/GLES, or
+defining the graphical executable and smoke test.
 
 Core/domain targets do not depend on SDL, Dear ImGui, EGL/GLES, or a display. Platform, render, and UI code may
 depend inward on core/domain code, but core/domain dependencies do not point outward. The current ownership
