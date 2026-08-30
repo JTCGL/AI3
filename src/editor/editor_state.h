@@ -6,25 +6,30 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ai3
 {
-using ObjectId = std::uint32_t;
+using ObjectId = std::uint64_t;
 constexpr ObjectId no_object = 0;
 
 struct Transform
 {
-    // Positions are world-space meters. Orientations are canonical quaternions.
     glm::vec3 position{0.0F};
     glm::quat orientation{1.0F, 0.0F, 0.0F, 0.0F};
     glm::vec3 scale{1.0F};
 };
 
-enum class RenderableKind
+enum class PrimitiveKind
 {
     none,
-    cube
+    sphere
+};
+
+struct SpherePrimitive
+{
+    float radius_meters = 1.0F;
 };
 
 struct SceneObject
@@ -32,11 +37,32 @@ struct SceneObject
     ObjectId id = no_object;
     ObjectId parent = no_object;
     std::string name;
-    std::string type;
     bool enabled = true;
     bool visible = true;
     Transform transform;
-    RenderableKind renderable = RenderableKind::none;
+    PrimitiveKind primitive = PrimitiveKind::none;
+    SpherePrimitive sphere;
+};
+
+struct CreateObject
+{
+    CreateObject(std::string object_name, ObjectId object_parent = no_object,
+                 Transform object_transform = {}, bool object_enabled = true,
+                 bool object_visible = true, PrimitiveKind object_primitive = PrimitiveKind::none,
+                 SpherePrimitive sphere_primitive = {})
+        : name(std::move(object_name)), parent(object_parent), transform(object_transform),
+          enabled(object_enabled), visible(object_visible), primitive(object_primitive),
+          sphere(sphere_primitive)
+    {
+    }
+
+    std::string name;
+    ObjectId parent = no_object;
+    Transform transform;
+    bool enabled = true;
+    bool visible = true;
+    PrimitiveKind primitive = PrimitiveKind::none;
+    SpherePrimitive sphere;
 };
 
 struct ConsoleMessage
@@ -59,10 +85,13 @@ class EditorState
     public:
     EditorState();
 
+    ObjectId create_object(CreateObject object);
+    bool delete_object(ObjectId id);
     const std::vector<SceneObject>& objects() const;
     SceneObject* find_object(ObjectId id);
     const SceneObject* find_object(ObjectId id) const;
     std::vector<ObjectId> children_of(ObjectId parent) const;
+    std::vector<const SceneObject*> visible_spheres() const;
 
     ObjectId selection() const;
     bool select(ObjectId id);
@@ -80,6 +109,7 @@ class EditorState
 
     private:
     std::vector<SceneObject> objects_;
+    ObjectId next_object_id_ = 1;
     ObjectId selection_ = no_object;
     std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,
                                                                                         true, true};

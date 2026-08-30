@@ -40,11 +40,11 @@ target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3_editor PUBLIC glm::glm)
 
 add_library(ai3_scene STATIC
-    src/scene/cube_mesh.cpp
     src/scene/length_units.cpp
     src/scene/orbit_camera.cpp
     src/scene/render_target_size.cpp
     src/scene/scene_math.cpp
+    src/scene/sphere_mesh.cpp
 )
 target_include_directories(ai3_scene PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3_scene PUBLIC ai3_editor)

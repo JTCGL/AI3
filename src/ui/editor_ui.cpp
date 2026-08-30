@@ -102,7 +102,20 @@ void EditorUi::draw_main_menu(bool& running)
         }
         if (ImGui::BeginMenu(localization_.text("menu.edit").c_str()))
         {
-            ImGui::TextDisabled("%s", localization_.text("editor.no_commands").c_str());
+            if (ImGui::MenuItem(localization_.text("action.create_sphere").c_str()))
+            {
+                const ObjectId sphere = state_.create_object({localization_.text("object.sphere"),
+                                                              no_object,
+                                                              {},
+                                                              true,
+                                                              true,
+                                                              PrimitiveKind::sphere});
+                state_.select(sphere);
+            }
+            const bool has_selection = state_.selection() != no_object;
+            if (ImGui::MenuItem(localization_.text("action.delete_selected").c_str(), nullptr,
+                                false, has_selection))
+                state_.delete_object(state_.selection());
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(localization_.text("menu.view").c_str()))
@@ -223,8 +236,10 @@ void EditorUi::draw_object_inspector()
                 stable_imgui_label(localization_.text("inspector.name"), "inspector_name");
             if (ImGui::InputText(name_label.c_str(), name, sizeof(name)))
                 object->name = name;
+            const char* type_key =
+                object->primitive == PrimitiveKind::sphere ? "type.sphere" : "type.object";
             const std::string type_text =
-                localization_.format("inspector.type", {{"type", object->type}});
+                localization_.format("inspector.type", {{"type", localization_.text(type_key)}});
             ImGui::TextUnformatted(type_text.c_str());
             const std::string enabled_label =
                 stable_imgui_label(localization_.text("inspector.enabled"), "inspector_enabled");
@@ -233,6 +248,20 @@ void EditorUi::draw_object_inspector()
             const std::string visible_label =
                 stable_imgui_label(localization_.text("inspector.visible"), "inspector_visible");
             ImGui::Checkbox(visible_label.c_str(), &object->visible);
+            if (object->primitive == PrimitiveKind::sphere)
+            {
+                float displayed_radius =
+                    length_from_meters(object->sphere.radius_meters, display_length_unit_);
+                const std::string radius_text = localization_.format(
+                    "inspector.radius_with_unit",
+                    {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+                const std::string radius_label = stable_imgui_label(radius_text, "sphere_radius");
+                const float speed = length_from_meters(0.05F, display_length_unit_);
+                const float minimum = length_from_meters(0.001F, display_length_unit_);
+                if (ImGui::DragFloat(radius_label.c_str(), &displayed_radius, speed, minimum))
+                    object->sphere.radius_meters =
+                        std::max(0.001F, length_to_meters(displayed_radius, display_length_unit_));
+            }
             const std::string transform_label =
                 stable_imgui_label(localization_.text("inspector.transform"), "transform");
             if (ImGui::CollapsingHeader(transform_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen))

@@ -1,5 +1,8 @@
 #include "editor/editor_state.h"
 
+#include <algorithm>
+#include <stdexcept>
+#include <unordered_set>
 #include <utility>
 
 namespace ai3
@@ -9,18 +12,39 @@ namespace
 std::size_t panel_index(EditorPanel panel) { return static_cast<std::size_t>(panel); }
 } // namespace
 
-EditorState::EditorState()
-    : objects_({{1, no_object, "Scene", "Scene", true, true, {}, RenderableKind::none},
-                {2, 1, "Camera", "Camera", true, true, {}, RenderableKind::none},
-                {3, 1, "Light", "Light", true, true, {}, RenderableKind::none},
-                {4, 1, "Cube", "Mesh", true, true, {}, RenderableKind::cube},
-                {5, 1, "Group", "Group", true, true, {}, RenderableKind::none},
-                {6, 5, "Child A", "Mesh", true, true, {}, RenderableKind::none},
-                {7, 5, "Child B", "Mesh", true, true, {}, RenderableKind::none}}),
-      console_messages_({{"console.initialized", {}}, {"console.ready", {}}})
+EditorState::EditorState() : console_messages_({{"console.initialized", {}}, {"console.ready", {}}})
 {
-    objects_[1].transform.position = {0.0F, 5.0F, 2.0F};
-    objects_[2].transform.position = {2.0F, 1.0F, 4.0F};
+}
+
+ObjectId EditorState::create_object(CreateObject object)
+{
+    if (object.parent != no_object && find_object(object.parent) == nullptr)
+        throw std::invalid_argument("Scene object parent does not exist");
+    if (object.primitive == PrimitiveKind::sphere && object.sphere.radius_meters <= 0.0F)
+        throw std::invalid_argument("Sphere radius must be positive");
+
+    const ObjectId id = next_object_id_++;
+    objects_.push_back({id, object.parent, std::move(object.name), object.enabled, object.visible,
+                        object.transform, object.primitive, object.sphere});
+    return id;
+}
+
+bool EditorState::delete_object(ObjectId id)
+{
+    if (find_object(id) == nullptr)
+        return false;
+
+    std::unordered_set<ObjectId> deleted{id};
+    for (std::size_t index = 0; index < objects_.size(); ++index)
+        if (deleted.count(objects_[index].parent) != 0)
+            deleted.insert(objects_[index].id);
+
+    if (deleted.count(selection_) != 0)
+        clear_selection();
+    objects_.erase(std::remove_if(objects_.begin(), objects_.end(), [&](const SceneObject& object)
+                                  { return deleted.count(object.id) != 0; }),
+                   objects_.end());
+    return true;
 }
 
 const std::vector<SceneObject>& EditorState::objects() const { return objects_; }
@@ -48,6 +72,15 @@ std::vector<ObjectId> EditorState::children_of(ObjectId parent) const
         if (object.parent == parent)
             children.push_back(object.id);
     return children;
+}
+
+std::vector<const SceneObject*> EditorState::visible_spheres() const
+{
+    std::vector<const SceneObject*> spheres;
+    for (const SceneObject& object : objects_)
+        if (object.enabled && object.visible && object.primitive == PrimitiveKind::sphere)
+            spheres.push_back(&object);
+    return spheres;
 }
 
 ObjectId EditorState::selection() const { return selection_; }
