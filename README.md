@@ -3,6 +3,10 @@
 AI3 is a C++ project targeting OpenGL ES 3 through SDL3, with Dear ImGui (docking branch) for the user
 interface and GLM as its canonical vector and matrix math library.
 
+Project documentation: [current architecture](docs/PROJECT.md),
+[architectural decisions](docs/decisions/), [roadmap](docs/ROADMAP.md), and
+[completed milestones](docs/MILESTONES.md).
+
 The initial supported build targets are:
 
 - Termux on ARM64 using Clang.

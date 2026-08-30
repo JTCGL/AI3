@@ -1,180 +1,109 @@
-# AI3 Phase-One Contract
+# AI3 Current Architecture
 
-## Supported targets
+This document describes the current repository state. Architectural rationale belongs in
+[`decisions/`](decisions/), future work in [`ROADMAP.md`](ROADMAP.md), and completed milestone history in
+[`MILESTONES.md`](MILESTONES.md). Implementation and tests are authoritative if documentation disagrees.
 
-| Environment | Architecture | Compiler | Graphics |
-| --- | --- | --- | --- |
-| Termux | ARM64 | Clang | OpenGL ES 3.0 |
-| Desktop Linux | x86-64 | GCC | OpenGL ES 3.0 |
-| GitHub Actions | x86-64 Ubuntu | GCC | compile/test validation |
+## Supported phase-one platform
 
-## Technology
-- C++17
-- CMake
-- Ninja
-- GLM fetched by CMake as the canonical vector and matrix math library
-- SDL3 fetched by CMake
-- Dear ImGui docking branch lineage fetched by CMake
-- Dear ImGui SDL3 platform backend
-- Dear ImGui OpenGL3 renderer backend configured for OpenGL ES 3
-- System EGL/GLES implementation
-- No GLAD
+AI3 is a C++17 application built with CMake and Ninja. It targets Termux ARM64 with Clang and desktop Linux
+x86-64 with GCC. The graphical application uses SDL3 for its window, input, OpenGL context, and display-scale
+integration; OpenGL ES 3.0 is the only renderer API. Dear ImGui comes from docking-branch lineage and uses
+`imgui_impl_sdl3` and `imgui_impl_opengl3` with `IMGUI_IMPL_OPENGL_ES3`. SDL3, Dear ImGui, GLM, and doctest are
+fetched at pinned revisions. There is no desktop OpenGL path, Vulkan path, GLAD, renderer abstraction, or
+ImGui multi-viewport support.
 
-## Build policy
-Build directories must live outside the source tree. CMake presets define the canonical developer configurations.
-`headless-debug` is the canonical core configuration and builds all display-independent libraries and tests
-without fetching SDL or Dear ImGui, discovering EGL/GLES, or defining the graphical executable. Core/domain
-targets must remain independent of SDL, Dear ImGui, and GLES; platform, rendering, and UI layers depend inward
-on them. Pure feature logic belongs in headless-testable targets whenever practical.
+On Termux, SDL uses its X11 backend and runs as a normal process against Termux:X11 rather than as an Android
+Activity. See [ADR 0001](decisions/0001-termux-x11-backend.md).
 
-## First application milestone
-The first real application feature must:
-1. Fetch pinned SDL3 and Dear ImGui revisions with CMake.
-2. Build Dear ImGui core plus imgui_demo.cpp.
-3. Create an SDL3 window and OpenGL ES 3 context.
-4. Initialize the ImGui SDL3 and OpenGL3 backends.
-5. Enable docking and keyboard navigation.
-6. Create a dockspace.
-7. Show a basic Hello World window.
-8. Provide menu access to the Dear ImGui demo and useful diagnostic windows.
-9. Build on Termux ARM64/Clang and desktop Linux x86-64/GCC.
-10. Pass the repository verification command and GitHub CI.
+## Build and dependency boundaries
 
-Desktop OpenGL, Vulkan, renderer abstraction, and ImGui multi-viewport support are explicitly deferred.
+The canonical verification entry point is `bash scripts/check.sh`. CMake presets keep builds outside the
+source tree. The `headless-debug` preset builds the options, editor, scene, localization, and test targets
+without fetching SDL or Dear ImGui, discovering EGL/GLES, or defining the graphical executable and smoke
+test.
 
-## Editor shell milestone
+Core/domain targets do not depend on SDL, Dear ImGui, EGL/GLES, or a display. Platform, render, and UI code may
+depend inward on core/domain code, but core/domain dependencies do not point outward. The current ownership
+split is:
 
-The visible editor shell adds a project-owned, display-independent state model for a fixed dummy scene,
-selection, object properties, panel visibility, and console messages. Dear ImGui draws the Scene Graph,
-Viewport placeholder, Object Inspector, and Console from that shared state. Dock layout construction is a
-first-use or explicit reset operation; normal Dear ImGui `.ini` persistence owns later user arrangements.
+- `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
+  viewport state.
+- `editor`: display-independent object identity, lifecycle, hierarchy, selection, authoritative transforms,
+  semantic object data, panel visibility, layout-reset intent, and console data.
+- `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
+  sizing, orbit view construction, and viewport-view selection/resolution.
+- `localization`: external resource discovery and UTF-8 string lookup.
+- `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
+- `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, and the
+  offscreen viewport framebuffer.
+- `ui`: Dear ImGui lifecycle and editor presentation/control. `EditorUi` receives references to authoritative
+  `EditorState` and `ViewportView`, but currently owns the concrete `ViewportRenderer` and therefore its GLES
+  resources.
 
-Scene rendering, ECS, serialization, undo/redo, asset management, and plugin frameworks remain deferred.
+## Editor and scene model
 
-## Localization and DPI foundation
+Scenes start empty. `EditorState` is the only scene-object lifecycle and hierarchy authority. Object IDs are
+scene-owned, stable, monotonically allocated, and not reused after deletion. Objects share identity, name,
+enabled/visible state, a local transform, and a two-level semantic tag. Current concrete object subtypes are
+sphere primitive, perspective camera, and directional light; their payloads are plain tagged data rather
+than polymorphic objects or components. Default-name counters are monotonic per category/subtype.
 
-The next editor-wide infrastructure milestone establishes:
-- external UTF-8 locale resources,
-- stable localization keys with English fallback,
-- runtime locale switching,
-- a clear separation between translation capability and font-glyph coverage,
-- SDL3-driven DPI/content-scale awareness,
-- scale-aware Dear ImGui fonts and style metrics,
-- stable docking/window identities across both language and DPI changes.
+Deleting an object deletes only that object. Its direct children become scene roots with preserved world-space
+poses; deeper descendants retain their existing parents. Deletion is transactional if any direct child cannot
+be faithfully unparented as TRS. Selection is cleared only when the deleted object was selected.
 
-Initial glyph coverage may remain Latin-focused, but the localization architecture must not assume ASCII or
-prevent later Cyrillic/CJK font profiles. Font-atlas rebuilding or font replacement for larger glyph sets is
-a separate concern from string lookup and locale switching.
+Sphere radius, perspective projection parameters, and directional-light parameters are authoritative semantic
+editor data. Sphere meshes are deterministic derived data in the scene layer. The renderer draws all enabled,
+visible spheres, caches their derived GLES geometry by object ID and radius, and uses the first enabled
+directional light in scene order; without one it uses ambient-only lighting.
 
-## Basic interactive scene milestone
+## Spatial and hierarchy invariants
 
-The first scene vertical slice keeps four responsibilities distinct:
+AI3 uses a right-handed, Z-up world: +X right, +Y forward, and +Z up. Stored scene lengths are meters.
+Authoritative orientations are normalized `glm::quat` values. Human-facing Euler rotations are degrees in
+intrinsic XYZ order and use centralized conversion helpers. Metric display units affect presentation only.
+See [ADR 0003](decisions/0003-spatial-conventions.md).
 
-- `editor` owns object identity, hierarchy, selection, visibility, and authoritative transforms without a
-  display dependency;
-- `scene` owns GLM-backed transform composition, the orbit camera, procedural primitive data, and framebuffer
-  sizing policy without ImGui or graphics APIs;
-- `render` owns the single concrete OpenGL ES 3 viewport renderer and its shader, mesh, and offscreen
-  framebuffer resources;
-- `ui` presents the rendered texture and translates viewport-local mouse input into camera changes.
+Object transforms are local-to-parent TRS; a root local transform is also its world transform. `EditorState`
+recursively resolves world transforms for every consumer. All object categories may parent one another.
+Reparenting rejects missing parents, self-parenting, descendants, cycles, non-invertible parents, and affine
+results that cannot be reconstructed faithfully as TRS. Successful reparenting is transactional and preserves
+the object's world matrix, including supported reflected/negative-scale cases.
 
-The Viewport attachment follows the ImGui content region converted through the backend-provided framebuffer
-scale. It is resized only when the resulting pixel dimensions change. Renderable objects and their semantic
-parameters are supplied by the editor model and each object transform drives its model matrix directly.
+The Scene Graph presents the authoritative hierarchy as nested nodes. Dropping an object onto another delegates
+to `EditorState::reparent_object`; dropping it onto the UI-only Scene Root requests unparenting. Rejections are
+reported in the Console. Local, Parent, World, and View are explicit tool reference spaces and do not change
+transform storage semantics. See [ADR 0004](decisions/0004-hierarchy-world-transforms.md).
 
-This milestone intentionally defers object picking/manipulation, pan and fly controls, gizmos, lighting and
-material systems, asset loading, serialization, undo/redo, ECS, and a renderer abstraction. Orbit and zoom
-are the only direct viewport interactions.
+## Viewport and rendering
 
-## Spatial foundation
+The application has one viewport with display-independent `ViewportView` state outside Dear ImGui. Its source
+is Orbit or Scene Camera. Orbit state remains independent of scene hierarchy. Scene-camera selection belongs
+to the viewport, not to a global active-camera concept, and currently accepts perspective-camera objects only.
 
-AI3 uses a right-handed, Z-up world: +X is right, +Y is forward, and +Z is up. Scene lengths are stored in
-meters. The editor defaults to meters and can present millimeters, centimeters, meters, or kilometers
-without rescaling stored data.
+Views are resolved on demand from current state. Scene-camera resolution uses the authoritative resolved world
+position/orientation, current projection parameters, and current viewport aspect ratio. Deleting the selected
+camera falls back deterministically to the unchanged Orbit state; Reset Scene resets the viewport to default
+Orbit state. `ViewportRenderer` consumes only resolved view/projection values and does not know which mode
+constructed them. See [ADR 0005](decisions/0005-viewport-view-ownership.md).
 
-Authoritative orientations are normalized `glm::quat` values. Human-facing rotation values are Euler
-degrees using intrinsic XYZ rotations (local X, then local Y, then local Z), with positive angles following
-the right-hand rule. Quaternion/Euler conversion is centralized in scene math; an Euler result is one
-equivalent representation and is not assumed to be globally unique.
+The renderer draws the scene into its GLES color/depth target, sized from the ImGui viewport content region
+after framebuffer scaling. Dear ImGui presents that texture in the visible editor window. Display-independent
+view semantics are already separated from UI ownership, but construction and lifetime of `ViewportRenderer`
+and its GLES resources remain inside `EditorUi`.
 
-## Object lifecycle and semantic primitives
+## Localization, DPI, and editor shell
 
-Scenes begin empty and create objects through the display-independent `EditorState` lifecycle API. Object
-IDs are stable, scene-owned, monotonically allocated identities and are not reused after deletion. Deleting
-an object deletes only that object. Its direct children survive, become scene-root objects, and preserve their
-world-space poses; deeper descendants remain attached to their existing parents. The operation fails
-transactionally if any direct child cannot be faithfully unparented as TRS. Selection is cleared only when
-the deleted object itself was selected.
+Project-owned user-facing strings are external UTF-8 JSON resources in `assets/locales`. `en-US` is mandatory
+and is the initial and per-key fallback locale; missing keys render visibly. Locale switching is runtime, and
+stable hidden ImGui IDs preserve docking identities. The current embedded font profile is Latin-focused;
+translation capability and glyph coverage are separate concerns.
 
-The first semantic primitive is a sphere whose authoritative radius is stored in meters. Procedural vertex
-and index data is deterministic derived data in the headless scene layer. The UI edits radius through the
-active display-length conversion, while the concrete GLES3 renderer enumerates all enabled and visible
-spheres and generates geometry from their current semantic radii. Neither UI nor renderer owns object
-identity or primitive parameters.
+SDL window display scale is the UI-scale source of truth. Scale changes rebuild the ImGui font atlas and
+derive style metrics from unscaled defaults without replacing editor or docking state. See
+[ADR 0002](decisions/0002-localization-and-ui-scale.md).
 
-## Extensible scene-object categories
-
-Scene objects retain one shared identity, hierarchy, enabled/visible state, and transform, and carry a
-two-level semantic tag: general object, primitive plus primitive subtype, camera plus camera subtype, or
-light plus light subtype. The current concrete subtypes are sphere, perspective camera, and directional
-light. Subtype payloads remain plain tagged data rather than polymorphic objects or components. Creation,
-validation, default naming, deletion, reset, selection, parenting, and category/subtype queries all remain
-owned by the display-independent `EditorState`.
-
-Default-name counters are keyed by category and subtype, so each concrete subtype has an independent
-monotonic sequence without adding a lifecycle counter member for every new type. Perspective-camera and
-directional-light forward directions are derived from their object quaternion by rotating local -Z; no
-redundant direction is stored. The viewport remains controlled by the editor-only orbit camera and uses the
-first enabled directional light in scene order, with ambient-only lighting when no such light exists.
-
-## Hierarchy and coordinate spaces
-
-Every stored object transform is local to its immediate parent; a root object's local transform is also its
-world transform. `EditorState` is the authoritative category-agnostic hierarchy resolver and recursively
-composes `World(child) = World(parent) * Local(child)` for renderer and scene consumers. Primitives, cameras,
-lights, and general objects may parent one another without category restrictions. Self-parenting, missing
-parents, descendants as parents, and all other cycles are invalid. Parent IDs are read-only to callers and
-can be changed only by the transactional reparent operation.
-
-Parenting, unparenting, and reparenting preserve the object's world matrix. The operation computes the new
-local affine matrix, decomposes it to the stored position/quaternion/scale form, normalizes the quaternion,
-checks finite/invertible inputs, and verifies each recomposed matrix element with an absolute-plus-relative
-tolerance so translation magnitude cannot loosen validation of the linear transform.
-It rejects the entire operation when the local matrix contains shear or another affine result that plain TRS
-cannot faithfully represent. Zero-scale parents are likewise non-invertible and cannot receive a child while
-preserving its world pose. Reflected/negative scales are accepted only when their decomposed TRS reconstructs
-the requested local matrix within that same tolerance. The existing hierarchy and local transform remain
-unchanged on rejection.
-
-The Scene Graph exposes this hierarchy directly as nested tree nodes. Dragging any scene object onto another
-requests the target as its parent, regardless of either object's category; dragging it onto the UI-only Scene
-Root target requests an unparent to the scene root. Both gestures delegate to `EditorState::reparent_object`,
-so successful changes preserve world-space pose and mathematically unrepresentable hierarchy changes are
-rejected transactionally and reported in the Console. The UI does not maintain a parallel hierarchy model or
-perform hierarchy mathematics.
-
-Local, Parent, World, and View are explicit transform-tool reference spaces, distinct from transform storage.
-Scene math exposes their orthonormal bases in world coordinates: Local uses resolved object orientation,
-Parent uses resolved parent orientation (world axes for a root), World uses canonical axes, and View uses the
-caller-provided viewport camera basis. The editor `OrbitCamera` remains independent of scene hierarchy.
-Directional-light and perspective-camera directions use resolved world orientation; primitive rendering uses
-the authoritative resolved world matrix. Consumers must not independently traverse parent chains.
-
-## Viewport and view architecture
-
-The application owns the display-independent state for the editor's single viewport alongside the scene;
-Dear ImGui receives references and acts only as presenter/controller. A viewport's source is either Orbit or
-Scene Camera, with the latter retaining one scene-object ID. This selection is viewport-specific and does not
-establish a global active camera. Perspective Camera is the only currently supported Scene Camera subtype;
-validation and resolution are localized behind an explicit `CameraKind` dispatch in the view layer.
-
-Orbit is one way to construct a resolved view, not a renderer camera type. When a scene camera is selected,
-the viewport derives matrices from the camera's authoritative resolved world position and orientation, its
-current semantic FOV and clipping planes, and the current viewport aspect ratio. Deleting the selected camera
-causes deterministic fallback to the unchanged Orbit state. Reset Scene also resets the viewport to its
-default Orbit state.
-
-The GLES3 renderer consumes a small resolved view/projection value and is independent of Orbit and scene-
-camera selection semantics. This seam permits later view-construction modes without changing renderer
-fundamentals. FPS, trackball, rail/cinematic modes, multiple viewports, and a renderer abstraction remain
-unimplemented and deferred. See [ADR 0005](decisions/0005-viewport-view-ownership.md).
+The docked shell contains Scene Graph, Viewport, Object Inspector, and Console panels. Normal Dear ImGui `.ini`
+persistence owns user layout after first-use construction; Reset Layout requests reconstruction. The demo and
+diagnostic windows remain compiled and available.

@@ -86,8 +86,33 @@ The same verification path should be used locally and by GitHub Actions wherever
 - Fix failing CI before merge.
 - Keep commits focused and explain architectural changes in the pull request.
 
+### Milestone merge criterion
+
+A milestone is not ready to merge until its documentation has been reconciled with the final reviewed
+implementation, including semantic changes introduced during correction, review, or runtime testing. This is
+an explicit merge criterion alongside code review, repository verification, and appropriate runtime
+verification. Before declaring a milestone merge-ready:
+
+- Update `docs/PROJECT.md` if current architecture, behavior, or invariants changed.
+- Add or update relevant ADRs only for durable architectural decisions.
+- Reconcile `docs/ROADMAP.md` where future work was completed, discovered, deferred, or reordered.
+- Record the completed milestone concisely in `docs/MILESTONES.md`.
+- Reconcile the active milestone brief with the final approved scope and explicitly agreed scope corrections.
+- Update applicable `AGENTS.md` files only when the milestone discovered a rule that should govern future
+  development.
+
+Update only affected documentation and do not duplicate information across documentation layers.
+Documentation must describe the final reviewed implementation, not merely the original milestone plan.
+Implementation and tests remain authoritative if a discrepancy is discovered.
+
 ## Agent behavior
 Spend model effort on design, implementation, debugging, tests, and review. Prefer deterministic repository tooling for environment setup, formatting, building, and routine shell work.
 Do not silently change established architecture. Record deliberate architectural changes in project documentation.
+
+At the start of a milestone implementation, normally inspect the applicable `AGENTS.md` files,
+`docs/PROJECT.md`, `docs/ROADMAP.md`, relevant ADRs, `docs/MILESTONES.md`, the active brief under
+`docs/milestones/`, relevant implementation and tests, and recent Git history. Repository implementation and
+tests are authoritative when documentation conflicts. Keep current truth, rationale, future plans, and history
+in their respective documentation layers rather than repeating the complete project story in prompts or files.
 
 More local AGENTS.md files may add directory-specific rules.
