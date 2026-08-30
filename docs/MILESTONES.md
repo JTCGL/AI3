@@ -69,3 +69,11 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 - Added category-independent Scene Graph drag/drop parenting and root unparenting through the authoritative
   reparent operation, with visible transactional failure reporting. Corrected deletion semantics so deleting
   an object deletes only that object; direct children survive as scene roots with preserved world-space poses.
+
+## Milestone 11 — Scene Document persistence foundation
+
+- Final reviewed implementation head for [PR #27](https://github.com/JTCGL/AI3/pull/27):
+  `4d334ae26c2aaaa41415ca943fb95903f49890e9`
+- Added strict, versioned UTF-8 JSON Scene Documents with transactional headless serialization and filesystem
+  persistence, exact scene identity and hierarchy reconstruction, and localized SDL-native Open, Save, and
+  Save As workflows with defined document/workspace boundaries.
