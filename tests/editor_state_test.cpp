@@ -3,10 +3,16 @@
 #include "editor/editor_state.h"
 #include "scene/length_units.h"
 
-TEST_CASE("objects are created with stable monotonic scene IDs")
+TEST_CASE("editor state starts with an empty scene and no selection")
 {
     ai3::EditorState state;
     CHECK(state.objects().empty());
+    CHECK(state.selection() == ai3::no_object);
+}
+
+TEST_CASE("objects are created with stable monotonic scene IDs")
+{
+    ai3::EditorState state;
     const ai3::ObjectId root = state.create_object({"Scene"});
     const ai3::ObjectId first =
         state.create_object({"Sphere", root, {}, true, true, ai3::PrimitiveKind::sphere});

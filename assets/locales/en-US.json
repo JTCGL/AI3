@@ -34,7 +34,6 @@
     "inspector.rotation": "Rotation",
     "inspector.scale": "Scale",
     "inspector.radius_with_unit": "Radius ({unit})",
-    "object.scene": "Scene",
     "object.sphere": "Sphere",
     "type.object": "Object",
     "type.sphere": "Sphere",

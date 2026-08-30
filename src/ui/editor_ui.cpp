@@ -76,10 +76,6 @@ EditorUi::EditorUi(Localization& localization, float content_scale, float ui_sca
     : localization_(localization), content_scale_(content_scale), ui_scale_(ui_scale),
       font_size_(font_size)
 {
-    scene_root_ = state_.create_object({localization_.text("object.scene")});
-    const ObjectId sphere = state_.create_object(
-        {localization_.text("object.sphere"), scene_root_, {}, true, true, PrimitiveKind::sphere});
-    state_.select(sphere);
 }
 
 void EditorUi::set_scale_diagnostics(float content_scale, float ui_scale, float font_size)
@@ -108,10 +104,8 @@ void EditorUi::draw_main_menu(bool& running)
         {
             if (ImGui::MenuItem(localization_.text("action.create_sphere").c_str()))
             {
-                const ObjectId parent =
-                    state_.find_object(scene_root_) == nullptr ? no_object : scene_root_;
                 const ObjectId sphere = state_.create_object({localization_.text("object.sphere"),
-                                                              parent,
+                                                              no_object,
                                                               {},
                                                               true,
                                                               true,
