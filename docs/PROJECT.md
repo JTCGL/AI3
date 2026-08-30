@@ -9,8 +9,8 @@ This document describes the current repository state. Architectural rationale be
 AI3 is a C++17 application built with CMake and Ninja. It targets Termux ARM64 with Clang and desktop Linux
 x86-64 with GCC. The graphical application uses SDL3 for its window, input, OpenGL context, and display-scale
 integration; OpenGL ES 3.0 is the only renderer API. Dear ImGui comes from docking-branch lineage and uses
-`imgui_impl_sdl3` and `imgui_impl_opengl3` with `IMGUI_IMPL_OPENGL_ES3`. SDL3, Dear ImGui, GLM, and doctest are
-fetched at pinned revisions. There is no desktop OpenGL path, Vulkan path, GLAD, renderer abstraction, or
+`imgui_impl_sdl3` and `imgui_impl_opengl3` with `IMGUI_IMPL_OPENGL_ES3`. SDL3, Dear ImGui, GLM, nlohmann/json,
+and doctest are fetched at pinned revisions. There is no desktop OpenGL path, Vulkan path, GLAD, renderer abstraction, or
 ImGui multi-viewport support.
 
 On Termux, SDL uses its X11 backend and runs as a normal process against Termux:X11 rather than as an Android
@@ -31,7 +31,8 @@ split is:
 - `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
   viewport state.
 - `editor`: display-independent object identity, lifecycle, hierarchy, selection, authoritative transforms,
-  semantic object data, panel visibility, layout-reset intent, and console data.
+  semantic object data, transactional Scene Document serialization/filesystem I/O, panel visibility,
+  layout-reset intent, and console data.
 - `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
   sizing, orbit view construction, and viewport-view selection/resolution.
 - `localization`: external resource discovery and UTF-8 string lookup.
@@ -39,8 +40,8 @@ split is:
 - `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, and the
   offscreen viewport framebuffer.
 - `ui`: Dear ImGui lifecycle and editor presentation/control. `EditorUi` receives references to authoritative
-  `EditorState` and `ViewportView`, but currently owns the concrete `ViewportRenderer` and therefore its GLES
-  resources.
+  `EditorState` and `ViewportView`, owns the current document-path association and SDL native-dialog result
+  handoff, and currently owns the concrete `ViewportRenderer` and therefore its GLES resources.
 
 ## Editor and scene model
 
@@ -58,6 +59,26 @@ Sphere radius, perspective projection parameters, and directional-light paramete
 editor data. Sphere meshes are deterministic derived data in the scene layer. The renderer draws all enabled,
 visible spheres, caches their derived GLES geometry by object ID and radius, and uses the first enabled
 directional light in scene order; without one it uses ambient-only lighting.
+
+## Scene Documents
+
+AI3 Scene Documents are strict, versioned UTF-8 JSON files with the `.ai3scene` extension, format identifier
+`ai3-scene`, and current version `1`. They persist exact nonzero object IDs and ordering, names, enabled and
+visible state, parent IDs, authoritative local TRS, durable category/subtype names, current semantic payloads,
+the next-ID allocator, and subtype default-name counters. Quaternion arrays have stable `[w, x, y, z]` order
+and are normalized. World transforms, Euler presentation, derived geometry, renderer state, and editor
+workspace/session state are outside the format.
+
+The headless editor target owns serialization, validation, and ordinary-filesystem helpers through pinned
+nlohmann/json. A narrowly friended codec reconstructs a complete candidate with explicit identity and local
+hierarchy data; normal object creation still uses the lifecycle allocator. Load validates the entire candidate
+before replacing scene-owned state, and failure leaves the destination unchanged. Successful load clears
+selection while preserving non-document editor state such as console, panel visibility, and layout intent.
+
+The graphical UI uses SDL3 asynchronous native file dialogs for Open and Save As and retains one associated
+document path. Save uses that path or invokes Save As when none exists. After successful Open, the UI resets
+the viewport to default Orbit and clears renderer geometry caches before subsequent rendering. See
+[ADR 0006](decisions/0006-scene-document-format.md).
 
 ## Spatial and hierarchy invariants
 

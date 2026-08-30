@@ -1,9 +1,13 @@
 #include "ui/editor_ui.h"
+#include "editor/scene_document.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "scene/length_units.h"
 #include "scene/scene_math.h"
 #include "ui/ui_identity.h"
+
+#include <SDL3/SDL_dialog.h>
+#include <SDL3/SDL_error.h>
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -11,12 +15,59 @@
 #include <array>
 #include <cstdio>
 #include <iomanip>
+#include <mutex>
+#include <optional>
 #include <sstream>
 
 namespace ai3
 {
+enum class SceneDialogKind
+{
+    open,
+    save
+};
+
+struct SceneDialogResult
+{
+    SceneDialogKind kind;
+    std::string path;
+    std::string error;
+};
+
+class SceneDialogState
+{
+    public:
+    std::mutex mutex;
+    bool active = false;
+    std::optional<SceneDialogResult> result;
+    std::string filter_name;
+    SDL_DialogFileFilter filter{};
+};
+
 namespace
 {
+struct SceneDialogCallback
+{
+    std::weak_ptr<SceneDialogState> state;
+    SceneDialogKind kind;
+};
+
+void SDLCALL scene_dialog_callback(void* userdata, const char* const* files, int)
+{
+    std::unique_ptr<SceneDialogCallback> callback(static_cast<SceneDialogCallback*>(userdata));
+    const std::shared_ptr<SceneDialogState> state = callback->state.lock();
+    if (state == nullptr)
+        return;
+    SceneDialogResult result{callback->kind, {}, {}};
+    if (files == nullptr)
+        result.error = SDL_GetError();
+    else if (files[0] != nullptr)
+        result.path = files[0];
+    std::lock_guard<std::mutex> lock(state->mutex);
+    state->active = false;
+    state->result = std::move(result);
+}
+
 struct PanelMenuEntry
 {
     const char* key;
@@ -75,9 +126,10 @@ void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
 } // namespace
 
 EditorUi::EditorUi(EditorState& state, ViewportView& viewport_view, Localization& localization,
-                   float content_scale, float ui_scale, float font_size)
-    : state_(state), viewport_view_(viewport_view), localization_(localization),
-      content_scale_(content_scale), ui_scale_(ui_scale), font_size_(font_size)
+                   SDL_Window* window, float content_scale, float ui_scale, float font_size)
+    : state_(state), viewport_view_(viewport_view), localization_(localization), window_(window),
+      dialog_state_(std::make_shared<SceneDialogState>()), content_scale_(content_scale),
+      ui_scale_(ui_scale), font_size_(font_size)
 {
 }
 
@@ -93,12 +145,126 @@ std::string EditorUi::window_title(std::string_view key, std::string_view stable
     return stable_imgui_label(localization_.text(key), stable_id);
 }
 
+void EditorUi::report_document_result(std::string_view key, const std::string& detail)
+{
+    state_.add_console_message(std::string(key), detail);
+    state_.set_panel_visible(EditorPanel::console, true);
+}
+
+void EditorUi::request_open_dialog()
+{
+    {
+        std::lock_guard<std::mutex> lock(dialog_state_->mutex);
+        if (dialog_state_->active)
+            return;
+        dialog_state_->filter_name = localization_.text("dialog.scene_document_filter");
+        dialog_state_->filter = {dialog_state_->filter_name.c_str(), "ai3scene"};
+        dialog_state_->active = true;
+    }
+    auto* callback = new SceneDialogCallback{dialog_state_, SceneDialogKind::open};
+    SDL_ShowOpenFileDialog(scene_dialog_callback, callback, window_, &dialog_state_->filter, 1,
+                           nullptr, false);
+}
+
+void EditorUi::request_save_as_dialog()
+{
+    {
+        std::lock_guard<std::mutex> lock(dialog_state_->mutex);
+        if (dialog_state_->active)
+            return;
+        dialog_state_->filter_name = localization_.text("dialog.scene_document_filter");
+        dialog_state_->filter = {dialog_state_->filter_name.c_str(), "ai3scene"};
+        dialog_state_->active = true;
+    }
+    auto* callback = new SceneDialogCallback{dialog_state_, SceneDialogKind::save};
+    SDL_ShowSaveFileDialog(scene_dialog_callback, callback, window_, &dialog_state_->filter, 1,
+                           nullptr);
+}
+
+void EditorUi::save_document()
+{
+    if (document_path_.empty())
+    {
+        request_save_as_dialog();
+        return;
+    }
+    std::string error;
+    if (save_scene_document_file(state_, document_path_, &error))
+        report_document_result("console.document_saved", document_path_.string());
+    else
+        report_document_result("console.document_save_failed", error);
+}
+
+void EditorUi::process_dialog_result()
+{
+    std::optional<SceneDialogResult> result;
+    {
+        std::lock_guard<std::mutex> lock(dialog_state_->mutex);
+        result = std::move(dialog_state_->result);
+        dialog_state_->result.reset();
+    }
+    if (!result.has_value())
+        return;
+    if (!result->error.empty())
+    {
+        report_document_result(result->kind == SceneDialogKind::open
+                                   ? "console.document_open_failed"
+                                   : "console.document_save_failed",
+                               result->error);
+        return;
+    }
+    if (result->path.empty())
+        return;
+
+    std::filesystem::path path = std::filesystem::u8path(result->path);
+    if (result->kind == SceneDialogKind::open)
+    {
+        std::string error;
+        if (!load_scene_document_file(path, state_, &error))
+        {
+            report_document_result("console.document_open_failed", error);
+            return;
+        }
+        document_path_ = std::move(path);
+        viewport_view_.reset();
+        viewport_renderer_.clear_geometry_cache();
+        report_document_result("console.document_opened", document_path_.string());
+        return;
+    }
+
+    if (path.extension().empty())
+        path += scene_document_extension;
+    std::string error;
+    if (!save_scene_document_file(state_, path, &error))
+    {
+        report_document_result("console.document_save_failed", error);
+        return;
+    }
+    document_path_ = std::move(path);
+    report_document_result("console.document_saved", document_path_.string());
+}
+
 void EditorUi::draw_main_menu(bool& running)
 {
     if (ImGui::BeginMainMenuBar())
     {
         if (ImGui::BeginMenu(localization_.text("menu.file").c_str()))
         {
+            bool dialog_active = false;
+            {
+                std::lock_guard<std::mutex> lock(dialog_state_->mutex);
+                dialog_active = dialog_state_->active;
+            }
+            if (ImGui::MenuItem(localization_.text("action.open").c_str(), nullptr, false,
+                                !dialog_active))
+                request_open_dialog();
+            if (ImGui::MenuItem(localization_.text("action.save").c_str(), nullptr, false,
+                                !dialog_active))
+                save_document();
+            if (ImGui::MenuItem(localization_.text("action.save_as").c_str(), nullptr, false,
+                                !dialog_active))
+                request_save_as_dialog();
+            ImGui::Separator();
             if (ImGui::MenuItem(localization_.text("action.reset_scene").c_str()))
             {
                 state_.reset_scene();
@@ -504,7 +670,9 @@ void EditorUi::draw_console()
             else
             {
                 const std::string text =
-                    localization_.format(message.key, {{"object", message.argument}});
+                    localization_.format(message.key, {{"object", message.argument},
+                                                       {"detail", message.argument},
+                                                       {"path", message.argument}});
                 ImGui::TextUnformatted(text.c_str());
             }
         }
@@ -516,6 +684,7 @@ void EditorUi::draw_console()
 
 void EditorUi::draw(bool& running)
 {
+    process_dialog_result();
     draw_main_menu(running);
 
     constexpr ImGuiID dockspace_id = 0xA13ED170;

@@ -30,14 +30,24 @@ FetchContent_Declare(
     GIT_SHALLOW FALSE
 )
 
-FetchContent_MakeAvailable(glm)
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG 9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03
+    GIT_SHALLOW FALSE
+)
+
+FetchContent_MakeAvailable(glm nlohmann_json)
 
 add_library(ai3_options STATIC src/app/command_line.cpp)
 target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_library(ai3_editor STATIC src/editor/editor_state.cpp)
+add_library(ai3_editor STATIC
+    src/editor/editor_state.cpp
+    src/editor/scene_document.cpp
+)
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(ai3_editor PUBLIC glm::glm)
+target_link_libraries(ai3_editor PUBLIC glm::glm nlohmann_json::nlohmann_json)
 
 add_library(ai3_scene STATIC
     src/scene/length_units.cpp
@@ -151,6 +161,7 @@ if(AI3_BUILD_TESTS)
         tests/editor_state_test.cpp
         tests/hierarchy_test.cpp
         tests/localization_test.cpp
+        tests/scene_document_test.cpp
         tests/scene_test.cpp
         tests/ui_identity_test.cpp
         tests/viewport_view_test.cpp
