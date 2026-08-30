@@ -143,6 +143,13 @@ preserving its world pose. Reflected/negative scales are accepted only when thei
 the requested local matrix within that same tolerance. The existing hierarchy and local transform remain
 unchanged on rejection.
 
+The Scene Graph exposes this hierarchy directly as nested tree nodes. Dragging any scene object onto another
+requests the target as its parent, regardless of either object's category; dragging it onto the UI-only Scene
+Root target requests an unparent to the scene root. Both gestures delegate to `EditorState::reparent_object`,
+so successful changes preserve world-space pose and mathematically unrepresentable hierarchy changes are
+rejected transactionally and reported in the Console. The UI does not maintain a parallel hierarchy model or
+perform hierarchy mathematics.
+
 Local, Parent, World, and View are explicit transform-tool reference spaces, distinct from transform storage.
 Scene math exposes their orthonormal bases in world coordinates: Local uses resolved object orientation,
 Parent uses resolved parent orientation (world axes for a root), World uses canonical axes, and View uses the
