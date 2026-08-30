@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 
 namespace ai3
 {
@@ -125,33 +126,12 @@ ViewportRenderer::ViewportRenderer()
         if (mvp_location_ < 0 || model_location_ < 0)
             throw std::runtime_error("Viewport shader uniforms are unavailable");
 
-        glGenVertexArrays(1, &vertex_array_);
-        glGenBuffers(1, &vertex_buffer_);
-        glGenBuffers(1, &index_buffer_);
-        if (vertex_array_ == 0 || vertex_buffer_ == 0 || index_buffer_ == 0)
-            throw std::runtime_error("Viewport mesh resource creation failed");
-        glBindVertexArray(vertex_array_);
-        glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex),
-                              reinterpret_cast<const void*>(offsetof(MeshVertex, position)));
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex),
-                              reinterpret_cast<const void*>(offsetof(MeshVertex, normal)));
-        glBindVertexArray(0);
         gl_description_ =
             gl_string(GL_VERSION) + " | " + gl_string(GL_VENDOR) + " | " + gl_string(GL_RENDERER);
         require_no_gl_error("Viewport renderer initialization");
     }
     catch (...)
     {
-        if (index_buffer_ != 0)
-            glDeleteBuffers(1, &index_buffer_);
-        if (vertex_buffer_ != 0)
-            glDeleteBuffers(1, &vertex_buffer_);
-        if (vertex_array_ != 0)
-            glDeleteVertexArrays(1, &vertex_array_);
         if (program_ != 0)
             glDeleteProgram(program_);
         throw;
@@ -160,15 +140,83 @@ ViewportRenderer::ViewportRenderer()
 
 ViewportRenderer::~ViewportRenderer()
 {
+    clear_geometry_cache();
     destroy_render_target();
-    if (index_buffer_ != 0)
-        glDeleteBuffers(1, &index_buffer_);
-    if (vertex_buffer_ != 0)
-        glDeleteBuffers(1, &vertex_buffer_);
-    if (vertex_array_ != 0)
-        glDeleteVertexArrays(1, &vertex_array_);
     if (program_ != 0)
         glDeleteProgram(program_);
+}
+
+void ViewportRenderer::destroy_geometry(SphereGeometry& geometry)
+{
+    if (geometry.index_buffer != 0)
+        glDeleteBuffers(1, &geometry.index_buffer);
+    if (geometry.vertex_buffer != 0)
+        glDeleteBuffers(1, &geometry.vertex_buffer);
+    if (geometry.vertex_array != 0)
+        glDeleteVertexArrays(1, &geometry.vertex_array);
+    geometry = {};
+}
+
+void ViewportRenderer::clear_geometry_cache()
+{
+    for (auto& entry : sphere_geometry_cache_)
+        destroy_geometry(entry.second);
+    sphere_geometry_cache_.clear();
+}
+
+void ViewportRenderer::synchronize_geometry_cache(const EditorState& scene)
+{
+    std::unordered_set<ObjectId> live_ids;
+    for (const SceneObject& object : scene.objects())
+        live_ids.insert(object.id);
+    for (auto it = sphere_geometry_cache_.begin(); it != sphere_geometry_cache_.end();)
+    {
+        if (live_ids.count(it->first) != 0)
+        {
+            ++it;
+            continue;
+        }
+        destroy_geometry(it->second);
+        it = sphere_geometry_cache_.erase(it);
+    }
+}
+
+ViewportRenderer::SphereGeometry& ViewportRenderer::sphere_geometry(const SceneObject& object)
+{
+    auto [it, inserted] = sphere_geometry_cache_.try_emplace(object.id);
+    SphereGeometry& geometry = it->second;
+    if (!inserted && geometry.radius_meters == object.sphere.radius_meters)
+        return geometry;
+
+    destroy_geometry(geometry);
+    const SphereMesh mesh = make_sphere_mesh(object.sphere.radius_meters);
+    geometry.radius_meters = object.sphere.radius_meters;
+    geometry.index_count = static_cast<std::uint32_t>(mesh.indices.size());
+    glGenVertexArrays(1, &geometry.vertex_array);
+    glGenBuffers(1, &geometry.vertex_buffer);
+    glGenBuffers(1, &geometry.index_buffer);
+    if (geometry.vertex_array == 0 || geometry.vertex_buffer == 0 || geometry.index_buffer == 0)
+    {
+        destroy_geometry(geometry);
+        throw std::runtime_error("Viewport sphere resource creation failed");
+    }
+    glBindVertexArray(geometry.vertex_array);
+    glBindBuffer(GL_ARRAY_BUFFER, geometry.vertex_buffer);
+    glBufferData(GL_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(mesh.vertices.size() * sizeof(MeshVertex)),
+                 mesh.vertices.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geometry.index_buffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 static_cast<GLsizeiptr>(mesh.indices.size() * sizeof(std::uint32_t)),
+                 mesh.indices.data(), GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex),
+                          reinterpret_cast<const void*>(offsetof(MeshVertex, position)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex),
+                          reinterpret_cast<const void*>(offsetof(MeshVertex, normal)));
+    glBindVertexArray(0);
+    return geometry;
 }
 
 void ViewportRenderer::destroy_render_target()
@@ -225,6 +273,7 @@ void ViewportRenderer::resize(RenderTargetSize size)
 void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camera,
                               RenderTargetSize size)
 {
+    synchronize_geometry_cache(scene);
     if (requires_render_target_resize(size_, size))
         resize(size);
     if (size_.width == 0 || size_.height == 0)
@@ -237,26 +286,18 @@ void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camer
     glClearColor(0.055F, 0.07F, 0.10F, 1.0F);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(program_);
-    glBindVertexArray(vertex_array_);
     const glm::mat4 view_projection = camera.projection_matrix(static_cast<float>(size_.width) /
                                                                static_cast<float>(size_.height)) *
                                       camera.view_matrix();
     for (const SceneObject* object : scene.visible_spheres())
     {
-        const SphereMesh mesh = make_sphere_mesh(object->sphere.radius_meters);
-        glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_);
-        glBufferData(GL_ARRAY_BUFFER,
-                     static_cast<GLsizeiptr>(mesh.vertices.size() * sizeof(MeshVertex)),
-                     mesh.vertices.data(), GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer_);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                     static_cast<GLsizeiptr>(mesh.indices.size() * sizeof(std::uint32_t)),
-                     mesh.indices.data(), GL_DYNAMIC_DRAW);
+        const SphereGeometry& geometry = sphere_geometry(*object);
+        glBindVertexArray(geometry.vertex_array);
         const glm::mat4 model = compose_transform(object->transform);
         const glm::mat4 mvp = view_projection * model;
         glUniformMatrix4fv(mvp_location_, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(model_location_, 1, GL_FALSE, glm::value_ptr(model));
-        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.indices.size()), GL_UNSIGNED_INT,
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(geometry.index_count), GL_UNSIGNED_INT,
                        nullptr);
     }
     glBindVertexArray(0);

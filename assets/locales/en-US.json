@@ -11,6 +11,7 @@
     "menu.language": "Language",
     "menu.display_units": "Display Units",
     "action.quit": "Quit",
+    "action.reset_scene": "Reset Scene",
     "action.reset_layout": "Reset Layout",
     "action.clear": "Clear",
     "action.create_sphere": "Create Sphere",

@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 
 namespace ai3
 {
@@ -18,6 +19,8 @@ class ViewportRenderer
     ViewportRenderer& operator=(const ViewportRenderer&) = delete;
 
     void render(const EditorState& scene, const OrbitCamera& camera, RenderTargetSize size);
+    void synchronize_geometry_cache(const EditorState& scene);
+    void clear_geometry_cache();
     std::uint32_t texture() const { return color_texture_; }
     RenderTargetSize size() const { return size_; }
     std::uint64_t resize_count() const { return resize_count_; }
@@ -27,10 +30,19 @@ class ViewportRenderer
     void resize(RenderTargetSize size);
     void destroy_render_target();
 
+    struct SphereGeometry
+    {
+        float radius_meters = 0.0F;
+        std::uint32_t vertex_array = 0;
+        std::uint32_t vertex_buffer = 0;
+        std::uint32_t index_buffer = 0;
+        std::uint32_t index_count = 0;
+    };
+
+    SphereGeometry& sphere_geometry(const SceneObject& object);
+    static void destroy_geometry(SphereGeometry& geometry);
+
     std::uint32_t program_ = 0;
-    std::uint32_t vertex_array_ = 0;
-    std::uint32_t vertex_buffer_ = 0;
-    std::uint32_t index_buffer_ = 0;
     std::uint32_t framebuffer_ = 0;
     std::uint32_t color_texture_ = 0;
     std::uint32_t depth_renderbuffer_ = 0;
@@ -39,5 +51,6 @@ class ViewportRenderer
     RenderTargetSize size_{};
     std::uint64_t resize_count_ = 0;
     std::string gl_description_;
+    std::unordered_map<ObjectId, SphereGeometry> sphere_geometry_cache_;
 };
 } // namespace ai3

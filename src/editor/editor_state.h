@@ -86,7 +86,9 @@ class EditorState
     EditorState();
 
     ObjectId create_object(CreateObject object);
+    ObjectId create_sphere(std::string localized_base_name, SpherePrimitive sphere = {});
     bool delete_object(ObjectId id);
+    void reset_scene();
     const std::vector<SceneObject>& objects() const;
     SceneObject* find_object(ObjectId id);
     const SceneObject* find_object(ObjectId id) const;
@@ -110,6 +112,7 @@ class EditorState
     private:
     std::vector<SceneObject> objects_;
     ObjectId next_object_id_ = 1;
+    std::uint64_t spheres_created_ = 0;
     ObjectId selection_ = no_object;
     std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,
                                                                                         true, true};

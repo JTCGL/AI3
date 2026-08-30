@@ -43,6 +43,40 @@ TEST_CASE("sphere creation stores semantic radius in meters")
           doctest::Approx(object->sphere.radius_meters));
 }
 
+TEST_CASE("sphere default names use a localized base and a scene-owned monotonic counter")
+{
+    ai3::EditorState state;
+    const ai3::ObjectId first = state.create_sphere("Sphere");
+    const ai3::ObjectId second = state.create_sphere("Sphere");
+    REQUIRE(state.find_object(first) != nullptr);
+    REQUIRE(state.find_object(second) != nullptr);
+    CHECK(state.find_object(first)->name == "Sphere 1");
+    CHECK(state.find_object(second)->name == "Sphere 2");
+
+    state.find_object(second)->name = "Renamed";
+    CHECK(state.delete_object(first));
+    const ai3::ObjectId third = state.create_sphere("Esfera");
+    CHECK(state.find_object(third)->name == "Esfera 3");
+    CHECK(third == 3);
+}
+
+TEST_CASE("scene reset empties lifecycle state and starts a new identity and naming sequence")
+{
+    ai3::EditorState state;
+    const ai3::ObjectId first = state.create_sphere("Sphere");
+    const ai3::ObjectId second = state.create_sphere("Sphere");
+    REQUIRE(first == 1);
+    REQUIRE(second == 2);
+    REQUIRE(state.select(second));
+
+    state.reset_scene();
+    CHECK(state.objects().empty());
+    CHECK(state.selection() == ai3::no_object);
+    const ai3::ObjectId after_reset = state.create_sphere("Sphere");
+    CHECK(after_reset == 1);
+    CHECK(state.find_object(after_reset)->name == "Sphere 1");
+}
+
 TEST_CASE("deleting a parent recursively deletes descendants and selected objects")
 {
     ai3::EditorState state;

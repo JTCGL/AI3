@@ -37,4 +37,6 @@ void OrbitCamera::zoom(float wheel_delta)
 {
     distance_ = std::clamp(distance_ * std::exp(-wheel_delta * 0.12F), 1.5F, 30.0F);
 }
+
+void OrbitCamera::reset() { *this = OrbitCamera{}; }
 } // namespace ai3

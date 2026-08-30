@@ -11,6 +11,7 @@
     "menu.language": "Idioma",
     "menu.display_units": "Unidades de visualización",
     "action.quit": "Salir",
+    "action.reset_scene": "Restablecer escena",
     "action.reset_layout": "Restablecer disposición",
     "action.clear": "Limpiar",
     "action.create_sphere": "Crear esfera",

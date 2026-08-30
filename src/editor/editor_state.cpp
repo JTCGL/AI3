@@ -29,6 +29,18 @@ ObjectId EditorState::create_object(CreateObject object)
     return id;
 }
 
+ObjectId EditorState::create_sphere(std::string localized_base_name, SpherePrimitive sphere)
+{
+    ++spheres_created_;
+    return create_object({std::move(localized_base_name) + " " + std::to_string(spheres_created_),
+                          no_object,
+                          {},
+                          true,
+                          true,
+                          PrimitiveKind::sphere,
+                          sphere});
+}
+
 bool EditorState::delete_object(ObjectId id)
 {
     if (find_object(id) == nullptr)
@@ -45,6 +57,14 @@ bool EditorState::delete_object(ObjectId id)
                                   { return deleted.count(object.id) != 0; }),
                    objects_.end());
     return true;
+}
+
+void EditorState::reset_scene()
+{
+    objects_.clear();
+    selection_ = no_object;
+    next_object_id_ = 1;
+    spheres_created_ = 0;
 }
 
 const std::vector<SceneObject>& EditorState::objects() const { return objects_; }

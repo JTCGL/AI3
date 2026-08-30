@@ -128,6 +128,19 @@ TEST_CASE("orbit camera uses Z as its stable up axis")
             CHECK(std::isfinite(view[column][row]));
 }
 
+TEST_CASE("orbit camera reset restores its default view")
+{
+    ai3::OrbitCamera camera;
+    const glm::vec3 default_target = camera.target();
+    camera.orbit(40.0F, -30.0F);
+    camera.zoom(4.0F);
+    camera.reset();
+    CHECK(camera.yaw_degrees() == doctest::Approx(35.0F));
+    CHECK(camera.pitch_degrees() == doctest::Approx(20.0F));
+    CHECK(camera.distance() == doctest::Approx(6.0F));
+    check_vec3(camera.target(), default_target);
+}
+
 TEST_CASE("procedural sphere is deterministic and has valid indexed geometry")
 {
     const ai3::SphereMesh mesh = ai3::make_sphere_mesh(1.0F);
