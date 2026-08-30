@@ -42,6 +42,8 @@ constexpr std::array<PanelMenuEntry, 4> panel_menu_entries = {
      {"panel.object_inspector", "ai3_object_inspector", EditorPanel::object_inspector},
      {"panel.console", "ai3_console", EditorPanel::console}}};
 
+constexpr char scene_object_payload[] = "AI3_SCENE_OBJECT";
+
 std::string decimal(float value, int precision)
 {
     std::ostringstream stream;
@@ -212,11 +214,48 @@ void EditorUi::draw_scene_node(ObjectId id)
                                         flags, "%s", object->name.c_str());
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
         state_.select(id);
+    if (ImGui::BeginDragDropSource())
+    {
+        ImGui::SetDragDropPayload(scene_object_payload, &id, sizeof(id));
+        ImGui::TextUnformatted(object->name.c_str());
+        ImGui::EndDragDropSource();
+    }
+    accept_reparent_drop(id);
     if (open && !children.empty())
     {
         for (ObjectId child : children)
             draw_scene_node(child);
         ImGui::TreePop();
+    }
+}
+
+void EditorUi::accept_reparent_drop(ObjectId new_parent)
+{
+    if (!ImGui::BeginDragDropTarget())
+        return;
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(scene_object_payload);
+        payload != nullptr && payload->DataSize == sizeof(ObjectId))
+    {
+        const ObjectId dragged = *static_cast<const ObjectId*>(payload->Data);
+        pending_reparent_ = {dragged, new_parent};
+    }
+    ImGui::EndDragDropTarget();
+}
+
+void EditorUi::apply_pending_reparent()
+{
+    const auto [dragged, new_parent] = pending_reparent_;
+    if (dragged == no_object)
+        return;
+    pending_reparent_ = {no_object, no_object};
+    const SceneObject* object = state_.find_object(dragged);
+    if (object == nullptr)
+        return;
+    const std::string object_name = object->name;
+    if (!state_.reparent_object(dragged, new_parent))
+    {
+        state_.add_console_message("console.reparent_rejected", object_name);
+        state_.set_panel_visible(EditorPanel::console, true);
     }
 }
 
@@ -227,8 +266,14 @@ void EditorUi::draw_scene_graph()
     {
         const std::string title = window_title("panel.scene_graph", "ai3_scene_graph");
         ImGui::Begin(title.c_str(), &visible);
+        const std::string root_label =
+            stable_imgui_label(localization_.text("scene_graph.root"), "scene_graph_root");
+        ImGui::Selectable(root_label.c_str(), false, ImGuiSelectableFlags_SpanAvailWidth);
+        accept_reparent_drop(no_object);
+        ImGui::Separator();
         for (ObjectId root : state_.children_of(no_object))
             draw_scene_node(root);
+        apply_pending_reparent();
         ImGui::End();
     }
     state_.set_panel_visible(EditorPanel::scene_graph, visible);

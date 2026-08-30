@@ -8,6 +8,7 @@
 #include <glm/geometric.hpp>
 #include <glm/vec4.hpp>
 
+#include <array>
 #include <cmath>
 #include <string>
 
@@ -183,19 +184,114 @@ TEST_CASE("deep hierarchy resolution is deterministic and reset removes hierarch
     CHECK(scene.create_object(object("New", ai3::ObjectCategory::general)) == 1);
 }
 
-TEST_CASE("recursive deletion handles mixed category hierarchy")
+TEST_CASE("deleting a root preserves mixed-category children descendants poses and IDs")
 {
     ai3::EditorState scene;
-    const ai3::ObjectId light = scene.create_object(object("Light", ai3::ObjectCategory::light));
-    const ai3::ObjectId camera = scene.create_object(object("Camera", ai3::ObjectCategory::camera));
-    const ai3::ObjectId primitive =
-        scene.create_object(object("Primitive", ai3::ObjectCategory::primitive));
-    REQUIRE(scene.reparent_object(light, camera));
-    REQUIRE(scene.reparent_object(camera, primitive));
-    REQUIRE(scene.delete_object(primitive));
-    CHECK(scene.find_object(primitive) == nullptr);
-    CHECK(scene.find_object(camera) == nullptr);
-    CHECK(scene.find_object(light) == nullptr);
+    const ai3::ObjectId root = scene.create_object(
+        object("Root", ai3::ObjectCategory::general, ai3::no_object,
+               transform({2.0F, -1.0F, 3.0F}, {0.0F, 0.0F, 90.0F}, {2.0F, 2.0F, 2.0F})));
+    const ai3::ObjectId camera = scene.create_object(
+        object("Camera", ai3::ObjectCategory::camera, root,
+               transform({1.0F, 2.0F, 3.0F}, {30.0F, 0.0F, 0.0F}, {0.5F, 1.5F, 2.0F})));
+    const ai3::ObjectId light = scene.create_object(
+        object("Light", ai3::ObjectCategory::light, camera, transform({0.0F, 4.0F, 0.0F})));
+    const ai3::ObjectId primitive = scene.create_object(
+        object("Primitive", ai3::ObjectCategory::primitive, root, transform({-2.0F, 0.0F, 1.0F})));
+    const glm::mat4 camera_world = scene.world_transform_matrix(camera);
+    const glm::mat4 light_world = scene.world_transform_matrix(light);
+    const glm::mat4 primitive_world = scene.world_transform_matrix(primitive);
+    const ai3::Transform expected_camera_root = {
+        {-2.0F, 1.0F, 9.0F},
+        glm::normalize(scene.find_object(root)->transform.orientation *
+                       scene.find_object(camera)->transform.orientation),
+        {1.0F, 3.0F, 4.0F}};
+    const ai3::Transform light_local = scene.find_object(light)->transform;
+    REQUIRE(scene.select(light));
+
+    REQUIRE(scene.delete_object(root));
+    CHECK(scene.find_object(root) == nullptr);
+    REQUIRE(scene.find_object(camera) != nullptr);
+    REQUIRE(scene.find_object(light) != nullptr);
+    REQUIRE(scene.find_object(primitive) != nullptr);
+    CHECK(scene.find_object(camera)->parent_id() == ai3::no_object);
+    CHECK(scene.find_object(primitive)->parent_id() == ai3::no_object);
+    CHECK(scene.find_object(light)->parent_id() == camera);
+    check_matrix(scene.world_transform_matrix(camera), camera_world);
+    check_matrix(scene.world_transform_matrix(light), light_world);
+    check_matrix(scene.world_transform_matrix(primitive), primitive_world);
+    check_transform(scene.find_object(camera)->transform, expected_camera_root);
+    check_transform(scene.find_object(light)->transform, light_local);
+    CHECK(scene.selection() == light);
+    CHECK(scene.objects().size() == 3);
+    CHECK(scene.create_object(object("Next", ai3::ObjectCategory::general)) == 5);
+}
+
+TEST_CASE("deleting a non-root parent sends direct children to scene root")
+{
+    ai3::EditorState scene;
+    const ai3::ObjectId ancestor = scene.create_object(
+        object("A", ai3::ObjectCategory::primitive, ai3::no_object,
+               transform({5.0F, 0.0F, 0.0F}, {0.0F, 0.0F, 20.0F}, {2.0F, 2.0F, 2.0F})));
+    const ai3::ObjectId deleted = scene.create_object(
+        object("B", ai3::ObjectCategory::camera, ancestor,
+               transform({1.0F, 2.0F, 0.0F}, {0.0F, 0.0F, 15.0F}, {0.5F, 0.5F, 0.5F})));
+    const ai3::ObjectId child = scene.create_object(
+        object("C", ai3::ObjectCategory::light, deleted,
+               transform({0.0F, 3.0F, 1.0F}, {10.0F, 0.0F, 0.0F}, {2.0F, 3.0F, 4.0F})));
+    const ai3::ObjectId descendant = scene.create_object(
+        object("D", ai3::ObjectCategory::primitive, child, transform({1.0F, 0.0F, 0.0F})));
+    const glm::mat4 child_world = scene.world_transform_matrix(child);
+    const glm::mat4 descendant_world = scene.world_transform_matrix(descendant);
+    const ai3::Transform descendant_local = scene.find_object(descendant)->transform;
+    REQUIRE(scene.select(deleted));
+
+    REQUIRE(scene.delete_object(deleted));
+    CHECK(scene.find_object(deleted) == nullptr);
+    CHECK(scene.find_object(ancestor) != nullptr);
+    CHECK(scene.find_object(child)->parent_id() == ai3::no_object);
+    CHECK(scene.find_object(child)->parent_id() != ancestor);
+    CHECK(scene.find_object(descendant)->parent_id() == child);
+    check_matrix(scene.world_transform_matrix(child), child_world);
+    check_matrix(scene.world_transform_matrix(descendant), descendant_world);
+    check_transform(scene.find_object(descendant)->transform, descendant_local);
+    CHECK(scene.selection() == ai3::no_object);
+}
+
+TEST_CASE("deletion fails transactionally when every child cannot become root TRS")
+{
+    ai3::EditorState scene;
+    const ai3::ObjectId parent = scene.create_object(
+        object("Parent", ai3::ObjectCategory::general, ai3::no_object,
+               transform({2.0F, 3.0F, 4.0F}, {0.0F, 0.0F, 45.0F}, {2.0F, 1.0F, 1.0F})));
+    const ai3::ObjectId representable = scene.create_object(object(
+        "Representable", ai3::ObjectCategory::camera, parent, transform({1.0F, 0.0F, 0.0F})));
+    const ai3::ObjectId sheared =
+        scene.create_object(object("Sheared", ai3::ObjectCategory::light, parent,
+                                   transform({0.0F, 2.0F, 0.0F}, {0.0F, 0.0F, -20.0F})));
+    const ai3::ObjectId descendant = scene.create_object(object(
+        "Descendant", ai3::ObjectCategory::primitive, sheared, transform({0.0F, 0.0F, 3.0F})));
+    const std::array<ai3::ObjectId, 4> ids = {parent, representable, sheared, descendant};
+    std::array<ai3::Transform, 4> local_before;
+    std::array<glm::mat4, 4> world_before;
+    for (std::size_t index = 0; index < ids.size(); ++index)
+    {
+        local_before[index] = scene.find_object(ids[index])->transform;
+        world_before[index] = scene.world_transform_matrix(ids[index]);
+    }
+    REQUIRE(scene.select(parent));
+
+    CHECK_FALSE(scene.delete_object(parent));
+    CHECK(scene.objects().size() == ids.size());
+    CHECK(scene.selection() == parent);
+    CHECK(scene.find_object(representable)->parent_id() == parent);
+    CHECK(scene.find_object(sheared)->parent_id() == parent);
+    CHECK(scene.find_object(descendant)->parent_id() == sheared);
+    for (std::size_t index = 0; index < ids.size(); ++index)
+    {
+        REQUIRE(scene.find_object(ids[index]) != nullptr);
+        check_transform(scene.find_object(ids[index])->transform, local_before[index]);
+        check_matrix(scene.world_transform_matrix(ids[index]), world_before[index]);
+    }
 }
 
 TEST_CASE("render-facing world matrix does not affect sphere geometry semantics")

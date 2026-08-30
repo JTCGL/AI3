@@ -7,6 +7,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace ai3
 {
@@ -22,6 +23,8 @@ class EditorUi
     void draw_main_menu(bool& running);
     void draw_scene_graph();
     void draw_scene_node(ObjectId id);
+    void accept_reparent_drop(ObjectId new_parent);
+    void apply_pending_reparent();
     void draw_viewport();
     void draw_object_inspector();
     void draw_console();
@@ -41,5 +44,6 @@ class EditorUi
     bool show_id_stack_ = false;
     bool show_about_ = false;
     bool show_ai3_diagnostics_ = false;
+    std::pair<ObjectId, ObjectId> pending_reparent_ = {no_object, no_object};
 };
 } // namespace ai3

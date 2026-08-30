@@ -101,7 +101,10 @@ equivalent representation and is not assumed to be globally unique.
 
 Scenes begin empty and create objects through the display-independent `EditorState` lifecycle API. Object
 IDs are stable, scene-owned, monotonically allocated identities and are not reused after deletion. Deleting
-a parent recursively deletes its descendants; selection is cleared when its object is in that subtree.
+an object deletes only that object. Its direct children survive, become scene-root objects, and preserve their
+world-space poses; deeper descendants remain attached to their existing parents. The operation fails
+transactionally if any direct child cannot be faithfully unparented as TRS. Selection is cleared only when
+the deleted object itself was selected.
 
 The first semantic primitive is a sphere whose authoritative radius is stored in meters. Procedural vertex
 and index data is deterministic derived data in the headless scene layer. The UI edits radius through the
@@ -142,6 +145,13 @@ cannot faithfully represent. Zero-scale parents are likewise non-invertible and 
 preserving its world pose. Reflected/negative scales are accepted only when their decomposed TRS reconstructs
 the requested local matrix within that same tolerance. The existing hierarchy and local transform remain
 unchanged on rejection.
+
+The Scene Graph exposes this hierarchy directly as nested tree nodes. Dragging any scene object onto another
+requests the target as its parent, regardless of either object's category; dragging it onto the UI-only Scene
+Root target requests an unparent to the scene root. Both gestures delegate to `EditorState::reparent_object`,
+so successful changes preserve world-space pose and mathematically unrepresentable hierarchy changes are
+rejected transactionally and reported in the Console. The UI does not maintain a parallel hierarchy model or
+perform hierarchy mathematics.
 
 Local, Parent, World, and View are explicit transform-tool reference spaces, distinct from transform storage.
 Scene math exposes their orthonormal bases in world coordinates: Local uses resolved object orientation,

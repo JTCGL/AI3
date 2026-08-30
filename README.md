@@ -28,8 +28,11 @@ localization, GLM, and unit-test targets, but does not define the graphical `ai3
 Run `../build/AI3/termux-clang-debug/ai3` on Termux or
 `../build/AI3/linux-gcc-debug/ai3` on desktop Linux. The application creates an
 SDL3-managed OpenGL ES 3 context and presents a docked editor shell with a Scene Graph,
-rendered Viewport, Object Inspector, and Console. The Edit menu creates spheres and deletes the selected
-object; sphere radius is edited in the active display unit while remaining stored in meters. The View menu controls editor panels,
+rendered Viewport, Object Inspector, and Console. The Object menu creates scene objects and deletes the
+selected object; sphere radius is edited in the active display unit while remaining stored in meters. Dragging
+an object onto another Scene Graph object reparents it, while dragging it onto Scene Root unparents it. These
+category-agnostic operations preserve world-space pose through the authoritative editor hierarchy operation
+and are visibly rejected when the resulting local transform cannot be represented. The View menu controls editor panels,
 the Window menu can restore the default layout and show AI3 scale/locale diagnostics. The Help menu switches
 between external English and Spanish UTF-8 locale resources at runtime, while stable internal window IDs
 preserve docking. Dear ImGui diagnostics remain available from Help.
@@ -60,7 +63,8 @@ selection, primitive semantics, transforms, panel state, and console data. The T
 
 Core/domain targets are intentionally independent of SDL, Dear ImGui, and GLES. Platform, rendering, and UI
 targets may depend on those core targets; dependencies must not point back outward from core into graphics.
-Scene objects use stable monotonic IDs and public create/delete APIs, with recursive descendant deletion.
+Scene objects use stable monotonic IDs and public create/delete APIs. Deleting an object deletes only that
+object; its direct children survive as scene roots and preserve their world-space poses.
 Sphere parameters are semantic editor state; procedural meshes are derived in the headless scene layer.
 
 The application's single viewport has display-independent view state outside Dear ImGui. Its source is Orbit
