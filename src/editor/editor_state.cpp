@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
-#include <unordered_set>
 #include <utility>
 
 namespace ai3
@@ -263,20 +262,19 @@ bool EditorState::delete_object(ObjectId id)
 {
     if (find_object(id) == nullptr)
         return false;
-    std::unordered_set<ObjectId> deleted{id};
-    bool found_descendant = true;
-    while (found_descendant)
-    {
-        found_descendant = false;
-        for (const SceneObject& object : objects_)
-            if (deleted.count(object.parent_id_) != 0 && deleted.insert(object.id).second)
-                found_descendant = true;
-    }
-    if (deleted.count(selection_) != 0)
+
+    EditorState candidate = *this;
+    for (ObjectId child : children_of(id))
+        if (!candidate.reparent_object(child, no_object))
+            return false;
+    candidate.objects_.erase(std::remove_if(candidate.objects_.begin(), candidate.objects_.end(),
+                                            [id](const SceneObject& object)
+                                            { return object.id == id; }),
+                             candidate.objects_.end());
+
+    objects_ = std::move(candidate.objects_);
+    if (selection_ == id)
         clear_selection();
-    objects_.erase(std::remove_if(objects_.begin(), objects_.end(), [&](const SceneObject& object)
-                                  { return deleted.count(object.id) != 0; }),
-                   objects_.end());
     return true;
 }
 

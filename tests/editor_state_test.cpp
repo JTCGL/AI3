@@ -166,7 +166,7 @@ TEST_CASE("root camera and light directions derive from quaternion negative Z")
     check_vec3(ai3::directional_light_direction(state, light), {-1.0F, 0.0F, 0.0F});
 }
 
-TEST_CASE("camera and light objects share parenting recursive deletion and selection lifecycle")
+TEST_CASE("deletion preserves descendants and clears only a deleted selection")
 {
     ai3::EditorState state;
     const ai3::ObjectId root = state.create_object(ai3::CreateObject{"Root"});
@@ -175,10 +175,15 @@ TEST_CASE("camera and light objects share parenting recursive deletion and selec
     const ai3::ObjectId survivor = state.create_sphere("Sphere");
     REQUIRE(state.select(light));
     CHECK(state.delete_object(root));
-    CHECK(state.selection() == ai3::no_object);
-    CHECK(state.find_object(camera) == nullptr);
-    CHECK(state.find_object(light) == nullptr);
+    CHECK(state.selection() == light);
+    CHECK(state.find_object(camera)->parent_id() == ai3::no_object);
+    CHECK(state.find_object(light)->parent_id() == camera);
     CHECK(state.find_object(survivor) != nullptr);
+
+    REQUIRE(state.select(camera));
+    CHECK(state.delete_object(camera));
+    CHECK(state.selection() == ai3::no_object);
+    CHECK(state.find_object(light)->parent_id() == ai3::no_object);
 }
 
 TEST_CASE("category and subtype queries distinguish objects and filter enabled visibility")

@@ -101,7 +101,10 @@ equivalent representation and is not assumed to be globally unique.
 
 Scenes begin empty and create objects through the display-independent `EditorState` lifecycle API. Object
 IDs are stable, scene-owned, monotonically allocated identities and are not reused after deletion. Deleting
-a parent recursively deletes its descendants; selection is cleared when its object is in that subtree.
+an object deletes only that object. Its direct children survive, become scene-root objects, and preserve their
+world-space poses; deeper descendants remain attached to their existing parents. The operation fails
+transactionally if any direct child cannot be faithfully unparented as TRS. Selection is cleared only when
+the deleted object itself was selected.
 
 The first semantic primitive is a sphere whose authoritative radius is stored in meters. Procedural vertex
 and index data is deterministic derived data in the headless scene layer. The UI edits radius through the

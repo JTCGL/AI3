@@ -63,7 +63,8 @@ selection, primitive semantics, transforms, panel state, and console data. The T
 
 Core/domain targets are intentionally independent of SDL, Dear ImGui, and GLES. Platform, rendering, and UI
 targets may depend on those core targets; dependencies must not point back outward from core into graphics.
-Scene objects use stable monotonic IDs and public create/delete APIs, with recursive descendant deletion.
+Scene objects use stable monotonic IDs and public create/delete APIs. Deleting an object deletes only that
+object; its direct children survive as scene roots and preserve their world-space poses.
 Sphere parameters are semantic editor state; procedural meshes are derived in the headless scene layer.
 
 The application's single viewport has display-independent view state outside Dear ImGui. Its source is Orbit
