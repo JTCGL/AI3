@@ -31,14 +31,17 @@ ObjectId EditorState::create_object(CreateObject object)
 
 ObjectId EditorState::create_sphere(std::string localized_base_name, SpherePrimitive sphere)
 {
-    ++spheres_created_;
-    return create_object({std::move(localized_base_name) + " " + std::to_string(spheres_created_),
-                          no_object,
-                          {},
-                          true,
-                          true,
-                          PrimitiveKind::sphere,
-                          sphere});
+    const std::uint64_t sphere_number = spheres_created_ + 1;
+    const ObjectId id =
+        create_object({std::move(localized_base_name) + " " + std::to_string(sphere_number),
+                       no_object,
+                       {},
+                       true,
+                       true,
+                       PrimitiveKind::sphere,
+                       sphere});
+    spheres_created_ = sphere_number;
+    return id;
 }
 
 bool EditorState::delete_object(ObjectId id)

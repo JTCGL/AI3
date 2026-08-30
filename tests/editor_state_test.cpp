@@ -3,6 +3,8 @@
 #include "editor/editor_state.h"
 #include "scene/length_units.h"
 
+#include <stdexcept>
+
 TEST_CASE("editor state starts with an empty scene and no selection")
 {
     ai3::EditorState state;
@@ -58,6 +60,16 @@ TEST_CASE("sphere default names use a localized base and a scene-owned monotonic
     const ai3::ObjectId third = state.create_sphere("Esfera");
     CHECK(state.find_object(third)->name == "Esfera 3");
     CHECK(third == 3);
+}
+
+TEST_CASE("failed sphere creation does not consume a default name")
+{
+    ai3::EditorState state;
+    CHECK_THROWS_AS(state.create_sphere("Sphere", {-1.0F}), std::invalid_argument);
+
+    const ai3::ObjectId first = state.create_sphere("Sphere");
+    REQUIRE(state.find_object(first) != nullptr);
+    CHECK(state.find_object(first)->name == "Sphere 1");
 }
 
 TEST_CASE("scene reset empties lifecycle state and starts a new identity and naming sequence")

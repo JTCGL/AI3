@@ -363,7 +363,6 @@ void EditorUi::draw_console()
 void EditorUi::draw(bool& running)
 {
     draw_main_menu(running);
-    viewport_renderer_.synchronize_geometry_cache(state_);
 
     constexpr ImGuiID dockspace_id = 0xA13ED170;
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
