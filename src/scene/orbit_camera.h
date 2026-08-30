@@ -13,10 +13,12 @@ class OrbitCamera
     glm::vec3 position() const;
     void orbit(float yaw_delta_degrees, float pitch_delta_degrees);
     void zoom(float wheel_delta);
+    void reset();
 
     float yaw_degrees() const { return yaw_degrees_; }
     float pitch_degrees() const { return pitch_degrees_; }
     float distance() const { return distance_; }
+    const glm::vec3& target() const { return target_; }
 
     private:
     glm::vec3 target_{};

@@ -96,6 +96,13 @@ void EditorUi::draw_main_menu(bool& running)
     {
         if (ImGui::BeginMenu(localization_.text("menu.file").c_str()))
         {
+            if (ImGui::MenuItem(localization_.text("action.reset_scene").c_str()))
+            {
+                state_.reset_scene();
+                viewport_renderer_.clear_geometry_cache();
+                camera_.reset();
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem(localization_.text("action.quit").c_str()))
                 running = false;
             ImGui::EndMenu();
@@ -104,12 +111,7 @@ void EditorUi::draw_main_menu(bool& running)
         {
             if (ImGui::MenuItem(localization_.text("action.create_sphere").c_str()))
             {
-                const ObjectId sphere = state_.create_object({localization_.text("object.sphere"),
-                                                              no_object,
-                                                              {},
-                                                              true,
-                                                              true,
-                                                              PrimitiveKind::sphere});
+                const ObjectId sphere = state_.create_sphere(localization_.text("object.sphere"));
                 state_.select(sphere);
             }
             const bool has_selection = state_.selection() != no_object;
