@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/gtc/quaternion.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
 #include <array>
@@ -20,6 +21,15 @@ struct Transform
     glm::vec3 position{0.0F};
     glm::quat orientation{1.0F, 0.0F, 0.0F, 0.0F};
     glm::vec3 scale{1.0F};
+};
+
+glm::mat4 compose_transform(const Transform& transform);
+
+struct ResolvedTransform
+{
+    glm::mat4 matrix{1.0F};
+    glm::vec3 position{0.0F};
+    glm::quat orientation{1.0F, 0.0F, 0.0F, 0.0F};
 };
 
 enum class ObjectCategory
@@ -64,10 +74,10 @@ struct DirectionalLight
 struct SceneObject
 {
     ObjectId id = no_object;
-    ObjectId parent = no_object;
     std::string name;
     bool enabled = true;
     bool visible = true;
+    // Authoritative local-to-parent transform; for a root object this is also its world transform.
     Transform transform;
     ObjectCategory category = ObjectCategory::general;
     PrimitiveKind primitive_kind = PrimitiveKind::none;
@@ -76,6 +86,12 @@ struct SceneObject
     SpherePrimitive sphere;
     PerspectiveCamera perspective_camera;
     DirectionalLight directional_light;
+
+    ObjectId parent_id() const { return parent_id_; }
+
+    private:
+    ObjectId parent_id_ = no_object;
+    friend class EditorState;
 };
 
 struct CreateObject
@@ -135,6 +151,10 @@ class EditorState
     bool set_sphere(ObjectId id, SpherePrimitive sphere);
     bool set_perspective_camera(ObjectId id, PerspectiveCamera camera);
     bool set_directional_light(ObjectId id, DirectionalLight light);
+    // Changes hierarchy transactionally while preserving the object's complete world pose.
+    // Returns false for invalid hierarchy or a local affine matrix not faithfully representable as
+    // TRS.
+    bool reparent_object(ObjectId id, ObjectId new_parent);
     bool delete_object(ObjectId id);
     void reset_scene();
     const std::vector<SceneObject>& objects() const;
@@ -147,6 +167,10 @@ class EditorState
                                                ObjectQueryFilter filter = {}) const;
     std::vector<const SceneObject*> cameras(CameraKind kind, ObjectQueryFilter filter = {}) const;
     std::vector<const SceneObject*> lights(LightKind kind, ObjectQueryFilter filter = {}) const;
+    ResolvedTransform world_transform(ObjectId id) const;
+    glm::mat4 world_transform_matrix(ObjectId id) const;
+    glm::vec3 world_position(ObjectId id) const;
+    glm::quat world_orientation(ObjectId id) const;
 
     ObjectId selection() const;
     bool select(ObjectId id);

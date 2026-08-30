@@ -1,5 +1,9 @@
 #include "editor/editor_state.h"
 
+#include <glm/ext/matrix_transform.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -14,6 +18,39 @@ std::size_t panel_index(EditorPanel panel) { return static_cast<std::size_t>(pan
 bool matches_filter(const SceneObject& object, ObjectQueryFilter filter)
 {
     return (!filter.enabled_only || object.enabled) && (!filter.visible_only || object.visible);
+}
+
+bool finite(const glm::mat4& matrix)
+{
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row)
+            if (!std::isfinite(matrix[column][row]))
+                return false;
+    return true;
+}
+
+bool decompose_verified_trs(const glm::mat4& matrix, Transform& result)
+{
+    if (!finite(matrix))
+        return false;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    if (!glm::decompose(matrix, result.scale, result.orientation, result.position, skew,
+                        perspective))
+        return false;
+    if (!std::isfinite(glm::length(result.orientation)) || glm::length(result.orientation) == 0.0F)
+        return false;
+    result.orientation = glm::normalize(result.orientation);
+    const glm::mat4 reconstructed = compose_transform(result);
+    float largest = 1.0F;
+    float error = 0.0F;
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row)
+        {
+            largest = std::max(largest, std::abs(matrix[column][row]));
+            error = std::max(error, std::abs(matrix[column][row] - reconstructed[column][row]));
+        }
+    return finite(reconstructed) && error <= 0.0001F * largest;
 }
 
 void validate(const CreateObject& object)
@@ -51,6 +88,13 @@ void validate(const CreateObject& object)
 }
 } // namespace
 
+glm::mat4 compose_transform(const Transform& transform)
+{
+    glm::mat4 result = glm::translate(glm::mat4{1.0F}, transform.position);
+    result *= glm::mat4_cast(glm::normalize(transform.orientation));
+    return glm::scale(result, transform.scale);
+}
+
 EditorState::EditorState() : console_messages_({{"console.initialized", {}}, {"console.ready", {}}})
 {
 }
@@ -61,10 +105,21 @@ ObjectId EditorState::create_object(CreateObject object)
         throw std::invalid_argument("Scene object parent does not exist");
     validate(object);
     const ObjectId id = next_object_id_++;
-    objects_.push_back({id, object.parent, std::move(object.name), object.enabled, object.visible,
-                        object.transform, object.category, object.primitive_kind,
-                        object.camera_kind, object.light_kind, object.sphere,
-                        object.perspective_camera, object.directional_light});
+    SceneObject created;
+    created.id = id;
+    created.parent_id_ = object.parent;
+    created.name = std::move(object.name);
+    created.enabled = object.enabled;
+    created.visible = object.visible;
+    created.transform = object.transform;
+    created.category = object.category;
+    created.primitive_kind = object.primitive_kind;
+    created.camera_kind = object.camera_kind;
+    created.light_kind = object.light_kind;
+    created.sphere = object.sphere;
+    created.perspective_camera = object.perspective_camera;
+    created.directional_light = object.directional_light;
+    objects_.push_back(std::move(created));
     return id;
 }
 
@@ -153,14 +208,57 @@ bool EditorState::set_directional_light(ObjectId id, DirectionalLight light)
     return true;
 }
 
+bool EditorState::reparent_object(ObjectId id, ObjectId new_parent)
+{
+    SceneObject* object = find_object(id);
+    if (object == nullptr || id == new_parent)
+        return false;
+    if (new_parent != no_object && find_object(new_parent) == nullptr)
+        return false;
+    for (ObjectId ancestor = new_parent; ancestor != no_object;)
+    {
+        if (ancestor == id)
+            return false;
+        const SceneObject* parent = find_object(ancestor);
+        if (parent == nullptr)
+            return false;
+        ancestor = parent->parent_id_;
+    }
+    if (object->parent_id_ == new_parent)
+        return true;
+
+    const glm::mat4 old_world = world_transform_matrix(id);
+    glm::mat4 desired_local = old_world;
+    if (new_parent != no_object)
+    {
+        const glm::mat4 parent_world = world_transform_matrix(new_parent);
+        const float determinant = glm::determinant(parent_world);
+        if (!std::isfinite(determinant) || std::abs(determinant) <= 0.000001F)
+            return false;
+        desired_local = glm::inverse(parent_world) * old_world;
+    }
+    Transform new_local;
+    if (!decompose_verified_trs(desired_local, new_local))
+        return false;
+
+    object->parent_id_ = new_parent;
+    object->transform = new_local;
+    return true;
+}
+
 bool EditorState::delete_object(ObjectId id)
 {
     if (find_object(id) == nullptr)
         return false;
     std::unordered_set<ObjectId> deleted{id};
-    for (std::size_t index = 0; index < objects_.size(); ++index)
-        if (deleted.count(objects_[index].parent) != 0)
-            deleted.insert(objects_[index].id);
+    bool found_descendant = true;
+    while (found_descendant)
+    {
+        found_descendant = false;
+        for (const SceneObject& object : objects_)
+            if (deleted.count(object.parent_id_) != 0 && deleted.insert(object.id).second)
+                found_descendant = true;
+    }
     if (deleted.count(selection_) != 0)
         clear_selection();
     objects_.erase(std::remove_if(objects_.begin(), objects_.end(), [&](const SceneObject& object)
@@ -195,9 +293,47 @@ std::vector<ObjectId> EditorState::children_of(ObjectId parent) const
 {
     std::vector<ObjectId> children;
     for (const SceneObject& object : objects_)
-        if (object.parent == parent)
+        if (object.parent_id_ == parent)
             children.push_back(object.id);
     return children;
+}
+
+ResolvedTransform EditorState::world_transform(ObjectId id) const
+{
+    const SceneObject* object = find_object(id);
+    if (object == nullptr)
+        throw std::invalid_argument("Scene object does not exist");
+    std::vector<const SceneObject*> chain;
+    for (const SceneObject* current = object; current != nullptr;)
+    {
+        chain.push_back(current);
+        current = current->parent_id_ == no_object ? nullptr : find_object(current->parent_id_);
+        if (current == nullptr && chain.back()->parent_id_ != no_object)
+            throw std::logic_error("Scene hierarchy contains a missing parent");
+        if (chain.size() > objects_.size())
+            throw std::logic_error("Scene hierarchy contains a cycle");
+    }
+    ResolvedTransform resolved;
+    for (auto it = chain.rbegin(); it != chain.rend(); ++it)
+    {
+        resolved.matrix *= compose_transform((*it)->transform);
+        resolved.orientation =
+            glm::normalize(resolved.orientation * glm::normalize((*it)->transform.orientation));
+    }
+    resolved.position = glm::vec3{resolved.matrix[3]};
+    return resolved;
+}
+
+glm::mat4 EditorState::world_transform_matrix(ObjectId id) const
+{
+    return world_transform(id).matrix;
+}
+
+glm::vec3 EditorState::world_position(ObjectId id) const { return world_transform(id).position; }
+
+glm::quat EditorState::world_orientation(ObjectId id) const
+{
+    return world_transform(id).orientation;
 }
 
 std::vector<const SceneObject*> EditorState::objects_by_category(ObjectCategory category,

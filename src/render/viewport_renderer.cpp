@@ -301,7 +301,7 @@ void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camer
     const auto lights = scene.lights(LightKind::directional, {true, false});
     if (!lights.empty())
     {
-        light_direction = directional_light_direction(*lights.front());
+        light_direction = directional_light_direction(scene, lights.front()->id);
         light_color = lights.front()->directional_light.color;
         light_intensity = lights.front()->directional_light.intensity;
     }
@@ -312,7 +312,7 @@ void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camer
     {
         const SphereGeometry& geometry = sphere_geometry(*object);
         glBindVertexArray(geometry.vertex_array);
-        const glm::mat4 model = compose_transform(object->transform);
+        const glm::mat4 model = scene.world_transform_matrix(object->id);
         const glm::mat4 mvp = view_projection * model;
         glUniformMatrix4fv(mvp_location_, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(model_location_, 1, GL_FALSE, glm::value_ptr(model));

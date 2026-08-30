@@ -123,3 +123,28 @@ monotonic sequence without adding a lifecycle counter member for every new type.
 directional-light forward directions are derived from their object quaternion by rotating local -Z; no
 redundant direction is stored. The viewport remains controlled by the editor-only orbit camera and uses the
 first enabled directional light in scene order, with ambient-only lighting when no such light exists.
+
+## Hierarchy and coordinate spaces
+
+Every stored object transform is local to its immediate parent; a root object's local transform is also its
+world transform. `EditorState` is the authoritative category-agnostic hierarchy resolver and recursively
+composes `World(child) = World(parent) * Local(child)` for renderer and scene consumers. Primitives, cameras,
+lights, and general objects may parent one another without category restrictions. Self-parenting, missing
+parents, descendants as parents, and all other cycles are invalid. Parent IDs are read-only to callers and
+can be changed only by the transactional reparent operation.
+
+Parenting, unparenting, and reparenting preserve the object's world matrix. The operation computes the new
+local affine matrix, decomposes it to the stored position/quaternion/scale form, normalizes the quaternion,
+checks finite/invertible inputs, and verifies that recomposition agrees within a relative `1e-4` tolerance.
+It rejects the entire operation when the local matrix contains shear or another affine result that plain TRS
+cannot faithfully represent. Zero-scale parents are likewise non-invertible and cannot receive a child while
+preserving its world pose. Reflected/negative scales are accepted only when their decomposed TRS reconstructs
+the requested local matrix within that same tolerance. The existing hierarchy and local transform remain
+unchanged on rejection.
+
+Local, Parent, World, and View are explicit transform-tool reference spaces, distinct from transform storage.
+Scene math exposes their orthonormal bases in world coordinates: Local uses resolved object orientation,
+Parent uses resolved parent orientation (world axes for a root), World uses canonical axes, and View uses the
+caller-provided viewport camera basis. The editor `OrbitCamera` remains independent of scene hierarchy.
+Directional-light and perspective-camera directions use resolved world orientation; primitive rendering uses
+the authoritative resolved world matrix. Consumers must not independently traverse parent chains.

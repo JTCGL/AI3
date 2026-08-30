@@ -148,6 +148,7 @@ if(AI3_BUILD_TESTS)
     add_executable(ai3_tests
         tests/command_line_test.cpp
         tests/editor_state_test.cpp
+        tests/hierarchy_test.cpp
         tests/localization_test.cpp
         tests/scene_test.cpp
         tests/ui_identity_test.cpp
