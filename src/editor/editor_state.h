@@ -13,6 +13,7 @@
 
 namespace ai3
 {
+class SceneDocumentCodec;
 using ObjectId = std::uint64_t;
 constexpr ObjectId no_object = 0;
 
@@ -92,6 +93,7 @@ struct SceneObject
     private:
     ObjectId parent_id_ = no_object;
     friend class EditorState;
+    friend class SceneDocumentCodec;
 };
 
 struct CreateObject
@@ -184,6 +186,7 @@ class EditorState
     bool consume_layout_reset_request();
 
     private:
+    friend class SceneDocumentCodec;
     struct SubtypeKey
     {
         ObjectCategory category;

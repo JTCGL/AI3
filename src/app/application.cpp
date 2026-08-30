@@ -31,8 +31,8 @@ int Application::run()
             locate_resource_directory(std::filesystem::path(base_path) / "ai3") / "locales");
         EditorState editor_state;
         ViewportView viewport_view;
-        EditorUi editor_ui(editor_state, viewport_view, localization, initial_scale,
-                           imgui.ui_scale(), imgui.font_size());
+        EditorUi editor_ui(editor_state, viewport_view, localization, platform.window(),
+                           initial_scale, imgui.ui_scale(), imgui.font_size());
         bool running = true;
         int rendered_frames = 0;
         while (running && (options_.frame_limit == 0 || rendered_frames < options_.frame_limit))
