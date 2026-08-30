@@ -276,7 +276,7 @@ void ViewportRenderer::resize(RenderTargetSize size)
     require_no_gl_error("Viewport framebuffer resize");
 }
 
-void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camera,
+void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportView& view,
                               RenderTargetSize size)
 {
     synchronize_geometry_cache(scene);
@@ -292,9 +292,7 @@ void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camer
     glClearColor(0.055F, 0.07F, 0.10F, 1.0F);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(program_);
-    const glm::mat4 view_projection = camera.projection_matrix(static_cast<float>(size_.width) /
-                                                               static_cast<float>(size_.height)) *
-                                      camera.view_matrix();
+    const glm::mat4 view_projection = view.projection * view.view;
     glm::vec3 light_direction{0.0F, 0.0F, -1.0F};
     glm::vec3 light_color{1.0F};
     float light_intensity = 0.0F;

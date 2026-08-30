@@ -149,3 +149,22 @@ Parent uses resolved parent orientation (world axes for a root), World uses cano
 caller-provided viewport camera basis. The editor `OrbitCamera` remains independent of scene hierarchy.
 Directional-light and perspective-camera directions use resolved world orientation; primitive rendering uses
 the authoritative resolved world matrix. Consumers must not independently traverse parent chains.
+
+## Viewport and view architecture
+
+The application owns the display-independent state for the editor's single viewport alongside the scene;
+Dear ImGui receives references and acts only as presenter/controller. A viewport's source is either Orbit or
+Scene Camera, with the latter retaining one scene-object ID. This selection is viewport-specific and does not
+establish a global active camera. Perspective Camera is the only currently supported Scene Camera subtype;
+validation and resolution are localized behind an explicit `CameraKind` dispatch in the view layer.
+
+Orbit is one way to construct a resolved view, not a renderer camera type. When a scene camera is selected,
+the viewport derives matrices from the camera's authoritative resolved world position and orientation, its
+current semantic FOV and clipping planes, and the current viewport aspect ratio. Deleting the selected camera
+causes deterministic fallback to the unchanged Orbit state. Reset Scene also resets the viewport to its
+default Orbit state.
+
+The GLES3 renderer consumes a small resolved view/projection value and is independent of Orbit and scene-
+camera selection semantics. This seam permits later view-construction modes without changing renderer
+fundamentals. FPS, trackball, rail/cinematic modes, multiple viewports, and a renderer abstraction remain
+unimplemented and deferred. See [ADR 0005](decisions/0005-viewport-view-ownership.md).

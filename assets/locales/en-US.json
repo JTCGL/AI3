@@ -55,6 +55,8 @@
     "viewport.heading": "AI3 Editor Viewport",
     "viewport.selection": "Selection: {selection}",
     "viewport.none": "None",
+    "viewport.view_source": "View",
+    "viewport.view_orbit": "Orbit",
     "viewport.available": "Available: {width} x {height}",
     "viewport.deferred": "Scene rendering is intentionally deferred",
     "diagnostics.title": "AI3 Diagnostics",

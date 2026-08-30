@@ -5,6 +5,7 @@
 #include "localization/localization.h"
 #include "localization/resource_locator.h"
 #include "platform/sdl_gl_platform.h"
+#include "scene/viewport_view.h"
 #include "ui/editor_ui.h"
 #include "ui/imgui_layer.h"
 #include <SDL3/SDL.h>
@@ -28,7 +29,10 @@ int Application::run()
             throw SdlError("SDL_GetBasePath failed");
         Localization localization(
             locate_resource_directory(std::filesystem::path(base_path) / "ai3") / "locales");
-        EditorUi editor_ui(localization, initial_scale, imgui.ui_scale(), imgui.font_size());
+        EditorState editor_state;
+        ViewportView viewport_view;
+        EditorUi editor_ui(editor_state, viewport_view, localization, initial_scale,
+                           imgui.ui_scale(), imgui.font_size());
         bool running = true;
         int rendered_frames = 0;
         while (running && (options_.frame_limit == 0 || rendered_frames < options_.frame_limit))

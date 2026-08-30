@@ -62,3 +62,10 @@ Core/domain targets are intentionally independent of SDL, Dear ImGui, and GLES. 
 targets may depend on those core targets; dependencies must not point back outward from core into graphics.
 Scene objects use stable monotonic IDs and public create/delete APIs, with recursive descendant deletion.
 Sphere parameters are semantic editor state; procedural meshes are derived in the headless scene layer.
+
+The application's single viewport has display-independent view state outside Dear ImGui. Its source is Orbit
+or Scene Camera; the localized selector currently lists Perspective Camera scene objects because that is the
+only implemented camera subtype. Scene-camera matrices are derived from current authoritative world
+transforms and projection parameters, while the GLES3 renderer
+consumes only resolved view/projection matrices. Deleting a viewed camera falls back to Orbit, and Reset Scene
+restores the default Orbit state. See [ADR 0005](docs/decisions/0005-viewport-view-ownership.md).
