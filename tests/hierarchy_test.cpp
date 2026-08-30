@@ -257,6 +257,24 @@ TEST_CASE("reparent rejects shear that cannot be represented by local TRS")
     check_matrix(scene.world_transform_matrix(child), world_before);
 }
 
+TEST_CASE("large translation cannot mask unrepresentable shear during reparenting")
+{
+    ai3::EditorState scene;
+    const ai3::ObjectId parent =
+        scene.create_object(object("Parent", ai3::ObjectCategory::general, ai3::no_object,
+                                   transform({}, {0.0F, 0.0F, 45.0F}, {2.0F, 1.0F, 1.0F})));
+    const ai3::ObjectId child = scene.create_object(
+        object("Child", ai3::ObjectCategory::primitive, ai3::no_object,
+               transform({100000000.0F, -100000000.0F, 0.0F}, {0.0F, 0.0F, -20.0F})));
+    const ai3::Transform local_before = scene.find_object(child)->transform;
+    const glm::mat4 world_before = scene.world_transform_matrix(child);
+
+    CHECK_FALSE(scene.reparent_object(child, parent));
+    CHECK(scene.find_object(child)->parent_id() == ai3::no_object);
+    check_transform(scene.find_object(child)->transform, local_before);
+    check_matrix(scene.world_transform_matrix(child), world_before);
+}
+
 TEST_CASE("verified reflected TRS reparenting preserves world pose")
 {
     ai3::EditorState scene;

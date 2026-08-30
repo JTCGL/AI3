@@ -16,7 +16,8 @@ Reparenting is transactional and preserves the old world matrix. The desired new
 new-parent world matrix multiplied by the old child world matrix, or simply the old world matrix when moving
 to the root. GLM decomposes that affine matrix to position, normalized quaternion, and scale. AI3 accepts the
 result only when all values are finite, the parent is invertible, and recomposing the candidate TRS matches
-every desired matrix element within relative tolerance `1e-4`.
+each desired matrix element within an absolute-plus-relative tolerance. Matrix elements are compared
+independently, so translation magnitude cannot loosen validation of the linear transform.
 
 Reflected transforms and negative scale components use the same reconstruction test and are accepted only
 when GLM returns a finite TRS that reproduces the requested matrix. Numerically singular parent matrices

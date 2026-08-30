@@ -135,7 +135,8 @@ can be changed only by the transactional reparent operation.
 
 Parenting, unparenting, and reparenting preserve the object's world matrix. The operation computes the new
 local affine matrix, decomposes it to the stored position/quaternion/scale form, normalizes the quaternion,
-checks finite/invertible inputs, and verifies that recomposition agrees within a relative `1e-4` tolerance.
+checks finite/invertible inputs, and verifies each recomposed matrix element with an absolute-plus-relative
+tolerance so translation magnitude cannot loosen validation of the linear transform.
 It rejects the entire operation when the local matrix contains shear or another affine result that plain TRS
 cannot faithfully represent. Zero-scale parents are likewise non-invertible and cannot receive a child while
 preserving its world pose. Reflected/negative scales are accepted only when their decomposed TRS reconstructs

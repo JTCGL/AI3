@@ -29,6 +29,15 @@ bool finite(const glm::mat4& matrix)
     return true;
 }
 
+bool approximately_equal(float desired, float reconstructed)
+{
+    constexpr float absolute_tolerance = 0.00001F;
+    constexpr float relative_tolerance = 0.0001F;
+    return std::abs(desired - reconstructed) <=
+           absolute_tolerance +
+               relative_tolerance * std::max(std::abs(desired), std::abs(reconstructed));
+}
+
 bool decompose_verified_trs(const glm::mat4& matrix, Transform& result)
 {
     if (!finite(matrix))
@@ -42,15 +51,19 @@ bool decompose_verified_trs(const glm::mat4& matrix, Transform& result)
         return false;
     result.orientation = glm::normalize(result.orientation);
     const glm::mat4 reconstructed = compose_transform(result);
-    float largest = 1.0F;
-    float error = 0.0F;
+    if (!finite(reconstructed))
+        return false;
+    for (int column = 0; column < 3; ++column)
+        for (int row = 0; row < 3; ++row)
+            if (!approximately_equal(matrix[column][row], reconstructed[column][row]))
+                return false;
+    for (int row = 0; row < 3; ++row)
+        if (!approximately_equal(matrix[3][row], reconstructed[3][row]))
+            return false;
     for (int column = 0; column < 4; ++column)
-        for (int row = 0; row < 4; ++row)
-        {
-            largest = std::max(largest, std::abs(matrix[column][row]));
-            error = std::max(error, std::abs(matrix[column][row] - reconstructed[column][row]));
-        }
-    return finite(reconstructed) && error <= 0.0001F * largest;
+        if (!approximately_equal(matrix[column][3], reconstructed[column][3]))
+            return false;
+    return true;
 }
 
 void validate(const CreateObject& object)
