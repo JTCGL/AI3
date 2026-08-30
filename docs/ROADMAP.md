@@ -4,12 +4,16 @@ This is a record of known future areas and architectural boundaries, not a commi
 a promise that every item will ship unchanged. Milestone planning sets approved scope. Ordering may change as
 requirements and demonstrated dependencies become clearer.
 
-## Scene documents and persistence
+## Future document workflow
 
-- Define the Scene Document and Save/Load behavior, including the durable representation of object identity,
-  hierarchy, local transforms, semantic object payloads, and relevant editor-owned scene state.
-- Decide versioning, validation, error handling, and import/export boundaries as part of that milestone rather
-  than presupposing a serialization framework now.
+- Add dirty-state tracking and unsaved-change prompts when their interaction policy is specified.
+- Define autosave, crash recovery, and recent-file behavior as separate workflow milestones.
+- Add multi-document, import/export, assets, and format migration only when their own requirements establish
+  the necessary ownership and compatibility policies.
+
+Version 1 Scene Documents and single-document Open/Save/Save As are established. Scene files intentionally do
+not include viewport, layout, locale, display-unit, console, diagnostics, renderer, or other workspace/session
+state.
 
 ## Transform tools and editing workflow
 
