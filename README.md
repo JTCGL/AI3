@@ -15,8 +15,15 @@ The initial supported build targets are:
 Configure, build, and test with the preset for your platform:
 
 ```sh
+bash scripts/bootstrap.sh
 bash scripts/check.sh
 ```
+
+Bootstrap installs the supported platform prerequisites without changing the platform compiler policy, then
+validates CMake 3.25 or newer and clang-format 21.x. On desktop Linux, GCC remains the build compiler; on
+Termux, Clang remains the build compiler. Ubuntu Jammy and Noble (including derivatives such as Linux Mint)
+use their underlying Ubuntu codename when an official LLVM repository is needed for `clang-format-21` or the
+official Kitware repository is needed for a sufficiently new CMake.
 
 The canonical display-independent configuration needs no SDL, Dear ImGui, EGL/GLES, X11, or Wayland
 development packages:
@@ -49,7 +56,9 @@ persisted because the project does not otherwise have a settings system. See [AD
 Run `ai3 --smoke-test` with a reachable X server to initialize the real SDL/GLES/ImGui stack, render three
 hidden frames, and exit. `scripts/check.sh` runs this integration test when `DISPLAY` is set and always runs
 display-independent unit tests. Source formatting is checked by the same script; use
-`bash scripts/format.sh --write` to apply the repository style.
+`bash scripts/format.sh --write` to apply the repository style. Formatting is defined by clang-format 21.x;
+the script prefers `clang-format-21`, accepts an unversioned `clang-format` only when its reported major is
+21, and fails instead of falling back to another major.
 
 The Termux preset identifies the target as Linux for CMake platform detection.
 Termux's compiler still targets Android's Bionic environment, but SDL must select

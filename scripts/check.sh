@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cmake_version="$(cmake --version 2>/dev/null | sed -n '1s/^cmake version //p')"
+if [[ ! "${cmake_version}" =~ ^[0-9]+\.[0-9]+([.][0-9]+)?$ ]] ||
+    ! printf '3.25\n%s\n' "${cmake_version}" | sort -V -C; then
+    printf 'AI3 verification requires CMake >= 3.25; found "%s". Run bash scripts/bootstrap.sh.\n' \
+        "${cmake_version:-not installed}" >&2
+    exit 1
+fi
+
+printf '[AI3 check] Using CMake %s\n' "${cmake_version}"
+
 if [[ -n "${AI3_PRESET:-}" ]]; then
     preset="${AI3_PRESET}"
 elif [[ -n "${PREFIX:-}" && "${PREFIX}" == *"com.termux"* ]]; then

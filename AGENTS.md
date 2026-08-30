@@ -48,6 +48,8 @@ Do not introduce desktop OpenGL, Vulkan, GLAD, a renderer abstraction, or multi-
 
 ## Build and dependency policy
 - Use CMake and Ninja.
+- Require CMake 3.25 or newer and clang-format major 21; bootstrap and verification scripts must validate
+  these repository tool contracts explicitly.
 - Keep all builds out of the source tree.
 - Use CMake FetchContent for SDL3 and Dear ImGui.
 - Use GLM as the canonical library for vectors, matrices, transforms, projections, and view math.
