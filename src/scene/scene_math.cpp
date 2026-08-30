@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace ai3
 {
@@ -44,5 +45,24 @@ glm::mat4 compose_transform(const Transform& transform)
     glm::mat4 result = glm::translate(glm::mat4{1.0F}, transform.position);
     result *= glm::mat4_cast(glm::normalize(transform.orientation));
     return glm::scale(result, transform.scale);
+}
+
+glm::vec3 local_forward_from_orientation(const glm::quat& orientation)
+{
+    return glm::normalize(orientation) * glm::vec3{0.0F, 0.0F, -1.0F};
+}
+
+glm::vec3 camera_forward_direction(const SceneObject& camera)
+{
+    if (camera.category != ObjectCategory::camera || camera.camera_kind != CameraKind::perspective)
+        throw std::invalid_argument("Scene object is not a perspective camera");
+    return local_forward_from_orientation(camera.transform.orientation);
+}
+
+glm::vec3 directional_light_direction(const SceneObject& light)
+{
+    if (light.category != ObjectCategory::light || light.light_kind != LightKind::directional)
+        throw std::invalid_argument("Scene object is not a directional light");
+    return local_forward_from_orientation(light.transform.orientation);
 }
 } // namespace ai3

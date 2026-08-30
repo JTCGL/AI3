@@ -108,3 +108,18 @@ and index data is deterministic derived data in the headless scene layer. The UI
 active display-length conversion, while the concrete GLES3 renderer enumerates all enabled and visible
 spheres and generates geometry from their current semantic radii. Neither UI nor renderer owns object
 identity or primitive parameters.
+
+## Extensible scene-object categories
+
+Scene objects retain one shared identity, hierarchy, enabled/visible state, and transform, and carry a
+two-level semantic tag: general object, primitive plus primitive subtype, camera plus camera subtype, or
+light plus light subtype. The current concrete subtypes are sphere, perspective camera, and directional
+light. Subtype payloads remain plain tagged data rather than polymorphic objects or components. Creation,
+validation, default naming, deletion, reset, selection, parenting, and category/subtype queries all remain
+owned by the display-independent `EditorState`.
+
+Default-name counters are keyed by category and subtype, so each concrete subtype has an independent
+monotonic sequence without adding a lifecycle counter member for every new type. Perspective-camera and
+directional-light forward directions are derived from their object quaternion by rotating local -Z; no
+redundant direction is stored. The viewport remains controlled by the editor-only orbit camera and uses the
+first enabled directional light in scene order, with ambient-only lighting when no such light exists.
