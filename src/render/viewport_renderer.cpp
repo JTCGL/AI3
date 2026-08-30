@@ -32,14 +32,16 @@ void main()
 constexpr const char* fragment_shader_source = R"(#version 300 es
 precision mediump float;
 in vec3 v_normal;
+uniform vec3 u_light_direction;
+uniform vec3 u_light_color;
+uniform float u_light_intensity;
 out vec4 out_color;
 void main()
 {
     vec3 normal = normalize(v_normal);
-    vec3 light = normalize(vec3(0.5, 0.8, 0.7));
-    float diffuse = max(dot(normal, light), 0.0);
+    float diffuse = max(dot(normal, -u_light_direction), 0.0);
     vec3 base = vec3(0.22, 0.58, 0.92);
-    out_color = vec4(base * (0.25 + diffuse * 0.75), 1.0);
+    out_color = vec4(base * (0.1 + u_light_color * diffuse * u_light_intensity), 1.0);
 }
 )";
 
@@ -123,7 +125,11 @@ ViewportRenderer::ViewportRenderer()
         program_ = create_program();
         mvp_location_ = glGetUniformLocation(program_, "u_mvp");
         model_location_ = glGetUniformLocation(program_, "u_model");
-        if (mvp_location_ < 0 || model_location_ < 0)
+        light_direction_location_ = glGetUniformLocation(program_, "u_light_direction");
+        light_color_location_ = glGetUniformLocation(program_, "u_light_color");
+        light_intensity_location_ = glGetUniformLocation(program_, "u_light_intensity");
+        if (mvp_location_ < 0 || model_location_ < 0 || light_direction_location_ < 0 ||
+            light_color_location_ < 0 || light_intensity_location_ < 0)
             throw std::runtime_error("Viewport shader uniforms are unavailable");
 
         gl_description_ =
@@ -289,7 +295,20 @@ void ViewportRenderer::render(const EditorState& scene, const OrbitCamera& camer
     const glm::mat4 view_projection = camera.projection_matrix(static_cast<float>(size_.width) /
                                                                static_cast<float>(size_.height)) *
                                       camera.view_matrix();
-    for (const SceneObject* object : scene.visible_spheres())
+    glm::vec3 light_direction{0.0F, 0.0F, -1.0F};
+    glm::vec3 light_color{1.0F};
+    float light_intensity = 0.0F;
+    const auto lights = scene.lights(LightKind::directional, {true, false});
+    if (!lights.empty())
+    {
+        light_direction = directional_light_direction(*lights.front());
+        light_color = lights.front()->directional_light.color;
+        light_intensity = lights.front()->directional_light.intensity;
+    }
+    glUniform3fv(light_direction_location_, 1, glm::value_ptr(light_direction));
+    glUniform3fv(light_color_location_, 1, glm::value_ptr(light_color));
+    glUniform1f(light_intensity_location_, light_intensity);
+    for (const SceneObject* object : scene.primitives(PrimitiveKind::sphere, {true, true}))
     {
         const SphereGeometry& geometry = sphere_geometry(*object);
         glBindVertexArray(geometry.vertex_array);

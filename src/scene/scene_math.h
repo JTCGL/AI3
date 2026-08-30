@@ -13,4 +13,7 @@ namespace ai3
 glm::quat orientation_from_euler_degrees(glm::vec3 euler_degrees);
 glm::vec3 euler_degrees_from_orientation(const glm::quat& orientation);
 glm::mat4 compose_transform(const Transform& transform);
+glm::vec3 local_forward_from_orientation(const glm::quat& orientation);
+glm::vec3 camera_forward_direction(const SceneObject& camera);
+glm::vec3 directional_light_direction(const SceneObject& light);
 } // namespace ai3

@@ -107,13 +107,26 @@ void EditorUi::draw_main_menu(bool& running)
                 running = false;
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu(localization_.text("menu.edit").c_str()))
+        if (ImGui::BeginMenu(localization_.text("menu.object").c_str()))
         {
             if (ImGui::MenuItem(localization_.text("action.create_sphere").c_str()))
             {
                 const ObjectId sphere = state_.create_sphere(localization_.text("object.sphere"));
                 state_.select(sphere);
             }
+            if (ImGui::MenuItem(localization_.text("action.create_perspective_camera").c_str()))
+            {
+                const ObjectId camera =
+                    state_.create_perspective_camera(localization_.text("object.camera"));
+                state_.select(camera);
+            }
+            if (ImGui::MenuItem(localization_.text("action.create_directional_light").c_str()))
+            {
+                const ObjectId light =
+                    state_.create_directional_light(localization_.text("object.directional_light"));
+                state_.select(light);
+            }
+            ImGui::Separator();
             const bool has_selection = state_.selection() != no_object;
             if (ImGui::MenuItem(localization_.text("action.delete_selected").c_str(), nullptr,
                                 false, has_selection))
@@ -238,8 +251,13 @@ void EditorUi::draw_object_inspector()
                 stable_imgui_label(localization_.text("inspector.name"), "inspector_name");
             if (ImGui::InputText(name_label.c_str(), name, sizeof(name)))
                 object->name = name;
-            const char* type_key =
-                object->primitive == PrimitiveKind::sphere ? "type.sphere" : "type.object";
+            const char* type_key = "type.object";
+            if (object->primitive_kind == PrimitiveKind::sphere)
+                type_key = "type.sphere";
+            else if (object->camera_kind == CameraKind::perspective)
+                type_key = "type.perspective_camera";
+            else if (object->light_kind == LightKind::directional)
+                type_key = "type.directional_light";
             const std::string type_text =
                 localization_.format("inspector.type", {{"type", localization_.text(type_key)}});
             ImGui::TextUnformatted(type_text.c_str());
@@ -250,7 +268,7 @@ void EditorUi::draw_object_inspector()
             const std::string visible_label =
                 stable_imgui_label(localization_.text("inspector.visible"), "inspector_visible");
             ImGui::Checkbox(visible_label.c_str(), &object->visible);
-            if (object->primitive == PrimitiveKind::sphere)
+            if (object->primitive_kind == PrimitiveKind::sphere)
             {
                 float displayed_radius =
                     length_from_meters(object->sphere.radius_meters, display_length_unit_);
@@ -261,8 +279,67 @@ void EditorUi::draw_object_inspector()
                 const float speed = length_from_meters(0.05F, display_length_unit_);
                 const float minimum = length_from_meters(0.001F, display_length_unit_);
                 if (ImGui::DragFloat(radius_label.c_str(), &displayed_radius, speed, minimum))
-                    object->sphere.radius_meters =
-                        std::max(0.001F, length_to_meters(displayed_radius, display_length_unit_));
+                    state_.set_sphere(object->id,
+                                      {std::max(0.001F, length_to_meters(displayed_radius,
+                                                                         display_length_unit_))});
+            }
+            if (object->camera_kind == CameraKind::perspective)
+            {
+                const std::string camera_label = stable_imgui_label(
+                    localization_.text("inspector.camera"), "perspective_camera");
+                if (ImGui::CollapsingHeader(camera_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    PerspectiveCamera camera = object->perspective_camera;
+                    const std::string fov_label = stable_imgui_label(
+                        localization_.text("inspector.vertical_fov"), "camera_vertical_fov");
+                    bool changed = ImGui::DragFloat(fov_label.c_str(), &camera.vertical_fov_degrees,
+                                                    0.5F, 0.1F, 179.9F);
+                    float near_display =
+                        length_from_meters(camera.near_plane_meters, display_length_unit_);
+                    float far_display =
+                        length_from_meters(camera.far_plane_meters, display_length_unit_);
+                    const std::string near_text = localization_.format(
+                        "inspector.near_plane_with_unit",
+                        {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+                    const std::string far_text = localization_.format(
+                        "inspector.far_plane_with_unit",
+                        {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+                    changed |= ImGui::DragFloat(
+                        stable_imgui_label(near_text, "camera_near_plane").c_str(), &near_display,
+                        length_from_meters(0.01F, display_length_unit_),
+                        length_from_meters(0.001F, display_length_unit_));
+                    changed |= ImGui::DragFloat(
+                        stable_imgui_label(far_text, "camera_far_plane").c_str(), &far_display,
+                        length_from_meters(0.1F, display_length_unit_),
+                        length_from_meters(0.002F, display_length_unit_));
+                    camera.near_plane_meters =
+                        std::max(0.001F, length_to_meters(near_display, display_length_unit_));
+                    camera.far_plane_meters =
+                        std::max(camera.near_plane_meters + 0.001F,
+                                 length_to_meters(far_display, display_length_unit_));
+                    if (changed)
+                        state_.set_perspective_camera(object->id, camera);
+                }
+            }
+            if (object->light_kind == LightKind::directional)
+            {
+                const std::string light_label =
+                    stable_imgui_label(localization_.text("inspector.light"), "directional_light");
+                if (ImGui::CollapsingHeader(light_label.c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+                {
+                    DirectionalLight light = object->directional_light;
+                    const std::string color_label = stable_imgui_label(
+                        localization_.text("inspector.color"), "directional_light_color");
+                    const std::string intensity_label = stable_imgui_label(
+                        localization_.text("inspector.intensity"), "directional_light_intensity");
+                    bool changed =
+                        ImGui::ColorEdit3(color_label.c_str(), glm::value_ptr(light.color));
+                    changed |=
+                        ImGui::DragFloat(intensity_label.c_str(), &light.intensity, 0.05F, 0.0F);
+                    light.intensity = std::max(0.0F, light.intensity);
+                    if (changed)
+                        state_.set_directional_light(object->id, light);
+                }
             }
             const std::string transform_label =
                 stable_imgui_label(localization_.text("inspector.transform"), "transform");

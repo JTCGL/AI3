@@ -48,6 +48,9 @@ class ViewportRenderer
     std::uint32_t depth_renderbuffer_ = 0;
     int mvp_location_ = -1;
     int model_location_ = -1;
+    int light_direction_location_ = -1;
+    int light_color_location_ = -1;
+    int light_intensity_location_ = -1;
     RenderTargetSize size_{};
     std::uint64_t resize_count_ = 0;
     std::string gl_description_;
