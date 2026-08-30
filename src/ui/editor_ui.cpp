@@ -204,7 +204,7 @@ void EditorUi::draw_scene_node(ObjectId id)
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     if (state_.selection() == id)
         flags |= ImGuiTreeNodeFlags_Selected;
-    if (object->parent == no_object)
+    if (object->parent_id() == no_object)
         flags |= ImGuiTreeNodeFlags_DefaultOpen;
 
     const bool open = ImGui::TreeNodeEx(reinterpret_cast<void*>(static_cast<std::uintptr_t>(id)),

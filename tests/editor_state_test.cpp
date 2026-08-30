@@ -152,18 +152,18 @@ TEST_CASE("camera and light semantic validation rejects invalid updates")
     CHECK(state.find_object(light)->directional_light.intensity == doctest::Approx(1.0F));
 }
 
-TEST_CASE("camera and light directions derive from quaternion local negative Z")
+TEST_CASE("root camera and light directions derive from quaternion negative Z")
 {
     ai3::EditorState state;
     const ai3::ObjectId camera = state.create_perspective_camera("Camera");
     const ai3::ObjectId light = state.create_directional_light("Directional Light");
-    check_vec3(ai3::camera_forward_direction(*state.find_object(camera)), {0.0F, 0.0F, -1.0F});
+    check_vec3(ai3::camera_forward_direction(state, camera), {0.0F, 0.0F, -1.0F});
     state.find_object(camera)->transform.orientation =
         ai3::orientation_from_euler_degrees({90.0F, 0.0F, 0.0F});
-    check_vec3(ai3::camera_forward_direction(*state.find_object(camera)), {0.0F, 1.0F, 0.0F});
+    check_vec3(ai3::camera_forward_direction(state, camera), {0.0F, 1.0F, 0.0F});
     state.find_object(light)->transform.orientation =
         ai3::orientation_from_euler_degrees({0.0F, 90.0F, 0.0F});
-    check_vec3(ai3::directional_light_direction(*state.find_object(light)), {-1.0F, 0.0F, 0.0F});
+    check_vec3(ai3::directional_light_direction(state, light), {-1.0F, 0.0F, 0.0F});
 }
 
 TEST_CASE("camera and light objects share parenting recursive deletion and selection lifecycle")

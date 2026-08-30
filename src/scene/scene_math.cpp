@@ -40,29 +40,48 @@ glm::vec3 euler_degrees_from_orientation(const glm::quat& orientation)
     return glm::degrees(glm::vec3{x, y, z});
 }
 
-glm::mat4 compose_transform(const Transform& transform)
-{
-    glm::mat4 result = glm::translate(glm::mat4{1.0F}, transform.position);
-    result *= glm::mat4_cast(glm::normalize(transform.orientation));
-    return glm::scale(result, transform.scale);
-}
-
 glm::vec3 local_forward_from_orientation(const glm::quat& orientation)
 {
     return glm::normalize(orientation) * glm::vec3{0.0F, 0.0F, -1.0F};
 }
 
-glm::vec3 camera_forward_direction(const SceneObject& camera)
+glm::mat3 coordinate_space_basis(const EditorState& scene, ObjectId id, CoordinateSpace space,
+                                 const glm::mat4& view_matrix)
 {
-    if (camera.category != ObjectCategory::camera || camera.camera_kind != CameraKind::perspective)
-        throw std::invalid_argument("Scene object is not a perspective camera");
-    return local_forward_from_orientation(camera.transform.orientation);
+    const SceneObject* object = scene.find_object(id);
+    if (object == nullptr)
+        throw std::invalid_argument("Scene object does not exist");
+    switch (space)
+    {
+    case CoordinateSpace::local:
+        return glm::mat3_cast(scene.world_orientation(id));
+    case CoordinateSpace::parent:
+        return object->parent_id() == no_object
+                   ? glm::mat3{1.0F}
+                   : glm::mat3_cast(scene.world_orientation(object->parent_id()));
+    case CoordinateSpace::world:
+        return glm::mat3{1.0F};
+    case CoordinateSpace::view:
+        return glm::transpose(glm::mat3{view_matrix});
+    }
+    throw std::invalid_argument("Unknown coordinate space");
 }
 
-glm::vec3 directional_light_direction(const SceneObject& light)
+glm::vec3 camera_forward_direction(const EditorState& scene, ObjectId camera_id)
 {
-    if (light.category != ObjectCategory::light || light.light_kind != LightKind::directional)
+    const SceneObject* camera = scene.find_object(camera_id);
+    if (camera == nullptr || camera->category != ObjectCategory::camera ||
+        camera->camera_kind != CameraKind::perspective)
+        throw std::invalid_argument("Scene object is not a perspective camera");
+    return local_forward_from_orientation(scene.world_orientation(camera_id));
+}
+
+glm::vec3 directional_light_direction(const EditorState& scene, ObjectId light_id)
+{
+    const SceneObject* light = scene.find_object(light_id);
+    if (light == nullptr || light->category != ObjectCategory::light ||
+        light->light_kind != LightKind::directional)
         throw std::invalid_argument("Scene object is not a directional light");
-    return local_forward_from_orientation(light.transform.orientation);
+    return local_forward_from_orientation(scene.world_orientation(light_id));
 }
 } // namespace ai3
