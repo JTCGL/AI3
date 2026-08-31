@@ -19,6 +19,19 @@ bash scripts/bootstrap.sh
 bash scripts/check.sh
 ```
 
+For an existing checkout, choose the synchronization command according to intent:
+
+```sh
+# Return the checkout to current known-good main, then verify it.
+bash scripts/sync-and-check.sh
+
+# Fast-forward and verify the currently checked-out tracked branch without switching branches.
+bash scripts/sync-current-and-check.sh
+```
+
+Both synchronization commands require a clean working tree and use fast-forward-only updates. The
+current-branch command refuses detached HEAD and branches without a configured upstream.
+
 Bootstrap installs the supported platform prerequisites without changing the platform compiler policy, then
 validates CMake 3.25 or newer and clang-format 21.x. On desktop Linux, GCC remains the build compiler; on
 Termux, Clang remains the build compiler. Ubuntu Jammy and Noble (including derivatives such as Linux Mint)
@@ -47,6 +60,11 @@ and are visibly rejected when the resulting local transform cannot be represente
 the Window menu can restore the default layout and show AI3 scale/locale diagnostics. The Help menu switches
 between external English and Spanish UTF-8 locale resources at runtime, while stable internal window IDs
 preserve docking. Dear ImGui diagnostics remain available from Help.
+
+Dear ImGui docking/layout persistence is stored as `imgui.ini` beside the running `ai3` executable, independent
+of the shell working directory. Smoke mode disables ImGui settings persistence. A future packaged or read-only
+installation may require an appropriate per-user configuration directory; the current development runtime does
+not implement that packaging policy.
 
 SDL3 window display scale drives font-atlas size, ImGui style metrics, and deliberate editor drawing metrics.
 Scale changes are applied at runtime. The current embedded font uses a Latin-focused profile; UTF-8 translation

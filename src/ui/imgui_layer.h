@@ -1,11 +1,12 @@
 #pragma once
 #include <SDL3/SDL_video.h>
+#include <string>
 namespace ai3
 {
 class ImGuiLayer
 {
     public:
-    ImGuiLayer(SDL_Window* window, SDL_GLContext gl_context, bool save_settings,
+    ImGuiLayer(SDL_Window* window, SDL_GLContext gl_context, std::string ini_filename,
                float display_scale);
     ~ImGuiLayer();
     ImGuiLayer(const ImGuiLayer&) = delete;
@@ -19,6 +20,7 @@ class ImGuiLayer
     bool context_initialized_ = false;
     bool sdl_backend_initialized_ = false;
     bool gl_backend_initialized_ = false;
+    std::string ini_filename_;
     float ui_scale_ = 1.0F;
     float font_size_ = 16.0F;
 };

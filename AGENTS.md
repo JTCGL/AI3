@@ -72,6 +72,10 @@ bash scripts/check.sh
 
 The same verification path should be used locally and by GitHub Actions wherever practical.
 
+Use `bash scripts/sync-and-check.sh` only to return a checkout to known-good `main` and verify it. Use
+`bash scripts/sync-current-and-check.sh` to fast-forward and verify the currently checked-out tracked feature or
+PR branch without switching branches.
+
 ### Termux resource safety
 - Keep the Termux build preset at one parallel job.
 - Run local build and verification commands serially in the foreground.

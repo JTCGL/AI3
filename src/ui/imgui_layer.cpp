@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
 namespace ai3
 {
 namespace
@@ -13,16 +14,16 @@ constexpr float base_font_size = 16.0F;
 constexpr float minimum_scale = 0.75F;
 constexpr float maximum_scale = 4.0F;
 } // namespace
-ImGuiLayer::ImGuiLayer(SDL_Window* window, SDL_GLContext gl_context, bool save_settings,
+ImGuiLayer::ImGuiLayer(SDL_Window* window, SDL_GLContext gl_context, std::string ini_filename,
                        float display_scale)
+    : ini_filename_(std::move(ini_filename))
 {
     IMGUI_CHECKVERSION();
     if (ImGui::CreateContext() == nullptr)
         throw std::runtime_error("ImGui context initialization failed");
     context_initialized_ = true;
     ImGuiIO& io = ImGui::GetIO();
-    if (!save_settings)
-        io.IniFilename = nullptr;
+    io.IniFilename = ini_filename_.empty() ? nullptr : ini_filename_.c_str();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     update_display_scale(display_scale);

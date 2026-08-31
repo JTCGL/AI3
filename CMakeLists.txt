@@ -39,7 +39,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(glm nlohmann_json)
 
-add_library(ai3_options STATIC src/app/command_line.cpp)
+add_library(ai3_options STATIC
+    src/app/command_line.cpp
+    src/app/runtime_paths.cpp
+)
 target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_library(ai3_editor STATIC
@@ -165,6 +168,7 @@ if(AI3_BUILD_TESTS)
         tests/editor_state_test.cpp
         tests/hierarchy_test.cpp
         tests/localization_test.cpp
+        tests/runtime_paths_test.cpp
         tests/scene_document_test.cpp
         tests/scene_test.cpp
         tests/ui_identity_test.cpp
