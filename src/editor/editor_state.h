@@ -14,6 +14,7 @@
 namespace ai3
 {
 class SceneDocumentCodec;
+class EditorHistory;
 using ObjectId = std::uint64_t;
 using DocumentRevision = std::uint64_t;
 constexpr ObjectId no_object = 0;
@@ -192,6 +193,7 @@ class EditorState
     bool consume_layout_reset_request();
 
     private:
+    friend class EditorHistory;
     friend class SceneDocumentCodec;
     struct SubtypeKey
     {
@@ -200,6 +202,10 @@ class EditorState
         bool operator<(const SubtypeKey& other) const
         {
             return std::pair{category, subtype} < std::pair{other.category, other.subtype};
+        }
+        bool operator==(const SubtypeKey& other) const
+        {
+            return category == other.category && subtype == other.subtype;
         }
     };
     ObjectId create_named_object(std::string localized_base_name, CreateObject object,

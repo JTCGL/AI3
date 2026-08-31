@@ -19,6 +19,7 @@
 #include <mutex>
 #include <optional>
 #include <sstream>
+#include <utility>
 
 namespace ai3
 {
@@ -101,6 +102,30 @@ std::string decimal(float value, int precision)
     std::ostringstream stream;
     stream << std::fixed << std::setprecision(precision) << value;
     return stream.str();
+}
+
+template <typename Mutation>
+void apply_continuous_edit(EditorHistory& history, bool changed, Mutation&& mutation)
+{
+    if (ImGui::IsItemActivated())
+        history.begin_transaction();
+    if (changed)
+        std::forward<Mutation>(mutation)();
+    if (ImGui::IsItemDeactivated())
+    {
+        if (ImGui::IsItemDeactivatedAfterEdit())
+            history.commit_transaction();
+        else
+            history.cancel_transaction();
+    }
+}
+
+template <typename Mutation> void apply_discrete_edit(EditorHistory& history, Mutation&& mutation)
+{
+    if (!history.begin_transaction())
+        return;
+    std::forward<Mutation>(mutation)();
+    history.commit_transaction();
 }
 
 void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
@@ -364,30 +389,75 @@ void EditorUi::draw_main_menu(bool& running)
                 request_transition(DocumentTransition::quit, running);
             ImGui::EndMenu();
         }
+        EditorHistory& history = document_session_.history();
+        if (ImGui::BeginMenu(localization_.text("menu.edit").c_str()))
+        {
+            if (ImGui::MenuItem(localization_.text("action.undo").c_str(),
+                                localization_.text("shortcut.undo").c_str(), false,
+                                history.can_undo()))
+            {
+                history.undo();
+                viewport_renderer_.clear_geometry_cache();
+            }
+            if (ImGui::MenuItem(localization_.text("action.redo").c_str(),
+                                localization_.text("shortcut.redo").c_str(), false,
+                                history.can_redo()))
+            {
+                history.redo();
+                viewport_renderer_.clear_geometry_cache();
+            }
+            ImGui::EndMenu();
+        }
+        if (!ImGui::GetIO().WantTextInput &&
+            ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z,
+                            ImGuiInputFlags_RouteGlobal))
+        {
+            if (history.redo())
+                viewport_renderer_.clear_geometry_cache();
+        }
+        else if (!ImGui::GetIO().WantTextInput &&
+                 ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z, ImGuiInputFlags_RouteGlobal))
+        {
+            if (history.undo())
+                viewport_renderer_.clear_geometry_cache();
+        }
         if (ImGui::BeginMenu(localization_.text("menu.object").c_str()))
         {
             if (ImGui::MenuItem(localization_.text("action.create_sphere").c_str()))
             {
-                const ObjectId sphere = state_.create_sphere(localization_.text("object.sphere"));
-                state_.select(sphere);
+                apply_discrete_edit(history,
+                                    [&]
+                                    {
+                                        const ObjectId sphere = state_.create_sphere(
+                                            localization_.text("object.sphere"));
+                                        state_.select(sphere);
+                                    });
             }
             if (ImGui::MenuItem(localization_.text("action.create_perspective_camera").c_str()))
             {
-                const ObjectId camera =
-                    state_.create_perspective_camera(localization_.text("object.camera"));
-                state_.select(camera);
+                apply_discrete_edit(history,
+                                    [&]
+                                    {
+                                        const ObjectId camera = state_.create_perspective_camera(
+                                            localization_.text("object.camera"));
+                                        state_.select(camera);
+                                    });
             }
             if (ImGui::MenuItem(localization_.text("action.create_directional_light").c_str()))
             {
-                const ObjectId light =
-                    state_.create_directional_light(localization_.text("object.directional_light"));
-                state_.select(light);
+                apply_discrete_edit(history,
+                                    [&]
+                                    {
+                                        const ObjectId light = state_.create_directional_light(
+                                            localization_.text("object.directional_light"));
+                                        state_.select(light);
+                                    });
             }
             ImGui::Separator();
             const bool has_selection = state_.selection() != no_object;
             if (ImGui::MenuItem(localization_.text("action.delete_selected").c_str(), nullptr,
                                 false, has_selection))
-                state_.delete_object(state_.selection());
+                apply_discrete_edit(history, [&] { state_.delete_object(state_.selection()); });
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(localization_.text("menu.view").c_str()))
@@ -506,11 +576,16 @@ void EditorUi::apply_pending_reparent()
     if (object == nullptr)
         return;
     const std::string object_name = object->name;
+    EditorHistory& history = document_session_.history();
+    history.begin_transaction();
     if (!state_.reparent_object(dragged, new_parent))
     {
+        history.cancel_transaction();
         state_.add_console_message("console.reparent_rejected", object_name);
         state_.set_panel_visible(EditorPanel::console, true);
     }
+    else
+        history.commit_transaction();
 }
 
 void EditorUi::draw_scene_graph()
@@ -549,8 +624,9 @@ void EditorUi::draw_object_inspector()
             std::snprintf(name, sizeof(name), "%s", object->name.c_str());
             const std::string name_label =
                 stable_imgui_label(localization_.text("inspector.name"), "inspector_name");
-            if (ImGui::InputText(name_label.c_str(), name, sizeof(name)))
-                state_.rename_object(object->id, name);
+            const bool name_changed = ImGui::InputText(name_label.c_str(), name, sizeof(name));
+            apply_continuous_edit(document_session_.history(), name_changed,
+                                  [&] { state_.rename_object(object->id, name); });
             const char* type_key = "type.object";
             if (object->primitive_kind == PrimitiveKind::sphere)
                 type_key = "type.sphere";
@@ -565,13 +641,15 @@ void EditorUi::draw_object_inspector()
                 stable_imgui_label(localization_.text("inspector.enabled"), "inspector_enabled");
             bool enabled = object->enabled;
             if (ImGui::Checkbox(enabled_label.c_str(), &enabled))
-                state_.set_object_enabled(object->id, enabled);
+                apply_discrete_edit(document_session_.history(),
+                                    [&] { state_.set_object_enabled(object->id, enabled); });
             ImGui::SameLine();
             const std::string visible_label =
                 stable_imgui_label(localization_.text("inspector.visible"), "inspector_visible");
             bool object_visible = object->visible;
             if (ImGui::Checkbox(visible_label.c_str(), &object_visible))
-                state_.set_object_visible(object->id, object_visible);
+                apply_discrete_edit(document_session_.history(),
+                                    [&] { state_.set_object_visible(object->id, object_visible); });
             if (object->primitive_kind == PrimitiveKind::sphere)
             {
                 float displayed_radius =
@@ -582,10 +660,16 @@ void EditorUi::draw_object_inspector()
                 const std::string radius_label = stable_imgui_label(radius_text, "sphere_radius");
                 const float speed = length_from_meters(0.05F, display_length_unit_);
                 const float minimum = length_from_meters(0.001F, display_length_unit_);
-                if (ImGui::DragFloat(radius_label.c_str(), &displayed_radius, speed, minimum))
-                    state_.set_sphere(object->id,
-                                      {std::max(0.001F, length_to_meters(displayed_radius,
-                                                                         display_length_unit_))});
+                const bool changed =
+                    ImGui::DragFloat(radius_label.c_str(), &displayed_radius, speed, minimum);
+                apply_continuous_edit(
+                    document_session_.history(), changed,
+                    [&]
+                    {
+                        state_.set_sphere(
+                            object->id, {std::max(0.001F, length_to_meters(displayed_radius,
+                                                                           display_length_unit_))});
+                    });
             }
             if (object->camera_kind == CameraKind::perspective)
             {
@@ -598,6 +682,8 @@ void EditorUi::draw_object_inspector()
                         localization_.text("inspector.vertical_fov"), "camera_vertical_fov");
                     bool changed = ImGui::DragFloat(fov_label.c_str(), &camera.vertical_fov_degrees,
                                                     0.5F, 0.1F, 179.9F);
+                    apply_continuous_edit(document_session_.history(), changed, [&]
+                                          { state_.set_perspective_camera(object->id, camera); });
                     float near_display =
                         length_from_meters(camera.near_plane_meters, display_length_unit_);
                     float far_display =
@@ -608,21 +694,28 @@ void EditorUi::draw_object_inspector()
                     const std::string far_text = localization_.format(
                         "inspector.far_plane_with_unit",
                         {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
-                    changed |= ImGui::DragFloat(
+                    changed = ImGui::DragFloat(
                         stable_imgui_label(near_text, "camera_near_plane").c_str(), &near_display,
                         length_from_meters(0.01F, display_length_unit_),
                         length_from_meters(0.001F, display_length_unit_));
-                    changed |= ImGui::DragFloat(
-                        stable_imgui_label(far_text, "camera_far_plane").c_str(), &far_display,
-                        length_from_meters(0.1F, display_length_unit_),
-                        length_from_meters(0.002F, display_length_unit_));
                     camera.near_plane_meters =
                         std::max(0.001F, length_to_meters(near_display, display_length_unit_));
                     camera.far_plane_meters =
+                        std::max(camera.near_plane_meters + 0.001F, camera.far_plane_meters);
+                    apply_continuous_edit(document_session_.history(), changed, [&]
+                                          { state_.set_perspective_camera(object->id, camera); });
+                    camera = state_.find_object(object->id)->perspective_camera;
+                    near_display =
+                        length_from_meters(camera.near_plane_meters, display_length_unit_);
+                    changed = ImGui::DragFloat(
+                        stable_imgui_label(far_text, "camera_far_plane").c_str(), &far_display,
+                        length_from_meters(0.1F, display_length_unit_),
+                        length_from_meters(0.002F, display_length_unit_));
+                    camera.far_plane_meters =
                         std::max(camera.near_plane_meters + 0.001F,
                                  length_to_meters(far_display, display_length_unit_));
-                    if (changed)
-                        state_.set_perspective_camera(object->id, camera);
+                    apply_continuous_edit(document_session_.history(), changed, [&]
+                                          { state_.set_perspective_camera(object->id, camera); });
                 }
             }
             if (object->light_kind == LightKind::directional)
@@ -638,11 +731,14 @@ void EditorUi::draw_object_inspector()
                         localization_.text("inspector.intensity"), "directional_light_intensity");
                     bool changed =
                         ImGui::ColorEdit3(color_label.c_str(), glm::value_ptr(light.color));
-                    changed |=
+                    apply_continuous_edit(document_session_.history(), changed,
+                                          [&] { state_.set_directional_light(object->id, light); });
+                    light = state_.find_object(object->id)->directional_light;
+                    changed =
                         ImGui::DragFloat(intensity_label.c_str(), &light.intensity, 0.05F, 0.0F);
                     light.intensity = std::max(0.0F, light.intensity);
-                    if (changed)
-                        state_.set_directional_light(object->id, light);
+                    apply_continuous_edit(document_session_.history(), changed,
+                                          [&] { state_.set_directional_light(object->id, light); });
                 }
             }
             const std::string transform_label =
@@ -673,6 +769,10 @@ void EditorUi::draw_object_inspector()
                         length_to_meters(displayed_position.z, display_length_unit_)};
                     transform_changed = true;
                 }
+                apply_continuous_edit(document_session_.history(), transform_changed,
+                                      [&] { state_.set_local_transform(object->id, transform); });
+                transform = state_.find_object(object->id)->transform;
+                transform_changed = false;
                 glm::vec3 displayed_rotation =
                     euler_degrees_from_orientation(transform.orientation);
                 if (ImGui::DragFloat3(rotation_label.c_str(), glm::value_ptr(displayed_rotation),
@@ -681,10 +781,13 @@ void EditorUi::draw_object_inspector()
                     transform.orientation = orientation_from_euler_degrees(displayed_rotation);
                     transform_changed = true;
                 }
-                transform_changed |= ImGui::DragFloat3(
+                apply_continuous_edit(document_session_.history(), transform_changed,
+                                      [&] { state_.set_local_transform(object->id, transform); });
+                transform = state_.find_object(object->id)->transform;
+                transform_changed = ImGui::DragFloat3(
                     scale_label.c_str(), glm::value_ptr(transform.scale), 0.05F, 0.01F, 100.0F);
-                if (transform_changed)
-                    state_.set_local_transform(object->id, transform);
+                apply_continuous_edit(document_session_.history(), transform_changed,
+                                      [&] { state_.set_local_transform(object->id, transform); });
             }
         }
         ImGui::End();

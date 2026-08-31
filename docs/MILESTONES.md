@@ -85,3 +85,9 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 - Added authoritative document revisions and a display-independent single-document session, centralized
   serialized-state mutations, and localized Save/Discard/Cancel protection for New, Open, Quit, and window
   close. Runtime verification passed on Termux ARM64 and T5600 Linux x86-64, and GitHub Actions passed.
+
+## Milestone 13 — Undo/Redo and editor transaction foundation
+
+- Added display-independent snapshot-backed linear history with intentional transaction boundaries,
+  checkpoint-based clean/dirty semantics, undoable discrete and continuous inspector edits, localized Undo/Redo
+  access, and document-replacement history baselines.
