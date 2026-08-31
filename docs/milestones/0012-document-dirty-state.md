@@ -66,3 +66,9 @@ regressions. Run `bash scripts/check.sh`.
 5. Confirm a failed save or invalid Open retains the current valid document and blocks replacement.
 6. Exercise File → Quit and the SDL window close control while dirty; Cancel must keep AI3 running.
 7. Confirm no Close Document action exists.
+
+## Completion evidence
+
+- Termux ARM64 runtime verification passed.
+- T5600 Linux x86-64 runtime verification passed.
+- GitHub Actions passed for the final reviewed implementation.
