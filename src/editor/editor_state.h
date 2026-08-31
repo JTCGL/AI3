@@ -26,6 +26,7 @@ struct Transform
 };
 
 glm::mat4 compose_transform(const Transform& transform);
+bool valid_transform(const Transform& transform);
 
 struct ResolvedTransform
 {

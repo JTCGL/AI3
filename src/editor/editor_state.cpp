@@ -84,6 +84,8 @@ bool decompose_verified_trs(const glm::mat4& matrix, Transform& result)
 
 void validate(const CreateObject& object)
 {
+    if (!valid_transform(object.transform))
+        throw std::invalid_argument("Scene object transform is invalid");
     const bool primitive_valid = object.category == ObjectCategory::primitive
                                      ? object.primitive_kind != PrimitiveKind::none
                                      : object.primitive_kind == PrimitiveKind::none;
@@ -110,12 +112,28 @@ void validate(const CreateObject& object)
             camera.far_plane_meters <= camera.near_plane_meters)
             throw std::invalid_argument("Perspective camera far plane must exceed its near plane");
     }
-    if (object.light_kind == LightKind::directional &&
-        (!std::isfinite(object.directional_light.intensity) ||
-         object.directional_light.intensity < 0.0F))
-        throw std::invalid_argument("Directional light intensity must be non-negative");
+    if (object.light_kind == LightKind::directional)
+    {
+        const DirectionalLight& light = object.directional_light;
+        if (!std::isfinite(light.color.x) || !std::isfinite(light.color.y) ||
+            !std::isfinite(light.color.z))
+            throw std::invalid_argument("Directional light color must be finite");
+        if (!std::isfinite(light.intensity) || light.intensity < 0.0F)
+            throw std::invalid_argument("Directional light intensity must be non-negative");
+    }
 }
 } // namespace
+
+bool valid_transform(const Transform& transform)
+{
+    for (float value : {transform.position.x, transform.position.y, transform.position.z,
+                        transform.scale.x, transform.scale.y, transform.scale.z})
+        if (!std::isfinite(value))
+            return false;
+    const float orientation_length = glm::length(transform.orientation);
+    return std::isfinite(orientation_length) && orientation_length > 0.0F &&
+           std::abs(orientation_length - 1.0F) <= 0.0001F;
+}
 
 glm::mat4 compose_transform(const Transform& transform)
 {
@@ -289,7 +307,7 @@ bool EditorState::set_object_visible(ObjectId id, bool visible)
 bool EditorState::set_local_transform(ObjectId id, Transform transform)
 {
     SceneObject* object = find_object_mutable(id);
-    if (object == nullptr)
+    if (object == nullptr || !valid_transform(transform))
         return false;
     if (equal(object->transform, transform))
         return true;

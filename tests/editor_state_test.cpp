@@ -6,7 +6,9 @@
 
 #include <glm/geometric.hpp>
 
+#include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -39,6 +41,16 @@ void check_vec3(const glm::vec3& actual, const glm::vec3& expected)
     CHECK(actual.x == doctest::Approx(expected.x).epsilon(0.0001));
     CHECK(actual.y == doctest::Approx(expected.y).epsilon(0.0001));
     CHECK(actual.z == doctest::Approx(expected.z).epsilon(0.0001));
+}
+
+void check_transform(const ai3::Transform& actual, const ai3::Transform& expected)
+{
+    check_vec3(actual.position, expected.position);
+    check_vec3(actual.scale, expected.scale);
+    CHECK(actual.orientation.w == doctest::Approx(expected.orientation.w));
+    CHECK(actual.orientation.x == doctest::Approx(expected.orientation.x));
+    CHECK(actual.orientation.y == doctest::Approx(expected.orientation.y));
+    CHECK(actual.orientation.z == doctest::Approx(expected.orientation.z));
 }
 } // namespace
 
@@ -120,6 +132,46 @@ TEST_CASE("objects are created with stable monotonic scene IDs")
     CHECK(first == 2);
     CHECK(state.delete_object(first));
     CHECK(state.create_object(sphere_object("Sphere", root)) == 3);
+}
+
+TEST_CASE("local transform mutation rejects invalid state transactionally")
+{
+    ai3::EditorState state;
+    const ai3::ObjectId object = state.create_object(ai3::CreateObject{"Object"});
+    const ai3::Transform original = state.find_object(object)->transform;
+    const auto revision = state.document_revision();
+    const float infinity = std::numeric_limits<float>::infinity();
+    const float not_a_number = std::numeric_limits<float>::quiet_NaN();
+
+    std::vector<ai3::Transform> invalid;
+    ai3::Transform non_finite_position = original;
+    non_finite_position.position.x = infinity;
+    invalid.push_back(non_finite_position);
+    ai3::Transform non_finite_scale = original;
+    non_finite_scale.scale.z = not_a_number;
+    invalid.push_back(non_finite_scale);
+    ai3::Transform zero_quaternion = original;
+    zero_quaternion.orientation = {0.0F, 0.0F, 0.0F, 0.0F};
+    invalid.push_back(zero_quaternion);
+    ai3::Transform non_finite_quaternion = original;
+    non_finite_quaternion.orientation.x = infinity;
+    invalid.push_back(non_finite_quaternion);
+    ai3::Transform non_normalized_quaternion = original;
+    non_normalized_quaternion.orientation = {2.0F, 0.0F, 0.0F, 0.0F};
+    invalid.push_back(non_normalized_quaternion);
+
+    for (const ai3::Transform& candidate : invalid)
+    {
+        CHECK_FALSE(state.set_local_transform(object, candidate));
+        check_transform(state.find_object(object)->transform, original);
+        CHECK(state.document_revision() == revision);
+    }
+
+    ai3::Transform reflected = original;
+    reflected.scale = {-1.0F, 0.0F, -2.0F};
+    REQUIRE(state.set_local_transform(object, reflected));
+    check_transform(state.find_object(object)->transform, reflected);
+    CHECK(state.document_revision() == revision + 1);
 }
 
 TEST_CASE("sphere creation preserves semantic radius and localized monotonic names")
@@ -207,11 +259,17 @@ TEST_CASE("camera and light semantic validation rejects invalid updates")
     CHECK_THROWS_AS(state.set_perspective_camera(camera, {50.0F, 10.0F, 5.0F}),
                     std::invalid_argument);
     const ai3::ObjectId light = state.create_directional_light("Directional Light");
+    const auto light_revision = state.document_revision();
     CHECK_THROWS_AS(state.set_directional_light(light, {glm::vec3{1.0F}, -0.01F}),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(state.set_directional_light(
+                        light, {{std::numeric_limits<float>::quiet_NaN(), 1.0F, 1.0F}, 1.0F}),
                     std::invalid_argument);
     CHECK(state.find_object(camera)->perspective_camera.vertical_fov_degrees ==
           doctest::Approx(50.0F));
     CHECK(state.find_object(light)->directional_light.intensity == doctest::Approx(1.0F));
+    check_vec3(state.find_object(light)->directional_light.color, {1.0F, 1.0F, 1.0F});
+    CHECK(state.document_revision() == light_revision);
 }
 
 TEST_CASE("root camera and light directions derive from quaternion negative Z")

@@ -76,24 +76,16 @@ Transform decode_transform(const Json& value)
     result.orientation = {
         number(orientation[0], "orientation"), number(orientation[1], "orientation"),
         number(orientation[2], "orientation"), number(orientation[3], "orientation")};
-    const float length = glm::length(result.orientation);
-    if (!std::isfinite(length) || length <= 0.0F)
-        invalid("orientation must be nonzero");
-    if (std::abs(length - 1.0F) > 0.0001F)
-        invalid("orientation must be normalized");
+    if (!valid_transform(result))
+        invalid("transform values must be finite and orientation must be normalized and nonzero");
     result.orientation = glm::normalize(result.orientation);
     return result;
 }
 
 Json encode_transform(const Transform& transform)
 {
-    for (float value : {transform.position.x, transform.position.y, transform.position.z,
-                        transform.scale.x, transform.scale.y, transform.scale.z})
-        if (!std::isfinite(value))
-            invalid("scene contains a non-finite transform");
-    const float length = glm::length(transform.orientation);
-    if (!std::isfinite(length) || length <= 0.0F)
-        invalid("scene contains an invalid quaternion");
+    if (!valid_transform(transform))
+        invalid("scene contains an invalid transform");
     const glm::quat orientation = glm::normalize(transform.orientation);
     return {{"position_meters", encode_vec3(transform.position)},
             {"orientation_wxyz",
