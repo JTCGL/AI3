@@ -115,6 +115,24 @@ TEST_CASE("empty Scene Document round trips")
     CHECK(loaded.create_object(ai3::CreateObject{"New"}) == 1);
 }
 
+TEST_CASE("transactional load advances revision only when document state changes")
+{
+    ai3::EditorState source;
+    source.create_sphere("Sphere");
+    std::string document;
+    REQUIRE(ai3::serialize_scene_document(source, document));
+
+    ai3::EditorState destination;
+    const auto initial = destination.document_revision();
+    REQUIRE(ai3::deserialize_scene_document(document, destination));
+    CHECK(destination.document_revision() == initial + 1);
+    const auto loaded = destination.document_revision();
+    REQUIRE(ai3::deserialize_scene_document(document, destination));
+    CHECK(destination.document_revision() == loaded);
+    CHECK_FALSE(ai3::deserialize_scene_document("invalid", destination));
+    CHECK(destination.document_revision() == loaded);
+}
+
 TEST_CASE("mixed Scene Document preserves ordering identity hierarchy local state and semantics")
 {
     ai3::EditorState source = mixed_scene();

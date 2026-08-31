@@ -354,10 +354,13 @@ class SceneDocumentCodec
         candidate.default_name_counts_[{ObjectCategory::light,
                                         static_cast<int>(LightKind::directional)}] = light_count;
 
+        const bool changed = encode(destination) != encode(candidate);
         destination.objects_ = std::move(candidate.objects_);
         destination.next_object_id_ = candidate.next_object_id_;
         destination.default_name_counts_ = std::move(candidate.default_name_counts_);
         destination.selection_ = no_object;
+        if (changed)
+            destination.advance_document_revision();
     }
 };
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "editor/document_session.h"
 #include "editor/editor_state.h"
 #include "localization/localization.h"
 #include "render/viewport_renderer.h"
@@ -22,10 +23,14 @@ class EditorUi
     EditorUi(EditorState& state, ViewportView& viewport_view, Localization& localization,
              SDL_Window* window, float content_scale, float ui_scale, float font_size);
     void draw(bool& running);
+    bool request_quit();
     void set_scale_diagnostics(float content_scale, float ui_scale, float font_size);
 
     private:
     void draw_main_menu(bool& running);
+    void draw_unsaved_changes_modal(bool& running);
+    void request_transition(DocumentTransition transition, bool& running);
+    void perform_transition(DocumentTransition transition, bool& running);
     void draw_scene_graph();
     void draw_scene_node(ObjectId id);
     void accept_reparent_drop(ObjectId new_parent);
@@ -41,12 +46,13 @@ class EditorUi
     std::string window_title(std::string_view key, std::string_view stable_id) const;
 
     EditorState& state_;
+    DocumentSession document_session_;
     ViewportView& viewport_view_;
     ViewportRenderer viewport_renderer_;
     Localization& localization_;
     SDL_Window* window_ = nullptr;
     std::shared_ptr<SceneDialogState> dialog_state_;
-    std::filesystem::path document_path_;
+    DocumentTransition ready_transition_ = DocumentTransition::none;
     LengthUnit display_length_unit_ = default_display_length_unit;
     float content_scale_ = 1.0F;
     float ui_scale_ = 1.0F;
