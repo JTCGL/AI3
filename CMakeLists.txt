@@ -43,6 +43,7 @@ add_library(ai3_options STATIC src/app/command_line.cpp)
 target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_library(ai3_editor STATIC
+    src/editor/document_session.cpp
     src/editor/editor_state.cpp
     src/editor/scene_document.cpp
 )
@@ -158,6 +159,7 @@ if(AI3_BUILD_TESTS)
     enable_testing()
     add_executable(ai3_tests
         tests/command_line_test.cpp
+        tests/document_session_test.cpp
         tests/editor_state_test.cpp
         tests/hierarchy_test.cpp
         tests/localization_test.cpp

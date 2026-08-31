@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -17,6 +18,22 @@ std::size_t panel_index(EditorPanel panel) { return static_cast<std::size_t>(pan
 bool matches_filter(const SceneObject& object, ObjectQueryFilter filter)
 {
     return (!filter.enabled_only || object.enabled) && (!filter.visible_only || object.visible);
+}
+
+bool equal(const glm::vec3& left, const glm::vec3& right)
+{
+    return left.x == right.x && left.y == right.y && left.z == right.z;
+}
+
+bool equal(const glm::quat& left, const glm::quat& right)
+{
+    return left.w == right.w && left.x == right.x && left.y == right.y && left.z == right.z;
+}
+
+bool equal(const Transform& left, const Transform& right)
+{
+    return equal(left.position, right.position) && equal(left.orientation, right.orientation) &&
+           equal(left.scale, right.scale);
 }
 
 bool finite(const glm::mat4& matrix)
@@ -67,6 +84,8 @@ bool decompose_verified_trs(const glm::mat4& matrix, Transform& result)
 
 void validate(const CreateObject& object)
 {
+    if (!valid_transform(object.transform))
+        throw std::invalid_argument("Scene object transform is invalid");
     const bool primitive_valid = object.category == ObjectCategory::primitive
                                      ? object.primitive_kind != PrimitiveKind::none
                                      : object.primitive_kind == PrimitiveKind::none;
@@ -93,12 +112,28 @@ void validate(const CreateObject& object)
             camera.far_plane_meters <= camera.near_plane_meters)
             throw std::invalid_argument("Perspective camera far plane must exceed its near plane");
     }
-    if (object.light_kind == LightKind::directional &&
-        (!std::isfinite(object.directional_light.intensity) ||
-         object.directional_light.intensity < 0.0F))
-        throw std::invalid_argument("Directional light intensity must be non-negative");
+    if (object.light_kind == LightKind::directional)
+    {
+        const DirectionalLight& light = object.directional_light;
+        if (!std::isfinite(light.color.x) || !std::isfinite(light.color.y) ||
+            !std::isfinite(light.color.z))
+            throw std::invalid_argument("Directional light color must be finite");
+        if (!std::isfinite(light.intensity) || light.intensity < 0.0F)
+            throw std::invalid_argument("Directional light intensity must be non-negative");
+    }
 }
 } // namespace
+
+bool valid_transform(const Transform& transform)
+{
+    for (float value : {transform.position.x, transform.position.y, transform.position.z,
+                        transform.scale.x, transform.scale.y, transform.scale.z})
+        if (!std::isfinite(value))
+            return false;
+    const float orientation_length = glm::length(transform.orientation);
+    return std::isfinite(orientation_length) && orientation_length > 0.0F &&
+           std::abs(orientation_length - 1.0F) <= 0.0001F;
+}
 
 glm::mat4 compose_transform(const Transform& transform)
 {
@@ -132,6 +167,7 @@ ObjectId EditorState::create_object(CreateObject object)
     created.perspective_camera = object.perspective_camera;
     created.directional_light = object.directional_light;
     objects_.push_back(std::move(created));
+    advance_document_revision();
     return id;
 }
 
@@ -180,7 +216,7 @@ ObjectId EditorState::create_directional_light(std::string localized_base_name,
 
 bool EditorState::set_sphere(ObjectId id, SpherePrimitive sphere)
 {
-    SceneObject* object = find_object(id);
+    SceneObject* object = find_object_mutable(id);
     if (object == nullptr || object->primitive_kind != PrimitiveKind::sphere)
         return false;
     CreateObject candidate{object->name};
@@ -188,13 +224,16 @@ bool EditorState::set_sphere(ObjectId id, SpherePrimitive sphere)
     candidate.primitive_kind = PrimitiveKind::sphere;
     candidate.sphere = sphere;
     validate(candidate);
+    if (object->sphere.radius_meters == sphere.radius_meters)
+        return true;
     object->sphere = sphere;
+    advance_document_revision();
     return true;
 }
 
 bool EditorState::set_perspective_camera(ObjectId id, PerspectiveCamera camera)
 {
-    SceneObject* object = find_object(id);
+    SceneObject* object = find_object_mutable(id);
     if (object == nullptr || object->camera_kind != CameraKind::perspective)
         return false;
     CreateObject candidate{object->name};
@@ -202,13 +241,18 @@ bool EditorState::set_perspective_camera(ObjectId id, PerspectiveCamera camera)
     candidate.camera_kind = CameraKind::perspective;
     candidate.perspective_camera = camera;
     validate(candidate);
+    if (object->perspective_camera.vertical_fov_degrees == camera.vertical_fov_degrees &&
+        object->perspective_camera.near_plane_meters == camera.near_plane_meters &&
+        object->perspective_camera.far_plane_meters == camera.far_plane_meters)
+        return true;
     object->perspective_camera = camera;
+    advance_document_revision();
     return true;
 }
 
 bool EditorState::set_directional_light(ObjectId id, DirectionalLight light)
 {
-    SceneObject* object = find_object(id);
+    SceneObject* object = find_object_mutable(id);
     if (object == nullptr || object->light_kind != LightKind::directional)
         return false;
     CreateObject candidate{object->name};
@@ -216,13 +260,65 @@ bool EditorState::set_directional_light(ObjectId id, DirectionalLight light)
     candidate.light_kind = LightKind::directional;
     candidate.directional_light = light;
     validate(candidate);
+    if (equal(object->directional_light.color, light.color) &&
+        object->directional_light.intensity == light.intensity)
+        return true;
     object->directional_light = light;
+    advance_document_revision();
+    return true;
+}
+
+bool EditorState::rename_object(ObjectId id, std::string name)
+{
+    SceneObject* object = find_object_mutable(id);
+    if (object == nullptr)
+        return false;
+    if (object->name == name)
+        return true;
+    object->name = std::move(name);
+    advance_document_revision();
+    return true;
+}
+
+bool EditorState::set_object_enabled(ObjectId id, bool enabled)
+{
+    SceneObject* object = find_object_mutable(id);
+    if (object == nullptr)
+        return false;
+    if (object->enabled == enabled)
+        return true;
+    object->enabled = enabled;
+    advance_document_revision();
+    return true;
+}
+
+bool EditorState::set_object_visible(ObjectId id, bool visible)
+{
+    SceneObject* object = find_object_mutable(id);
+    if (object == nullptr)
+        return false;
+    if (object->visible == visible)
+        return true;
+    object->visible = visible;
+    advance_document_revision();
+    return true;
+}
+
+bool EditorState::set_local_transform(ObjectId id, Transform transform)
+{
+    SceneObject* object = find_object_mutable(id);
+    if (object == nullptr || !valid_transform(transform))
+        return false;
+    if (equal(object->transform, transform))
+        return true;
+    object->transform = std::move(transform);
+    advance_document_revision();
     return true;
 }
 
 bool EditorState::reparent_object(ObjectId id, ObjectId new_parent)
 {
-    SceneObject* object = find_object(id);
+    SceneObject* object = find_object_mutable(id);
     if (object == nullptr || id == new_parent)
         return false;
     if (new_parent != no_object && find_object(new_parent) == nullptr)
@@ -255,6 +351,7 @@ bool EditorState::reparent_object(ObjectId id, ObjectId new_parent)
 
     object->parent_id_ = new_parent;
     object->transform = new_local;
+    advance_document_revision();
     return true;
 }
 
@@ -275,18 +372,24 @@ bool EditorState::delete_object(ObjectId id)
     objects_ = std::move(candidate.objects_);
     if (selection_ == id)
         clear_selection();
+    advance_document_revision();
     return true;
 }
 
-void EditorState::reset_scene()
+bool EditorState::reset_scene()
 {
+    if (objects_.empty() && next_object_id_ == 1 && default_name_counts_.empty())
+        return false;
     objects_.clear();
     selection_ = no_object;
     next_object_id_ = 1;
     default_name_counts_.clear();
+    advance_document_revision();
+    return true;
 }
+DocumentRevision EditorState::document_revision() const { return document_revision_; }
 const std::vector<SceneObject>& EditorState::objects() const { return objects_; }
-SceneObject* EditorState::find_object(ObjectId id)
+SceneObject* EditorState::find_object_mutable(ObjectId id)
 {
     for (SceneObject& object : objects_)
         if (object.id == id)
@@ -421,5 +524,11 @@ bool EditorState::consume_layout_reset_request()
     const bool requested = layout_reset_requested_;
     layout_reset_requested_ = false;
     return requested;
+}
+void EditorState::advance_document_revision()
+{
+    if (document_revision_ == std::numeric_limits<DocumentRevision>::max())
+        throw std::overflow_error("Scene Document revision exhausted");
+    ++document_revision_;
 }
 } // namespace ai3

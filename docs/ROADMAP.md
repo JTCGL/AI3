@@ -6,14 +6,17 @@ requirements and demonstrated dependencies become clearer.
 
 ## Future document workflow
 
-- Add dirty-state tracking and unsaved-change prompts when their interaction policy is specified.
 - Define autosave, crash recovery, and recent-file behavior as separate workflow milestones.
 - Add multi-document, import/export, assets, and format migration only when their own requirements establish
   the necessary ownership and compatibility policies.
+- Design an AI3-owned cross-platform file dialog/browser so the editor can eventually provide consistent file
+  workflow UX instead of permanently depending on host-native dialogs.
+- If configurable internal/document units are introduced, make them authoritative Scene Document data whose
+  changes dirty the document, with an explicit format and conversion policy decision first.
 
-Version 1 Scene Documents and single-document Open/Save/Save As are established. Scene files intentionally do
-not include viewport, layout, locale, display-unit, console, diagnostics, renderer, or other workspace/session
-state.
+Version 1 Scene Documents and revision-based single-document New/Open/Save/Save As with unsaved-change
+protection are established. Scene files intentionally do not include viewport, layout, locale, display-unit,
+console, diagnostics, renderer, or other workspace/session state.
 
 ## Transform tools and editing workflow
 

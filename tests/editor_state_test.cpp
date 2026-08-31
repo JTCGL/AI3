@@ -6,7 +6,9 @@
 
 #include <glm/geometric.hpp>
 
+#include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -40,6 +42,16 @@ void check_vec3(const glm::vec3& actual, const glm::vec3& expected)
     CHECK(actual.y == doctest::Approx(expected.y).epsilon(0.0001));
     CHECK(actual.z == doctest::Approx(expected.z).epsilon(0.0001));
 }
+
+void check_transform(const ai3::Transform& actual, const ai3::Transform& expected)
+{
+    check_vec3(actual.position, expected.position);
+    check_vec3(actual.scale, expected.scale);
+    CHECK(actual.orientation.w == doctest::Approx(expected.orientation.w));
+    CHECK(actual.orientation.x == doctest::Approx(expected.orientation.x));
+    CHECK(actual.orientation.y == doctest::Approx(expected.orientation.y));
+    CHECK(actual.orientation.z == doctest::Approx(expected.orientation.z));
+}
 } // namespace
 
 TEST_CASE("editor state starts with an empty scene and no selection")
@@ -47,6 +59,68 @@ TEST_CASE("editor state starts with an empty scene and no selection")
     ai3::EditorState state;
     CHECK(state.objects().empty());
     CHECK(state.selection() == ai3::no_object);
+    CHECK(state.document_revision() == 0);
+}
+
+TEST_CASE("document revision advances only for real authoritative mutations")
+{
+    ai3::EditorState state;
+    const auto initial = state.document_revision();
+    const ai3::ObjectId root = state.create_object(ai3::CreateObject{"Root"});
+    CHECK(state.document_revision() == initial + 1);
+
+    auto revision = state.document_revision();
+    REQUIRE(state.rename_object(root, "Root"));
+    REQUIRE(state.set_object_enabled(root, true));
+    REQUIRE(state.set_object_visible(root, true));
+    REQUIRE(state.set_local_transform(root, state.find_object(root)->transform));
+    CHECK(state.document_revision() == revision);
+
+    REQUIRE(state.rename_object(root, "Renamed"));
+    CHECK(state.document_revision() == ++revision);
+    REQUIRE(state.set_object_enabled(root, false));
+    CHECK(state.document_revision() == ++revision);
+    REQUIRE(state.set_object_visible(root, false));
+    CHECK(state.document_revision() == ++revision);
+    ai3::Transform moved = state.find_object(root)->transform;
+    moved.position.x = 2.0F;
+    REQUIRE(state.set_local_transform(root, moved));
+    CHECK(state.document_revision() == ++revision);
+
+    const ai3::ObjectId sphere = state.create_sphere("Sphere");
+    CHECK(state.document_revision() == ++revision);
+    REQUIRE(state.set_sphere(sphere, state.find_object(sphere)->sphere));
+    CHECK(state.document_revision() == revision);
+    REQUIRE(state.set_sphere(sphere, {2.0F}));
+    CHECK(state.document_revision() == ++revision);
+
+    const ai3::ObjectId camera = state.create_perspective_camera("Camera");
+    CHECK(state.document_revision() == ++revision);
+    REQUIRE(state.set_perspective_camera(camera, {60.0F, 0.2F, 200.0F}));
+    CHECK(state.document_revision() == ++revision);
+    const ai3::ObjectId light = state.create_directional_light("Light");
+    CHECK(state.document_revision() == ++revision);
+    REQUIRE(state.set_directional_light(light, {{0.5F, 0.6F, 0.7F}, 2.0F}));
+    CHECK(state.document_revision() == ++revision);
+
+    REQUIRE(state.reparent_object(sphere, root));
+    CHECK(state.document_revision() == ++revision);
+    REQUIRE(state.reparent_object(sphere, root));
+    CHECK(state.document_revision() == revision);
+
+    state.select(root);
+    state.set_panel_visible(ai3::EditorPanel::console, false);
+    state.add_console_message("test");
+    state.request_layout_reset();
+    state.consume_layout_reset_request();
+    CHECK(state.document_revision() == revision);
+
+    REQUIRE(state.delete_object(light));
+    CHECK(state.document_revision() == ++revision);
+    REQUIRE(state.reset_scene());
+    CHECK(state.document_revision() == ++revision);
+    CHECK_FALSE(state.reset_scene());
+    CHECK(state.document_revision() == revision);
 }
 
 TEST_CASE("objects are created with stable monotonic scene IDs")
@@ -58,6 +132,46 @@ TEST_CASE("objects are created with stable monotonic scene IDs")
     CHECK(first == 2);
     CHECK(state.delete_object(first));
     CHECK(state.create_object(sphere_object("Sphere", root)) == 3);
+}
+
+TEST_CASE("local transform mutation rejects invalid state transactionally")
+{
+    ai3::EditorState state;
+    const ai3::ObjectId object = state.create_object(ai3::CreateObject{"Object"});
+    const ai3::Transform original = state.find_object(object)->transform;
+    const auto revision = state.document_revision();
+    const float infinity = std::numeric_limits<float>::infinity();
+    const float not_a_number = std::numeric_limits<float>::quiet_NaN();
+
+    std::vector<ai3::Transform> invalid;
+    ai3::Transform non_finite_position = original;
+    non_finite_position.position.x = infinity;
+    invalid.push_back(non_finite_position);
+    ai3::Transform non_finite_scale = original;
+    non_finite_scale.scale.z = not_a_number;
+    invalid.push_back(non_finite_scale);
+    ai3::Transform zero_quaternion = original;
+    zero_quaternion.orientation = {0.0F, 0.0F, 0.0F, 0.0F};
+    invalid.push_back(zero_quaternion);
+    ai3::Transform non_finite_quaternion = original;
+    non_finite_quaternion.orientation.x = infinity;
+    invalid.push_back(non_finite_quaternion);
+    ai3::Transform non_normalized_quaternion = original;
+    non_normalized_quaternion.orientation = {2.0F, 0.0F, 0.0F, 0.0F};
+    invalid.push_back(non_normalized_quaternion);
+
+    for (const ai3::Transform& candidate : invalid)
+    {
+        CHECK_FALSE(state.set_local_transform(object, candidate));
+        check_transform(state.find_object(object)->transform, original);
+        CHECK(state.document_revision() == revision);
+    }
+
+    ai3::Transform reflected = original;
+    reflected.scale = {-1.0F, 0.0F, -2.0F};
+    REQUIRE(state.set_local_transform(object, reflected));
+    check_transform(state.find_object(object)->transform, reflected);
+    CHECK(state.document_revision() == revision + 1);
 }
 
 TEST_CASE("sphere creation preserves semantic radius and localized monotonic names")
@@ -145,11 +259,17 @@ TEST_CASE("camera and light semantic validation rejects invalid updates")
     CHECK_THROWS_AS(state.set_perspective_camera(camera, {50.0F, 10.0F, 5.0F}),
                     std::invalid_argument);
     const ai3::ObjectId light = state.create_directional_light("Directional Light");
+    const auto light_revision = state.document_revision();
     CHECK_THROWS_AS(state.set_directional_light(light, {glm::vec3{1.0F}, -0.01F}),
+                    std::invalid_argument);
+    CHECK_THROWS_AS(state.set_directional_light(
+                        light, {{std::numeric_limits<float>::quiet_NaN(), 1.0F, 1.0F}, 1.0F}),
                     std::invalid_argument);
     CHECK(state.find_object(camera)->perspective_camera.vertical_fov_degrees ==
           doctest::Approx(50.0F));
     CHECK(state.find_object(light)->directional_light.intensity == doctest::Approx(1.0F));
+    check_vec3(state.find_object(light)->directional_light.color, {1.0F, 1.0F, 1.0F});
+    CHECK(state.document_revision() == light_revision);
 }
 
 TEST_CASE("root camera and light directions derive from quaternion negative Z")
@@ -158,11 +278,13 @@ TEST_CASE("root camera and light directions derive from quaternion negative Z")
     const ai3::ObjectId camera = state.create_perspective_camera("Camera");
     const ai3::ObjectId light = state.create_directional_light("Directional Light");
     check_vec3(ai3::camera_forward_direction(state, camera), {0.0F, 0.0F, -1.0F});
-    state.find_object(camera)->transform.orientation =
-        ai3::orientation_from_euler_degrees({90.0F, 0.0F, 0.0F});
+    ai3::Transform camera_transform = state.find_object(camera)->transform;
+    camera_transform.orientation = ai3::orientation_from_euler_degrees({90.0F, 0.0F, 0.0F});
+    REQUIRE(state.set_local_transform(camera, camera_transform));
     check_vec3(ai3::camera_forward_direction(state, camera), {0.0F, 1.0F, 0.0F});
-    state.find_object(light)->transform.orientation =
-        ai3::orientation_from_euler_degrees({0.0F, 90.0F, 0.0F});
+    ai3::Transform light_transform = state.find_object(light)->transform;
+    light_transform.orientation = ai3::orientation_from_euler_degrees({0.0F, 90.0F, 0.0F});
+    REQUIRE(state.set_local_transform(light, light_transform));
     check_vec3(ai3::directional_light_direction(state, light), {-1.0F, 0.0F, 0.0F});
 }
 
@@ -216,7 +338,9 @@ TEST_CASE("selection mutable transforms panels console and layout remain headles
     const std::size_t messages = state.console_messages().size();
     CHECK(state.select(sphere));
     CHECK(state.console_messages().size() == messages + 1);
-    state.find_object(sphere)->transform.position = {1.0F, 2.0F, 3.0F};
+    ai3::Transform transform = state.find_object(sphere)->transform;
+    transform.position = {1.0F, 2.0F, 3.0F};
+    REQUIRE(state.set_local_transform(sphere, transform));
     CHECK(state.find_object(sphere)->transform.position.z == doctest::Approx(3.0F));
     state.set_panel_visible(ai3::EditorPanel::console, false);
     CHECK_FALSE(state.panel_visible(ai3::EditorPanel::console));

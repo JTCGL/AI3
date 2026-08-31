@@ -8,6 +8,7 @@
 
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_error.h>
+#include <SDL3/SDL_video.h>
 
 #include <glm/gtc/type_ptr.hpp>
 
@@ -127,10 +128,17 @@ void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
 
 EditorUi::EditorUi(EditorState& state, ViewportView& viewport_view, Localization& localization,
                    SDL_Window* window, float content_scale, float ui_scale, float font_size)
-    : state_(state), viewport_view_(viewport_view), localization_(localization), window_(window),
+    : state_(state), document_session_(state), viewport_view_(viewport_view),
+      localization_(localization), window_(window),
       dialog_state_(std::make_shared<SceneDialogState>()), content_scale_(content_scale),
       ui_scale_(ui_scale), font_size_(font_size)
 {
+}
+
+bool EditorUi::request_quit()
+{
+    return document_session_.request_transition(DocumentTransition::quit) ==
+           TransitionRequestResult::proceed;
 }
 
 void EditorUi::set_scale_diagnostics(float content_scale, float ui_scale, float font_size)
@@ -183,16 +191,24 @@ void EditorUi::request_save_as_dialog()
 
 void EditorUi::save_document()
 {
-    if (document_path_.empty())
+    if (document_session_.document_path().empty())
     {
         request_save_as_dialog();
         return;
     }
     std::string error;
-    if (save_scene_document_file(state_, document_path_, &error))
-        report_document_result("console.document_saved", document_path_.string());
+    if (document_session_.save(&error))
+    {
+        report_document_result("console.document_saved",
+                               document_session_.document_path().string());
+        if (document_session_.pending_transition() != DocumentTransition::none)
+            ready_transition_ = document_session_.saved_and_take_pending_transition();
+    }
     else
+    {
         report_document_result("console.document_save_failed", error);
+        document_session_.save_failed();
+    }
 }
 
 void EditorUi::process_dialog_result()
@@ -211,37 +227,106 @@ void EditorUi::process_dialog_result()
                                    ? "console.document_open_failed"
                                    : "console.document_save_failed",
                                result->error);
+        if (result->kind == SceneDialogKind::save)
+            document_session_.save_failed();
         return;
     }
     if (result->path.empty())
+    {
+        if (result->kind == SceneDialogKind::save)
+            document_session_.cancel_pending_transition();
         return;
+    }
 
     std::filesystem::path path = std::filesystem::u8path(result->path);
     if (result->kind == SceneDialogKind::open)
     {
         std::string error;
-        if (!load_scene_document_file(path, state_, &error))
+        if (!document_session_.open(path, &error))
         {
             report_document_result("console.document_open_failed", error);
             return;
         }
-        document_path_ = std::move(path);
         viewport_view_.reset();
         viewport_renderer_.clear_geometry_cache();
-        report_document_result("console.document_opened", document_path_.string());
+        report_document_result("console.document_opened",
+                               document_session_.document_path().string());
         return;
     }
 
     if (path.extension().empty())
         path += scene_document_extension;
     std::string error;
-    if (!save_scene_document_file(state_, path, &error))
+    if (!document_session_.save_as(path, &error))
     {
         report_document_result("console.document_save_failed", error);
+        document_session_.save_failed();
         return;
     }
-    document_path_ = std::move(path);
-    report_document_result("console.document_saved", document_path_.string());
+    report_document_result("console.document_saved", document_session_.document_path().string());
+    if (document_session_.pending_transition() != DocumentTransition::none)
+        ready_transition_ = document_session_.saved_and_take_pending_transition();
+}
+
+void EditorUi::perform_transition(DocumentTransition transition, bool& running)
+{
+    switch (transition)
+    {
+    case DocumentTransition::new_document:
+        document_session_.new_document();
+        viewport_renderer_.clear_geometry_cache();
+        break;
+    case DocumentTransition::open_document:
+        request_open_dialog();
+        break;
+    case DocumentTransition::quit:
+        running = false;
+        break;
+    case DocumentTransition::none:
+        break;
+    }
+}
+
+void EditorUi::request_transition(DocumentTransition transition, bool& running)
+{
+    if (document_session_.request_transition(transition) == TransitionRequestResult::proceed)
+        perform_transition(transition, running);
+}
+
+void EditorUi::draw_unsaved_changes_modal(bool& running)
+{
+    bool dialog_active = false;
+    {
+        std::lock_guard<std::mutex> lock(dialog_state_->mutex);
+        dialog_active = dialog_state_->active;
+    }
+    if (document_session_.pending_transition() != DocumentTransition::none && !dialog_active)
+        ImGui::OpenPopup("###ai3_unsaved_changes");
+    const std::string title =
+        stable_imgui_label(localization_.text("dialog.unsaved.title"), "ai3_unsaved_changes");
+    if (!ImGui::BeginPopupModal(title.c_str(), nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+    ImGui::TextWrapped("%s", localization_.text("dialog.unsaved.message").c_str());
+    if (ImGui::Button(localization_.text("dialog.unsaved.save").c_str()))
+    {
+        save_document();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(localization_.text("dialog.unsaved.discard").c_str()))
+    {
+        const DocumentTransition transition =
+            document_session_.discard_and_take_pending_transition();
+        ImGui::CloseCurrentPopup();
+        perform_transition(transition, running);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(localization_.text("dialog.unsaved.cancel").c_str()))
+    {
+        document_session_.cancel_pending_transition();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
 }
 
 void EditorUi::draw_main_menu(bool& running)
@@ -255,9 +340,12 @@ void EditorUi::draw_main_menu(bool& running)
                 std::lock_guard<std::mutex> lock(dialog_state_->mutex);
                 dialog_active = dialog_state_->active;
             }
+            if (ImGui::MenuItem(localization_.text("action.new").c_str(), nullptr, false,
+                                !dialog_active))
+                request_transition(DocumentTransition::new_document, running);
             if (ImGui::MenuItem(localization_.text("action.open").c_str(), nullptr, false,
                                 !dialog_active))
-                request_open_dialog();
+                request_transition(DocumentTransition::open_document, running);
             if (ImGui::MenuItem(localization_.text("action.save").c_str(), nullptr, false,
                                 !dialog_active))
                 save_document();
@@ -267,13 +355,13 @@ void EditorUi::draw_main_menu(bool& running)
             ImGui::Separator();
             if (ImGui::MenuItem(localization_.text("action.reset_scene").c_str()))
             {
-                state_.reset_scene();
+                document_session_.reset_scene();
                 viewport_renderer_.clear_geometry_cache();
                 viewport_view_.reset();
             }
             ImGui::Separator();
             if (ImGui::MenuItem(localization_.text("action.quit").c_str()))
-                running = false;
+                request_transition(DocumentTransition::quit, running);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(localization_.text("menu.object").c_str()))
@@ -452,7 +540,7 @@ void EditorUi::draw_object_inspector()
     {
         const std::string title = window_title("panel.object_inspector", "ai3_object_inspector");
         ImGui::Begin(title.c_str(), &visible);
-        SceneObject* object = state_.find_object(state_.selection());
+        const SceneObject* object = state_.find_object(state_.selection());
         if (object == nullptr)
             ImGui::TextDisabled("%s", localization_.text("inspector.select_prompt").c_str());
         else
@@ -462,7 +550,7 @@ void EditorUi::draw_object_inspector()
             const std::string name_label =
                 stable_imgui_label(localization_.text("inspector.name"), "inspector_name");
             if (ImGui::InputText(name_label.c_str(), name, sizeof(name)))
-                object->name = name;
+                state_.rename_object(object->id, name);
             const char* type_key = "type.object";
             if (object->primitive_kind == PrimitiveKind::sphere)
                 type_key = "type.sphere";
@@ -475,11 +563,15 @@ void EditorUi::draw_object_inspector()
             ImGui::TextUnformatted(type_text.c_str());
             const std::string enabled_label =
                 stable_imgui_label(localization_.text("inspector.enabled"), "inspector_enabled");
-            ImGui::Checkbox(enabled_label.c_str(), &object->enabled);
+            bool enabled = object->enabled;
+            if (ImGui::Checkbox(enabled_label.c_str(), &enabled))
+                state_.set_object_enabled(object->id, enabled);
             ImGui::SameLine();
             const std::string visible_label =
                 stable_imgui_label(localization_.text("inspector.visible"), "inspector_visible");
-            ImGui::Checkbox(visible_label.c_str(), &object->visible);
+            bool object_visible = object->visible;
+            if (ImGui::Checkbox(visible_label.c_str(), &object_visible))
+                state_.set_object_visible(object->id, object_visible);
             if (object->primitive_kind == PrimitiveKind::sphere)
             {
                 float displayed_radius =
@@ -565,25 +657,34 @@ void EditorUi::draw_object_inspector()
                     stable_imgui_label(localization_.text("inspector.rotation"), "rotation");
                 const std::string scale_label =
                     stable_imgui_label(localization_.text("inspector.scale"), "scale");
+                Transform transform = object->transform;
+                bool transform_changed = false;
                 glm::vec3 displayed_position{
-                    length_from_meters(object->transform.position.x, display_length_unit_),
-                    length_from_meters(object->transform.position.y, display_length_unit_),
-                    length_from_meters(object->transform.position.z, display_length_unit_)};
+                    length_from_meters(transform.position.x, display_length_unit_),
+                    length_from_meters(transform.position.y, display_length_unit_),
+                    length_from_meters(transform.position.z, display_length_unit_)};
                 const float position_speed = length_from_meters(0.1F, display_length_unit_);
                 if (ImGui::DragFloat3(position_label.c_str(), glm::value_ptr(displayed_position),
                                       position_speed))
-                    object->transform.position = {
+                {
+                    transform.position = {
                         length_to_meters(displayed_position.x, display_length_unit_),
                         length_to_meters(displayed_position.y, display_length_unit_),
                         length_to_meters(displayed_position.z, display_length_unit_)};
+                    transform_changed = true;
+                }
                 glm::vec3 displayed_rotation =
-                    euler_degrees_from_orientation(object->transform.orientation);
+                    euler_degrees_from_orientation(transform.orientation);
                 if (ImGui::DragFloat3(rotation_label.c_str(), glm::value_ptr(displayed_rotation),
                                       0.5F))
-                    object->transform.orientation =
-                        orientation_from_euler_degrees(displayed_rotation);
-                ImGui::DragFloat3(scale_label.c_str(), glm::value_ptr(object->transform.scale),
-                                  0.05F, 0.01F, 100.0F);
+                {
+                    transform.orientation = orientation_from_euler_degrees(displayed_rotation);
+                    transform_changed = true;
+                }
+                transform_changed |= ImGui::DragFloat3(
+                    scale_label.c_str(), glm::value_ptr(transform.scale), 0.05F, 0.01F, 100.0F);
+                if (transform_changed)
+                    state_.set_local_transform(object->id, transform);
             }
         }
         ImGui::End();
@@ -685,7 +786,20 @@ void EditorUi::draw_console()
 void EditorUi::draw(bool& running)
 {
     process_dialog_result();
+    if (ready_transition_ != DocumentTransition::none)
+    {
+        const DocumentTransition transition =
+            std::exchange(ready_transition_, DocumentTransition::none);
+        perform_transition(transition, running);
+    }
+    const std::string document_name = document_session_.document_path().empty()
+                                          ? localization_.text("document.untitled")
+                                          : document_session_.document_path().filename().string();
+    const std::string application_title =
+        "AI3 - " + document_name + (document_session_.dirty() ? " *" : "");
+    SDL_SetWindowTitle(window_, application_title.c_str());
     draw_main_menu(running);
+    draw_unsaved_changes_modal(running);
 
     constexpr ImGuiID dockspace_id = 0xA13ED170;
     const ImGuiViewport* viewport = ImGui::GetMainViewport();

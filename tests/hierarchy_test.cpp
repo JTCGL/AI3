@@ -142,7 +142,9 @@ TEST_CASE("parenting unparenting and reparenting preserve complete world pose")
     CHECK(scene.find_object(child)->parent_id() == parent_b);
     check_matrix(scene.world_transform_matrix(child), original_world);
 
-    scene.find_object(parent_b)->transform.position.x += 5.0F;
+    ai3::Transform moved_parent = scene.find_object(parent_b)->transform;
+    moved_parent.position.x += 5.0F;
+    REQUIRE(scene.set_local_transform(parent_b, moved_parent));
     check_vec3(scene.world_position(child),
                glm::vec3{original_world[3]} + glm::vec3{5.0F, 0.0F, 0.0F});
 }
@@ -306,7 +308,9 @@ TEST_CASE("render-facing world matrix does not affect sphere geometry semantics"
     const ai3::SphereMesh before =
         ai3::make_sphere_mesh(scene.find_object(id)->sphere.radius_meters);
     check_vec3(glm::vec3{scene.world_transform_matrix(id)[3]}, {5.0F, 5.0F, 6.0F});
-    scene.find_object(parent)->transform.position = {-1.0F, -2.0F, -3.0F};
+    ai3::Transform moved_parent = scene.find_object(parent)->transform;
+    moved_parent.position = {-1.0F, -2.0F, -3.0F};
+    REQUIRE(scene.set_local_transform(parent, moved_parent));
     const ai3::SphereMesh after =
         ai3::make_sphere_mesh(scene.find_object(id)->sphere.radius_meters);
     CHECK(before.indices == after.indices);

@@ -52,7 +52,7 @@ int Application::run()
                 if (event.type == SDL_EVENT_QUIT ||
                     (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
                      event.window.windowID == SDL_GetWindowID(platform.window())))
-                    running = false;
+                    running = !editor_ui.request_quit();
             }
             if (!running)
                 break;

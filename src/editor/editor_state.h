@@ -15,6 +15,7 @@ namespace ai3
 {
 class SceneDocumentCodec;
 using ObjectId = std::uint64_t;
+using DocumentRevision = std::uint64_t;
 constexpr ObjectId no_object = 0;
 
 struct Transform
@@ -25,6 +26,7 @@ struct Transform
 };
 
 glm::mat4 compose_transform(const Transform& transform);
+bool valid_transform(const Transform& transform);
 
 struct ResolvedTransform
 {
@@ -153,14 +155,18 @@ class EditorState
     bool set_sphere(ObjectId id, SpherePrimitive sphere);
     bool set_perspective_camera(ObjectId id, PerspectiveCamera camera);
     bool set_directional_light(ObjectId id, DirectionalLight light);
+    bool rename_object(ObjectId id, std::string name);
+    bool set_object_enabled(ObjectId id, bool enabled);
+    bool set_object_visible(ObjectId id, bool visible);
+    bool set_local_transform(ObjectId id, Transform transform);
     // Changes hierarchy transactionally while preserving the object's complete world pose.
     // Returns false for invalid hierarchy or a local affine matrix not faithfully representable as
     // TRS.
     bool reparent_object(ObjectId id, ObjectId new_parent);
     bool delete_object(ObjectId id);
-    void reset_scene();
+    bool reset_scene();
+    DocumentRevision document_revision() const;
     const std::vector<SceneObject>& objects() const;
-    SceneObject* find_object(ObjectId id);
     const SceneObject* find_object(ObjectId id) const;
     std::vector<ObjectId> children_of(ObjectId parent) const;
     std::vector<const SceneObject*> objects_by_category(ObjectCategory category,
@@ -198,10 +204,13 @@ class EditorState
     };
     ObjectId create_named_object(std::string localized_base_name, CreateObject object,
                                  SubtypeKey subtype);
+    SceneObject* find_object_mutable(ObjectId id);
+    void advance_document_revision();
 
     std::vector<SceneObject> objects_;
     ObjectId next_object_id_ = 1;
     std::map<SubtypeKey, std::uint64_t> default_name_counts_;
+    DocumentRevision document_revision_ = 0;
     ObjectId selection_ = no_object;
     std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,
                                                                                         true, true};

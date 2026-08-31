@@ -84,7 +84,9 @@ TEST_CASE("scene-camera view uses current authoritative world transform")
     check_vec3(glm::normalize(glm::vec3{resolved.view * glm::vec4{forward, 0.0F}}),
                {0.0F, 0.0F, -1.0F});
 
-    scene.find_object(camera)->transform.position = {-2.0F, 7.0F, 1.0F};
+    ai3::Transform moved_camera = scene.find_object(camera)->transform;
+    moved_camera.position = {-2.0F, 7.0F, 1.0F};
+    REQUIRE(scene.set_local_transform(camera, moved_camera));
     resolved = viewport.resolve(scene, 1.0F);
     check_vec3(glm::vec3{resolved.view * glm::vec4{scene.world_position(camera), 1.0F}},
                glm::vec3{0.0F});
@@ -109,7 +111,9 @@ TEST_CASE("parented scene-camera view uses resolved parent transform")
     const glm::vec3 first_world_position = scene.world_position(camera);
     check_vec3(glm::vec3{first.view * glm::vec4{scene.world_position(camera), 1.0F}},
                glm::vec3{0.0F});
-    scene.find_object(parent)->transform.position.x += 4.0F;
+    ai3::Transform moved_parent = scene.find_object(parent)->transform;
+    moved_parent.position.x += 4.0F;
+    REQUIRE(scene.set_local_transform(parent, moved_parent));
     const ai3::ResolvedViewportView moved = viewport.resolve(scene, 1.0F);
     CHECK(glm::length(glm::vec3{moved.view * glm::vec4{first_world_position, 1.0F}}) > 1.0F);
     check_vec3(glm::vec3{moved.view * glm::vec4{scene.world_position(camera), 1.0F}},
