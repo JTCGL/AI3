@@ -66,6 +66,50 @@ TEST_CASE("saved history checkpoints drive dirty state through undo redo and bra
     CHECK_FALSE(session.dirty());
 }
 
+TEST_CASE("active authoritative transaction changes participate in unsaved protection")
+{
+    ai3::EditorState state;
+    ai3::DocumentSession session(state);
+    edit(session, [&] { state.create_sphere("Sphere"); });
+    session.mark_saved_as("saved.ai3scene");
+    CHECK_FALSE(session.dirty());
+
+    REQUIRE(session.history().begin_transaction());
+    REQUIRE(state.rename_object(1, "Live edit"));
+    CHECK(session.history().has_uncommitted_changes());
+    CHECK(session.dirty());
+    for (ai3::DocumentTransition transition :
+         {ai3::DocumentTransition::new_document, ai3::DocumentTransition::open_document,
+          ai3::DocumentTransition::quit})
+    {
+        CHECK(session.request_transition(transition) ==
+              ai3::TransitionRequestResult::needs_unsaved_resolution);
+        CHECK(session.pending_transition() == transition);
+        session.cancel_pending_transition();
+    }
+
+    REQUIRE(session.history().cancel_transaction());
+    CHECK(state.find_object(1)->name == "Sphere 1");
+    CHECK_FALSE(session.history().has_uncommitted_changes());
+    CHECK_FALSE(session.dirty());
+
+    REQUIRE(session.history().begin_transaction());
+    CHECK_FALSE(session.history().has_uncommitted_changes());
+    CHECK_FALSE(session.dirty());
+    CHECK(session.request_transition(ai3::DocumentTransition::quit) ==
+          ai3::TransitionRequestResult::proceed);
+    CHECK_FALSE(session.history().commit_transaction());
+
+    REQUIRE(session.history().begin_transaction());
+    REQUIRE(state.set_sphere(1, {2.0F}));
+    CHECK(session.dirty());
+    REQUIRE(session.history().commit_transaction());
+    CHECK(session.dirty());
+    REQUIRE(session.history().undo());
+    CHECK(state.find_object(1)->sphere.radius_meters == doctest::Approx(1.0F));
+    CHECK_FALSE(session.dirty());
+}
+
 TEST_CASE("session file open is transactional and successful open is clean")
 {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();

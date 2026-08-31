@@ -15,8 +15,10 @@ gizmos, while retaining `EditorState` as mutation authority and `DocumentSession
   persists in `.ai3scene` files.
 - No-op commits create no entry; cancel restores the start; undo followed by editing discards the redo suffix.
 - `DocumentSession` compares current and saved history-state identities for dirty behavior while retaining
-  monotonic document revisions. Save checkpoints the current state. New and successful Open rebaseline history;
-  failed Open preserves it. Reset Scene is one undoable edit and retains its path.
+  monotonic document revisions. Real authoritative changes in an active, not-yet-committed transaction also
+  count as dirty, while an unchanged active transaction does not. Save checkpoints the current state. New and
+  successful Open rebaseline history; failed Open preserves it. Reset Scene is one undoable edit and retains
+  its path.
 - Create sphere/camera/light, delete, reparent/unparent, enabled/visible, and Reset Scene use discrete
   transactions. Name, semantic numeric/color fields, and position/rotation/scale controls use ImGui lifecycle
   boundaries so repeated live mutations form one undo step.

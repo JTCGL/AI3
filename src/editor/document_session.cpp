@@ -11,7 +11,11 @@ DocumentSession::DocumentSession(EditorState& state)
 {
 }
 
-bool DocumentSession::dirty() const { return history_.current_state_id() != clean_history_state_; }
+bool DocumentSession::dirty() const
+{
+    return history_.current_state_id() != clean_history_state_ ||
+           history_.has_uncommitted_changes();
+}
 const std::filesystem::path& DocumentSession::document_path() const { return document_path_; }
 DocumentRevision DocumentSession::clean_revision() const { return clean_revision_; }
 EditorHistory& DocumentSession::history() { return history_; }

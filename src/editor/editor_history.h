@@ -20,6 +20,7 @@ class EditorHistory
     bool commit_transaction();
     bool cancel_transaction();
     bool transaction_active() const;
+    bool has_uncommitted_changes() const;
 
     bool can_undo() const;
     bool can_redo() const;
@@ -45,6 +46,7 @@ class EditorHistory
     };
 
     Snapshot capture() const;
+    static bool snapshots_equal(const Snapshot& left, const Snapshot& right);
     void restore(const Snapshot& snapshot);
     HistoryStateId allocate_state_id();
 

@@ -98,6 +98,10 @@ renderer geometry caches before subsequent rendering. See
 [ADR 0006](decisions/0006-scene-document-format.md) and
 [ADR 0007](decisions/0007-document-revision-and-session.md).
 
+Dirty determination includes real authoritative changes made during an active transaction before it commits,
+so destructive-transition protection remains effective during live inspector edits and event-loop close
+requests. An active transaction with no authoritative change remains clean.
+
 ## Spatial and hierarchy invariants
 
 AI3 uses a right-handed, Z-up world: +X right, +Y forward, and +Z up. Stored scene lengths are meters.

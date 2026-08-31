@@ -65,14 +65,7 @@ bool EditorHistory::commit_transaction()
         return false;
     Snapshot after = capture();
     transaction_active_ = false;
-    const bool unchanged =
-        transaction_before_.next_object_id == after.next_object_id &&
-        transaction_before_.default_name_counts == after.default_name_counts &&
-        transaction_before_.objects.size() == after.objects.size() &&
-        std::equal(transaction_before_.objects.begin(), transaction_before_.objects.end(),
-                   after.objects.begin(), [](const SceneObject& left, const SceneObject& right)
-                   { return equal(left, right); });
-    if (unchanged)
+    if (snapshots_equal(transaction_before_, after))
         return false;
     entries_.erase(entries_.begin() + static_cast<std::ptrdiff_t>(position_), entries_.end());
     const HistoryStateId before_id = current_state_id();
@@ -93,6 +86,10 @@ bool EditorHistory::cancel_transaction()
 }
 
 bool EditorHistory::transaction_active() const { return transaction_active_; }
+bool EditorHistory::has_uncommitted_changes() const
+{
+    return transaction_active_ && !snapshots_equal(transaction_before_, capture());
+}
 bool EditorHistory::can_undo() const { return !transaction_active_ && position_ > 0; }
 bool EditorHistory::can_redo() const { return !transaction_active_ && position_ < entries_.size(); }
 
@@ -130,14 +127,7 @@ void EditorHistory::rebaseline()
 void EditorHistory::restore(const Snapshot& snapshot)
 {
     const Snapshot current = capture();
-    const bool unchanged =
-        current.next_object_id == snapshot.next_object_id &&
-        current.default_name_counts == snapshot.default_name_counts &&
-        current.objects.size() == snapshot.objects.size() &&
-        std::equal(current.objects.begin(), current.objects.end(), snapshot.objects.begin(),
-                   [](const SceneObject& left, const SceneObject& right)
-                   { return equal(left, right); });
-    if (unchanged)
+    if (snapshots_equal(current, snapshot))
         return;
     state_.objects_ = snapshot.objects;
     state_.next_object_id_ = snapshot.next_object_id;
@@ -145,6 +135,16 @@ void EditorHistory::restore(const Snapshot& snapshot)
     if (state_.selection_ != no_object && state_.find_object(state_.selection_) == nullptr)
         state_.selection_ = no_object;
     state_.advance_document_revision();
+}
+
+bool EditorHistory::snapshots_equal(const Snapshot& left, const Snapshot& right)
+{
+    return left.next_object_id == right.next_object_id &&
+           left.default_name_counts == right.default_name_counts &&
+           left.objects.size() == right.objects.size() &&
+           std::equal(left.objects.begin(), left.objects.end(), right.objects.begin(),
+                      [](const SceneObject& left_object, const SceneObject& right_object)
+                      { return equal(left_object, right_object); });
 }
 
 HistoryStateId EditorHistory::allocate_state_id()

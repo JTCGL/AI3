@@ -20,9 +20,10 @@ transaction API does not expose this representation, allowing later delta record
 
 `DocumentSession` owns the single active document's path association, saved history-state checkpoint, dirty
 determination, and pending New/Open/Quit transition. It also coordinates document filesystem operations.
-Dirty state is current history-state identity inequality with the saved checkpoint. The monotonic document
-revision remains in force and is not decremented by Undo: authoritative restoration advances it once when the
-restored state differs.
+Dirty state is current history-state identity inequality with the saved checkpoint, or a real authoritative
+change inside the active transaction before commit. Merely beginning an unchanged transaction is not dirty.
+The monotonic document revision remains in force and is not decremented by Undo: authoritative restoration
+advances it once when the restored state differs.
 
 New, Open, Quit, and window-close requests use the same pending-transition policy. A clean request may proceed
 immediately. A dirty request waits for Save, Discard, or Cancel. Saving permits the pending transition only
