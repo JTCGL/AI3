@@ -38,7 +38,7 @@ split is:
 - `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
   viewport state.
 - `editor`: display-independent object identity, lifecycle, hierarchy, selection, authoritative transforms,
-  semantic object data, document revision/session workflow, transactional Scene Document
+  semantic object data, undo/redo transactions, document revision/session workflow, transactional Scene Document
   serialization/filesystem I/O, panel visibility, layout-reset intent, and console data.
 - `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
   sizing, orbit view construction, and viewport-view selection/resolution.
@@ -57,9 +57,10 @@ scene-owned, stable, monotonically allocated, and not reused after deletion. Obj
 enabled/visible state, a local transform, and a two-level semantic tag. Current concrete object subtypes are
 sphere primitive, perspective camera, and directional light; their payloads are plain tagged data rather
 than polymorphic objects or components. Default-name counters are monotonic per category/subtype. Ordinary
-persistent mutations use explicit `EditorState` operations; public object lookup is read-only. A monotonic
-document revision advances for each real change to serialized state and not for no-op assignments or workspace
-interaction.
+persistent mutations use explicit `EditorState` operations; public object lookup is read-only. Normal editor
+mutations participate in `EditorHistory` transactions whose boundaries represent one intentional edit. A
+monotonic document revision advances for each real serialized-state change and authoritative history
+restoration, never rewinds on Undo, and ignores no-op assignments and workspace interaction.
 
 Deleting an object deletes only that object. Its direct children become scene roots with preserved world-space
 poses; deeper descendants retain their existing parents. Deletion is transactional if any direct child cannot
@@ -85,14 +86,21 @@ hierarchy data; normal object creation still uses the lifecycle allocator. Load 
 before replacing scene-owned state, and failure leaves the destination unchanged. Successful load clears
 selection while preserving non-document editor state such as console, panel visibility, and layout intent.
 
-The display-independent `DocumentSession` owns the single active document's associated path, clean revision,
-dirty determination, filesystem workflow, and pending New/Open/Quit transition. New establishes a clean empty
-untitled document; Reset Scene is an edit that retains the path. New, Open, Quit, and window close share
+`EditorHistory` uses internal authoritative before/after snapshots and exposes representation-independent
+begin/commit/cancel/undo/redo operations. Snapshots contain exact document state but exclude selection,
+viewport/session state, derived geometry, renderer caches, and GPU state. `DocumentSession` owns the active
+document's associated path, saved history checkpoint, dirty determination, filesystem workflow, and pending
+New/Open/Quit transition. New and successful Open rebaseline history; failed Open preserves it. Reset Scene is
+one undoable edit that retains the path. New, Open, Quit, and window close share
 Save/Discard/Cancel protection. The graphical UI presents that policy and uses SDL3 asynchronous native file
 dialogs for Open and Save As. After successful Open, the UI resets the viewport to default Orbit and clears
 renderer geometry caches before subsequent rendering. See
 [ADR 0006](decisions/0006-scene-document-format.md) and
 [ADR 0007](decisions/0007-document-revision-and-session.md).
+
+Dirty determination includes real authoritative changes made during an active transaction before it commits,
+so destructive-transition protection remains effective during live inspector edits and event-loop close
+requests. An active transaction with no authoritative change remains clean.
 
 ## Spatial and hierarchy invariants
 
@@ -140,6 +148,8 @@ SDL window display scale is the UI-scale source of truth. Scale changes rebuild 
 derive style metrics from unscaled defaults without replacing editor or docking state. See
 [ADR 0002](decisions/0002-localization-and-ui-scale.md).
 
-The docked shell contains Scene Graph, Viewport, Object Inspector, and Console panels. Normal Dear ImGui `.ini`
+The Edit menu provides localized Undo and Redo with enabled states and Ctrl+Z/Ctrl+Shift+Z shortcuts. Current
+name, numeric, color, and transform controls group one ImGui interaction into one transaction. The docked shell
+contains Scene Graph, Viewport, Object Inspector, and Console panels. Normal Dear ImGui `.ini`
 persistence owns user layout after first-use construction; Reset Layout requests reconstruction. The demo and
 diagnostic windows remain compiled and available.

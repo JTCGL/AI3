@@ -6,13 +6,20 @@
 namespace ai3
 {
 DocumentSession::DocumentSession(EditorState& state)
-    : state_(state), clean_revision_(state.document_revision())
+    : state_(state), history_(state), clean_revision_(state.document_revision()),
+      clean_history_state_(history_.current_state_id())
 {
 }
 
-bool DocumentSession::dirty() const { return state_.document_revision() != clean_revision_; }
+bool DocumentSession::dirty() const
+{
+    return history_.current_state_id() != clean_history_state_ ||
+           history_.has_uncommitted_changes();
+}
 const std::filesystem::path& DocumentSession::document_path() const { return document_path_; }
 DocumentRevision DocumentSession::clean_revision() const { return clean_revision_; }
+EditorHistory& DocumentSession::history() { return history_; }
+const EditorHistory& DocumentSession::history() const { return history_; }
 DocumentTransition DocumentSession::pending_transition() const { return pending_transition_; }
 
 TransitionRequestResult DocumentSession::request_transition(DocumentTransition transition)
@@ -41,7 +48,11 @@ DocumentTransition DocumentSession::saved_and_take_pending_transition()
 
 void DocumentSession::save_failed() { cancel_pending_transition(); }
 
-void DocumentSession::mark_saved() { clean_revision_ = state_.document_revision(); }
+void DocumentSession::mark_saved()
+{
+    clean_revision_ = state_.document_revision();
+    clean_history_state_ = history_.current_state_id();
+}
 
 void DocumentSession::mark_saved_as(std::filesystem::path path)
 {
@@ -52,6 +63,7 @@ void DocumentSession::mark_saved_as(std::filesystem::path path)
 void DocumentSession::mark_opened(std::filesystem::path path)
 {
     document_path_ = std::move(path);
+    history_.rebaseline();
     mark_saved();
 }
 
@@ -88,9 +100,17 @@ bool DocumentSession::open(std::filesystem::path path, std::string* error)
 void DocumentSession::new_document()
 {
     state_.reset_scene();
+    history_.rebaseline();
     document_path_.clear();
     mark_saved();
 }
 
-bool DocumentSession::reset_scene() { return state_.reset_scene(); }
+bool DocumentSession::reset_scene()
+{
+    if (!history_.begin_transaction())
+        return false;
+    const bool changed = state_.reset_scene();
+    history_.commit_transaction();
+    return changed;
+}
 } // namespace ai3

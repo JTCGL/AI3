@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "editor/editor_history.h"
 
 #include <filesystem>
 #include <string>
@@ -29,6 +29,8 @@ class DocumentSession
     bool dirty() const;
     const std::filesystem::path& document_path() const;
     DocumentRevision clean_revision() const;
+    EditorHistory& history();
+    const EditorHistory& history() const;
     DocumentTransition pending_transition() const;
 
     TransitionRequestResult request_transition(DocumentTransition transition);
@@ -48,8 +50,10 @@ class DocumentSession
 
     private:
     EditorState& state_;
+    EditorHistory history_;
     std::filesystem::path document_path_;
     DocumentRevision clean_revision_ = 0;
+    HistoryStateId clean_history_state_ = 0;
     DocumentTransition pending_transition_ = DocumentTransition::none;
 };
 } // namespace ai3

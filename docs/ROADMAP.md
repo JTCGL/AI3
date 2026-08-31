@@ -21,10 +21,11 @@ console, diagnostics, renderer, or other workspace/session state.
 ## Transform tools and editing workflow
 
 - Build transform gizmos incrementally: axis translation, planar/free translation, rotation, and scale.
-- Establish an undo/redo foundation and the editor transaction model needed by transform editing.
+- Evolve the established snapshot-backed undo/redo representation to focused deltas/coalescing when edit cost
+  requires proportional storage and restoration.
 - Add snapping where its interaction and storage semantics are specified.
-- Define appropriate interactive and numeric transaction boundaries so continuous gestures and field edits
-  produce intentional history operations.
+- Apply the established gesture transaction contract to transform gizmos: begin at gesture start, perform live
+  authoritative mutations, commit on completion, and cancel to restore the start.
 - Extend selection to multi-selection and define multi-object transform/editing behavior.
 
 AI3 already distinguishes Local, Parent, World, and View reference spaces and centrally resolves world
