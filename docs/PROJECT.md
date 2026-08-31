@@ -18,18 +18,21 @@ Activity. See [ADR 0001](decisions/0001-termux-x11-backend.md).
 
 ## Build and dependency boundaries
 
-The canonical verification entry point is `bash scripts/check.sh`. Existing development checkouts can safely
-synchronize to `origin/main` and run that verification with the repository-owned orchestration command:
+The canonical verification entry point is `bash scripts/check.sh`. Existing development checkouts can return
+to `origin/main` and run verification with `bash scripts/sync-and-check.sh`, or fast-forward and verify the
+currently checked-out tracked branch without switching with `bash scripts/sync-current-and-check.sh`. Both
+commands require a clean working tree and use fast-forward-only updates; the branch-preserving command refuses
+detached HEAD and missing upstream configuration. Known-good main synchronization examples are:
 
 - Termux: `cd ~/Projects/AI3 && bash scripts/sync-and-check.sh`
 - T5600: `cd ~/Documents/Projects/AI3 && bash scripts/sync-and-check.sh`
 
-The synchronization command refuses a dirty working tree, updates `main` only by fast-forward, and delegates
-all formatting, configuration, build, and test behavior to `check.sh`. Verification requires CMake 3.25 or newer
-and defines source formatting with clang-format 21.x; the scripts validate both contracts before using the
-tools. CMake presets keep builds outside the source tree. The `headless-debug` preset builds the options,
-editor, scene, localization, and test targets without fetching SDL or Dear ImGui, discovering EGL/GLES, or
-defining the graphical executable and smoke test.
+The main synchronization command explicitly switches to `main`; it is not the feature-branch test command.
+Both commands delegate all formatting, configuration, build, and test behavior to `check.sh`. Verification
+requires CMake 3.25 or newer and defines source formatting with clang-format 21.x; the scripts validate both
+contracts before using the tools. CMake presets keep builds outside the source tree. The `headless-debug`
+preset builds the options, editor, scene, localization, and test targets without fetching SDL or Dear ImGui,
+discovering EGL/GLES, or defining the graphical executable and smoke test.
 
 Core/domain targets do not depend on SDL, Dear ImGui, EGL/GLES, or a display. Platform, render, and UI code may
 depend inward on core/domain code, but core/domain dependencies do not point outward. The current ownership
@@ -150,6 +153,9 @@ derive style metrics from unscaled defaults without replacing editor or docking 
 
 The Edit menu provides localized Undo and Redo with enabled states and Ctrl+Z/Ctrl+Shift+Z shortcuts. Current
 name, numeric, color, and transform controls group one ImGui interaction into one transaction. The docked shell
-contains Scene Graph, Viewport, Object Inspector, and Console panels. Normal Dear ImGui `.ini`
-persistence owns user layout after first-use construction; Reset Layout requests reconstruction. The demo and
-diagnostic windows remain compiled and available.
+contains Scene Graph, Viewport, Object Inspector, and Console panels. Normal Dear ImGui `.ini` persistence owns
+user layout after first-use construction; its `imgui.ini` is stored beside the running executable rather than
+relative to the shell working directory. Smoke mode disables settings persistence. A future packaged/read-only
+installation may require a per-user configuration location, which is not implemented by the current
+development runtime. Reset Layout requests reconstruction. The demo and diagnostic windows remain compiled and
+available.

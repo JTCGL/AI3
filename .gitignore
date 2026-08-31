@@ -10,3 +10,6 @@ compile_commands.json
 .idea/
 *.swp
 *~
+
+# Dear ImGui runtime layout state from current or older local builds.
+imgui.ini

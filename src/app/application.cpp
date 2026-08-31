@@ -1,4 +1,5 @@
 #include "app/application.h"
+#include "app/runtime_paths.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl3.h"
@@ -22,13 +23,15 @@ int Application::run()
     {
         SdlGlPlatform platform("AI3", 1280, 720, options_.frame_limit > 0);
         const float initial_scale = platform.display_scale();
-        ImGuiLayer imgui(platform.window(), platform.gl_context(), options_.frame_limit == 0,
-                         initial_scale);
         const char* base_path = SDL_GetBasePath();
         if (base_path == nullptr)
             throw SdlError("SDL_GetBasePath failed");
-        Localization localization(
-            locate_resource_directory(std::filesystem::path(base_path) / "ai3") / "locales");
+        const std::filesystem::path executable_directory(base_path);
+        ImGuiLayer imgui(platform.window(), platform.gl_context(),
+                         imgui_ini_filename(executable_directory, options_.frame_limit == 0),
+                         initial_scale);
+        Localization localization(locate_resource_directory(executable_directory / "ai3") /
+                                  "locales");
         EditorState editor_state;
         ViewportView viewport_view;
         EditorUi editor_ui(editor_state, viewport_view, localization, platform.window(),
