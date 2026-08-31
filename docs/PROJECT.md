@@ -38,8 +38,8 @@ split is:
 - `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
   viewport state.
 - `editor`: display-independent object identity, lifecycle, hierarchy, selection, authoritative transforms,
-  semantic object data, transactional Scene Document serialization/filesystem I/O, panel visibility,
-  layout-reset intent, and console data.
+  semantic object data, document revision/session workflow, transactional Scene Document
+  serialization/filesystem I/O, panel visibility, layout-reset intent, and console data.
 - `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
   sizing, orbit view construction, and viewport-view selection/resolution.
 - `localization`: external resource discovery and UTF-8 string lookup.
@@ -47,8 +47,8 @@ split is:
 - `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, and the
   offscreen viewport framebuffer.
 - `ui`: Dear ImGui lifecycle and editor presentation/control. `EditorUi` receives references to authoritative
-  `EditorState` and `ViewportView`, owns the current document-path association and SDL native-dialog result
-  handoff, and currently owns the concrete `ViewportRenderer` and therefore its GLES resources.
+  `EditorState` and `ViewportView`, presents the display-independent document-session policy and SDL
+  native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
 
 ## Editor and scene model
 
@@ -56,7 +56,10 @@ Scenes start empty. `EditorState` is the only scene-object lifecycle and hierarc
 scene-owned, stable, monotonically allocated, and not reused after deletion. Objects share identity, name,
 enabled/visible state, a local transform, and a two-level semantic tag. Current concrete object subtypes are
 sphere primitive, perspective camera, and directional light; their payloads are plain tagged data rather
-than polymorphic objects or components. Default-name counters are monotonic per category/subtype.
+than polymorphic objects or components. Default-name counters are monotonic per category/subtype. Ordinary
+persistent mutations use explicit `EditorState` operations; public object lookup is read-only. A monotonic
+document revision advances for each real change to serialized state and not for no-op assignments or workspace
+interaction.
 
 Deleting an object deletes only that object. Its direct children become scene roots with preserved world-space
 poses; deeper descendants retain their existing parents. Deletion is transactional if any direct child cannot
@@ -82,10 +85,14 @@ hierarchy data; normal object creation still uses the lifecycle allocator. Load 
 before replacing scene-owned state, and failure leaves the destination unchanged. Successful load clears
 selection while preserving non-document editor state such as console, panel visibility, and layout intent.
 
-The graphical UI uses SDL3 asynchronous native file dialogs for Open and Save As and retains one associated
-document path. Save uses that path or invokes Save As when none exists. After successful Open, the UI resets
-the viewport to default Orbit and clears renderer geometry caches before subsequent rendering. See
-[ADR 0006](decisions/0006-scene-document-format.md).
+The display-independent `DocumentSession` owns the single active document's associated path, clean revision,
+dirty determination, filesystem workflow, and pending New/Open/Quit transition. New establishes a clean empty
+untitled document; Reset Scene is an edit that retains the path. New, Open, Quit, and window close share
+Save/Discard/Cancel protection. The graphical UI presents that policy and uses SDL3 asynchronous native file
+dialogs for Open and Save As. After successful Open, the UI resets the viewport to default Orbit and clears
+renderer geometry caches before subsequent rendering. See
+[ADR 0006](decisions/0006-scene-document-format.md) and
+[ADR 0007](decisions/0007-document-revision-and-session.md).
 
 ## Spatial and hierarchy invariants
 
