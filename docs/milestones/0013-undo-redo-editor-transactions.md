@@ -37,5 +37,11 @@ Headless tests cover grouped and discrete edits, undo/redo/cancel/no-op behavior
 and allocator restoration, invalid mutations, monotonic revisions, saved-checkpoint transitions, document
 replacement boundaries, failed Open preservation, and workspace exclusion. Run `bash scripts/check.sh`.
 
-Manual runtime verification remains required on Termux ARM64 and T5600 Linux x86-64 for menu/shortcut states,
-inspector interaction boundaries, Reset/New/Open workflows, and sphere cache rebuilding after Undo/Redo.
+## Completion evidence
+
+- Physical runtime verification passed on Termux ARM64.
+- Physical runtime verification passed on T5600 Linux x86-64.
+- The verified behavior included menu and shortcut access, continuous edit grouping, rendered sphere-geometry
+  regeneration, rename and flag edits, hierarchy pose restoration, delete, saved checkpoints, Reset Scene,
+  redo invalidation, document history boundaries, and active-edit unsaved-change protection.
+- GitHub Actions passed for the final corrected implementation.
