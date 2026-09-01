@@ -22,9 +22,11 @@ layout(location = 1) in vec3 a_normal;
 uniform mat4 u_mvp;
 uniform mat4 u_model;
 out vec3 v_normal;
+out vec3 v_world_position;
 void main()
 {
     v_normal = mat3(transpose(inverse(u_model))) * a_normal;
+    v_world_position = vec3(u_model * vec4(a_position, 1.0));
     gl_Position = u_mvp * vec4(a_position, 1.0);
 }
 )";
@@ -32,16 +34,41 @@ void main()
 constexpr const char* fragment_shader_source = R"(#version 300 es
 precision mediump float;
 in vec3 v_normal;
+in vec3 v_world_position;
 uniform vec3 u_light_direction;
 uniform vec3 u_light_color;
 uniform float u_light_intensity;
+uniform int u_shading;
+uniform vec3 u_ambient;
+uniform vec3 u_diffuse;
+uniform vec3 u_specular;
+uniform float u_shininess;
+uniform vec3 u_eye_position;
 out vec4 out_color;
+vec3 linear_to_srgb(vec3 c)
+{
+    bvec3 cutoff = lessThanEqual(c, vec3(0.0031308));
+    vec3 low = c * 12.92;
+    vec3 high = 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055;
+    return mix(high, low, cutoff);
+}
 void main()
 {
     vec3 normal = normalize(v_normal);
     float diffuse = max(dot(normal, -u_light_direction), 0.0);
-    vec3 base = vec3(0.22, 0.58, 0.92);
-    out_color = vec4(base * (0.1 + u_light_color * diffuse * u_light_intensity), 1.0);
+    vec3 linear_color = u_diffuse;
+    if (u_shading != 0)
+    {
+        linear_color = u_ambient + u_diffuse * u_light_color * diffuse * u_light_intensity;
+        if (u_shading == 2 && diffuse > 0.0)
+        {
+            vec3 reflected = reflect(u_light_direction, normal);
+            vec3 to_eye = normalize(u_eye_position - v_world_position);
+            float highlight = pow(max(dot(reflected, to_eye), 0.0), u_shininess);
+            linear_color += u_specular * u_light_color * highlight * u_light_intensity;
+        }
+    }
+    out_color = vec4(linear_to_srgb(clamp(linear_color, 0.0, 1.0)), 1.0);
 }
 )";
 
@@ -128,8 +155,16 @@ ViewportRenderer::ViewportRenderer()
         light_direction_location_ = glGetUniformLocation(program_, "u_light_direction");
         light_color_location_ = glGetUniformLocation(program_, "u_light_color");
         light_intensity_location_ = glGetUniformLocation(program_, "u_light_intensity");
+        shading_location_ = glGetUniformLocation(program_, "u_shading");
+        ambient_location_ = glGetUniformLocation(program_, "u_ambient");
+        diffuse_location_ = glGetUniformLocation(program_, "u_diffuse");
+        specular_location_ = glGetUniformLocation(program_, "u_specular");
+        shininess_location_ = glGetUniformLocation(program_, "u_shininess");
+        eye_position_location_ = glGetUniformLocation(program_, "u_eye_position");
         if (mvp_location_ < 0 || model_location_ < 0 || light_direction_location_ < 0 ||
-            light_color_location_ < 0 || light_intensity_location_ < 0)
+            light_color_location_ < 0 || light_intensity_location_ < 0 || shading_location_ < 0 ||
+            ambient_location_ < 0 || diffuse_location_ < 0 || specular_location_ < 0 ||
+            shininess_location_ < 0 || eye_position_location_ < 0)
             throw std::runtime_error("Viewport shader uniforms are unavailable");
 
         gl_description_ =
@@ -306,6 +341,7 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
     glUniform3fv(light_direction_location_, 1, glm::value_ptr(light_direction));
     glUniform3fv(light_color_location_, 1, glm::value_ptr(light_color));
     glUniform1f(light_intensity_location_, light_intensity);
+    glUniform3fv(eye_position_location_, 1, glm::value_ptr(view.eye_position));
     for (const SceneObject* object : scene.primitives(PrimitiveKind::sphere, {true, true}))
     {
         const SphereGeometry& geometry = sphere_geometry(*object);
@@ -314,6 +350,20 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
         const glm::mat4 mvp = view_projection * model;
         glUniformMatrix4fv(mvp_location_, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(model_location_, 1, GL_FALSE, glm::value_ptr(model));
+        const Material* material = scene.find_material(object->sphere.material_id);
+        const int shading = material == nullptr                             ? 0
+                            : material->shading == MaterialShading::lambert ? 1
+                                                                            : 2;
+        const glm::vec3 zero{0.0F};
+        const glm::vec3& ambient = material == nullptr ? zero : material->ambient_color;
+        const glm::vec3& diffuse =
+            material == nullptr ? object->sphere.fallback_color : material->diffuse_color;
+        const glm::vec3& specular = material == nullptr ? zero : material->specular_color;
+        glUniform1i(shading_location_, shading);
+        glUniform3fv(ambient_location_, 1, glm::value_ptr(ambient));
+        glUniform3fv(diffuse_location_, 1, glm::value_ptr(diffuse));
+        glUniform3fv(specular_location_, 1, glm::value_ptr(specular));
+        glUniform1f(shininess_location_, material == nullptr ? 1.0F : material->specular_power);
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(geometry.index_count), GL_UNSIGNED_INT,
                        nullptr);
     }

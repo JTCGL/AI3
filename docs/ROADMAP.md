@@ -48,10 +48,15 @@ independent of UI lifetime/ownership.
 ## Scene content
 
 - Expand light types, primitive types, and their tooling as concrete requirements appear.
+- Add material deletion/duplication, library browsing, textures, multiple slots, or PBR only through later
+  requirements that define their ownership and workflow.
 
 The current tagged category/subtype model provides explicit dispatch for sphere, perspective-camera, and
 directional-light data. It is not a commitment to a component system, renderer abstraction, or speculative
 general-purpose framework.
+
+Reusable document-owned Lambert/Phong materials, sphere assignment with unlit fallback color, and the
+linear-RGB/sRGB-boundary contract are established. This is not a generalized asset or shader system.
 
 ## Offscreen and headless rendering
 

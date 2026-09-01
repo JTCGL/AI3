@@ -194,7 +194,7 @@ TEST_CASE("malformed format version identity hierarchy and metadata are rejected
     wrong_format["format"] = "other";
     invalid_documents.push_back(wrong_format);
     Json wrong_version = valid;
-    wrong_version["version"] = 2;
+    wrong_version["version"] = 3;
     invalid_documents.push_back(wrong_version);
     Json duplicate = valid;
     duplicate["objects"][1]["id"] = duplicate["objects"][0]["id"];

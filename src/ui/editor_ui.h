@@ -37,6 +37,7 @@ class EditorUi
     void apply_pending_reparent();
     void draw_viewport();
     void draw_object_inspector();
+    void draw_material_editor();
     void draw_console();
     void request_open_dialog();
     void request_save_as_dialog();
@@ -63,6 +64,8 @@ class EditorUi
     bool show_id_stack_ = false;
     bool show_about_ = false;
     bool show_ai3_diagnostics_ = false;
+    bool show_material_editor_ = false;
+    MaterialId active_material_id_ = no_material;
     std::pair<ObjectId, ObjectId> pending_reparent_ = {no_object, no_object};
 };
 } // namespace ai3

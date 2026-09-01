@@ -40,7 +40,8 @@ ResolvedViewportView resolve_scene_camera(const EditorState& scene, const SceneO
         const PerspectiveCamera& perspective = camera.perspective_camera;
         return {view,
                 glm::perspective(glm::radians(perspective.vertical_fov_degrees), aspect_ratio,
-                                 perspective.near_plane_meters, perspective.far_plane_meters)};
+                                 perspective.near_plane_meters, perspective.far_plane_meters),
+                world.position};
     }
     case CameraKind::none:
         break;
@@ -79,7 +80,7 @@ ResolvedViewportView ViewportView::resolve(const EditorState& scene, float aspec
             return resolve_scene_camera(scene, *camera, aspect_ratio);
     }
 
-    return {orbit_.view_matrix(), orbit_.projection_matrix(aspect_ratio)};
+    return {orbit_.view_matrix(), orbit_.projection_matrix(aspect_ratio), orbit_.position()};
 }
 
 void ViewportView::reset()

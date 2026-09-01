@@ -46,6 +46,7 @@ add_library(ai3_options STATIC
 target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_library(ai3_editor STATIC
+    src/scene/color_space.cpp
     src/editor/document_session.cpp
     src/editor/editor_history.cpp
     src/editor/editor_state.cpp
@@ -168,6 +169,7 @@ if(AI3_BUILD_TESTS)
         tests/editor_state_test.cpp
         tests/hierarchy_test.cpp
         tests/localization_test.cpp
+        tests/material_test.cpp
         tests/runtime_paths_test.cpp
         tests/scene_document_test.cpp
         tests/scene_test.cpp

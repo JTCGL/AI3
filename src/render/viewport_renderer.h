@@ -51,6 +51,12 @@ class ViewportRenderer
     int light_direction_location_ = -1;
     int light_color_location_ = -1;
     int light_intensity_location_ = -1;
+    int shading_location_ = -1;
+    int ambient_location_ = -1;
+    int diffuse_location_ = -1;
+    int specular_location_ = -1;
+    int shininess_location_ = -1;
+    int eye_position_location_ = -1;
     RenderTargetSize size_{};
     std::uint64_t resize_count_ = 0;
     std::string gl_description_;
