@@ -28,6 +28,7 @@ class EditorUi
 
     private:
     void draw_main_menu(bool& running);
+    void draw_editor_toolbar();
     void draw_unsaved_changes_modal(bool& running);
     void request_transition(DocumentTransition transition, bool& running);
     void perform_transition(DocumentTransition transition, bool& running);

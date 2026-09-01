@@ -12,6 +12,11 @@ scene-camera object. The application owns the current scene and viewport state a
 references to the UI, which presents controls and translates input without becoming their authoritative
 owner.
 
+Each viewport also owns an independent interaction mode with the currently required values Selection and
+Navigation. View source answers what constructs the view; interaction mode answers what pointer input operates
+on. Interaction mode is workspace state and is excluded from Scene Document revision, dirty state, history,
+serialization, scene selection, and scene-camera selection. Changing source does not rewrite interaction mode.
+
 Orbit is one view-construction mode. A Perspective Camera remains an ordinary scene object with its normal
 identity, hierarchy, local transform, and semantic projection parameters. Camera selection belongs to a
 viewport; AI3 has no global active scene camera. Selecting a scene camera retains the independent Orbit pose,
@@ -34,9 +39,18 @@ does not know which view mode constructed them. This is the local seam for addin
 modes without changing renderer fundamentals; no plugin, renderer abstraction, or additional view mode is
 introduced by this decision.
 
+Navigation intent enters through `ViewportView`, which mutates Orbit only while Orbit is the active source.
+Navigation against a Scene Camera is inert because its transform is authoritative object data, not retained
+viewport navigation state. Selection uses display-independent CPU picking: normalized viewport coordinates and
+the resolved matrices construct a near-to-far world ray, and enabled, visible spheres are tested in their local
+space through the inverse authoritative world transform. Hit ordering uses the shared world-ray parameter, so
+non-uniform and reflected scale remain exact; non-invertible candidates are ignored safely. This is a narrow
+sphere operation, not a collision system or generic geometry interface.
+
 ## Consequences
 
-Viewport selection, Orbit interaction, scene-camera hierarchy resolution, and projection construction are
+Viewport selection, interaction-mode state, Orbit interaction, sphere picking, scene-camera hierarchy
+resolution, and projection construction are
 headless-testable without SDL, Dear ImGui, GLES, or a display. Dear ImGui remains a presenter/controller and
 the renderer remains the single concrete GLES3 implementation. Reset Scene resets both the scene lifecycle
 and the viewport to the default Orbit state through their owning application model instances.

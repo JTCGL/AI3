@@ -5,6 +5,7 @@
 #include "scene/color_space.h"
 #include "scene/length_units.h"
 #include "scene/scene_math.h"
+#include "scene/viewport_picking.h"
 #include "ui/ui_identity.h"
 
 #include <SDL3/SDL_dialog.h>
@@ -521,6 +522,49 @@ void EditorUi::draw_main_menu(bool& running)
     }
 }
 
+void EditorUi::draw_editor_toolbar()
+{
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float toolbar_height = ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2.0F;
+    constexpr ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings;
+    if (!ImGui::BeginViewportSideBar("###ai3_editor_toolbar", viewport, ImGuiDir_Up, toolbar_height,
+                                     flags))
+    {
+        ImGui::End();
+        return;
+    }
+
+    const bool selection = viewport_view_.interaction_mode() == ViewportInteractionMode::selection;
+    const std::string& selection_text = localization_.text("toolbar.selection");
+    const std::string selection_label =
+        stable_imgui_label(selection_text, "viewport_interaction_selection");
+    const ImVec2 selection_size{ImGui::CalcTextSize(selection_text.c_str()).x +
+                                    ImGui::GetStyle().FramePadding.x * 2.0F,
+                                ImGui::GetFrameHeight()};
+    if (ImGui::Selectable(selection_label.c_str(), selection, 0, selection_size))
+        viewport_view_.set_interaction_mode(ViewportInteractionMode::selection);
+    ImGui::SameLine();
+    const bool navigation =
+        viewport_view_.interaction_mode() == ViewportInteractionMode::navigation;
+    const std::string& navigation_text = localization_.text("toolbar.navigation");
+    const std::string navigation_label =
+        stable_imgui_label(navigation_text, "viewport_interaction_navigation");
+    const ImVec2 navigation_size{ImGui::CalcTextSize(navigation_text.c_str()).x +
+                                     ImGui::GetStyle().FramePadding.x * 2.0F,
+                                 ImGui::GetFrameHeight()};
+    if (ImGui::Selectable(navigation_label.c_str(), navigation, 0, navigation_size))
+        viewport_view_.set_interaction_mode(ViewportInteractionMode::navigation);
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+    ImGui::TextDisabled(
+        "%s",
+        localization_.text(selection ? "toolbar.selection_context" : "toolbar.navigation_context")
+            .c_str());
+    ImGui::End();
+}
+
 void EditorUi::draw_scene_node(ObjectId id)
 {
     const SceneObject* object = state_.find_object(id);
@@ -981,13 +1025,26 @@ void EditorUi::draw_viewport()
             if (ImGui::IsItemHovered())
             {
                 ImGuiIO& io = ImGui::GetIO();
-                if (viewport_view_.source() == ViewSource::orbit)
+                if (viewport_view_.interaction_mode() == ViewportInteractionMode::navigation)
                 {
                     if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
-                        viewport_view_.orbit().orbit(io.MouseDelta.x * 0.25F,
-                                                     -io.MouseDelta.y * 0.25F);
+                        viewport_view_.navigate(io.MouseDelta.x * 0.25F, -io.MouseDelta.y * 0.25F);
                     if (io.MouseWheel != 0.0F)
-                        viewport_view_.orbit().zoom(io.MouseWheel);
+                        viewport_view_.zoom(io.MouseWheel);
+                }
+                else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                {
+                    const ImVec2 minimum = ImGui::GetItemRectMin();
+                    const ImVec2 maximum = ImGui::GetItemRectMax();
+                    const glm::vec2 coordinates{
+                        (io.MousePos.x - minimum.x) / (maximum.x - minimum.x),
+                        (io.MousePos.y - minimum.y) / (maximum.y - minimum.y)};
+                    const ObjectId hit =
+                        pick_sphere(state_, viewport_world_ray(coordinates, resolved));
+                    if (hit == no_object)
+                        state_.clear_selection();
+                    else
+                        state_.select(hit);
                 }
             }
         }
@@ -1043,6 +1100,7 @@ void EditorUi::draw(bool& running)
     SDL_SetWindowTitle(window_, application_title.c_str());
     draw_main_menu(running);
     draw_unsaved_changes_modal(running);
+    draw_editor_toolbar();
 
     constexpr ImGuiID dockspace_id = 0xA13ED170;
     const ImGuiViewport* viewport = ImGui::GetMainViewport();

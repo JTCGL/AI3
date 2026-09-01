@@ -66,6 +66,24 @@ bool ViewportView::use_scene_camera(const EditorState& scene, ObjectId camera_id
     return true;
 }
 
+void ViewportView::set_interaction_mode(ViewportInteractionMode mode) { interaction_mode_ = mode; }
+
+bool ViewportView::navigate(float yaw_delta_degrees, float pitch_delta_degrees)
+{
+    if (source_ != ViewSource::orbit)
+        return false;
+    orbit_.orbit(yaw_delta_degrees, pitch_delta_degrees);
+    return true;
+}
+
+bool ViewportView::zoom(float wheel_delta)
+{
+    if (source_ != ViewSource::orbit)
+        return false;
+    orbit_.zoom(wheel_delta);
+    return true;
+}
+
 ResolvedViewportView ViewportView::resolve(const EditorState& scene, float aspect_ratio)
 {
     if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0F)

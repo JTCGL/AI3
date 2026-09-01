@@ -12,23 +12,34 @@ enum class ViewSource
     scene_camera
 };
 
+enum class ViewportInteractionMode
+{
+    selection,
+    navigation
+};
+
 // Display-independent state for one editor viewport. Scene-camera matrices are always derived
 // from current scene data; only the selected camera identity is retained.
 class ViewportView
 {
     public:
     ViewSource source() const { return source_; }
+    ViewportInteractionMode interaction_mode() const { return interaction_mode_; }
     ObjectId scene_camera_id() const { return scene_camera_id_; }
     OrbitCamera& orbit() { return orbit_; }
     const OrbitCamera& orbit() const { return orbit_; }
 
     void use_orbit();
     bool use_scene_camera(const EditorState& scene, ObjectId camera_id);
+    void set_interaction_mode(ViewportInteractionMode mode);
+    bool navigate(float yaw_delta_degrees, float pitch_delta_degrees);
+    bool zoom(float wheel_delta);
     ResolvedViewportView resolve(const EditorState& scene, float aspect_ratio);
     void reset();
 
     private:
     ViewSource source_ = ViewSource::orbit;
+    ViewportInteractionMode interaction_mode_ = ViewportInteractionMode::selection;
     ObjectId scene_camera_id_ = no_object;
     OrbitCamera orbit_;
 };

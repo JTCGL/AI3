@@ -32,6 +32,11 @@ AI3 already distinguishes Local, Parent, World, and View reference spaces and ce
 transforms. Those semantics are inputs to future tools; they do not by themselves define gizmo interaction,
 snapping, multi-object pivots, or transaction policy.
 
+The viewport now has explicit Selection and Navigation interaction modes plus a minimal contextual toolbar.
+Selection currently supports only enabled, visible spheres through display-independent CPU picking. Future
+gizmos may extend the established interaction boundary and toolbar context, but no generalized tool or toolbar
+framework is established.
+
 ## Viewports and cameras
 
 - Add display-independent view-construction modes such as FPS and trackball, while leaving room for other
@@ -41,9 +46,10 @@ snapping, multi-object pivots, or transaction policy.
 - Add camera/frustum visualization and related scene-camera tooling.
 
 `ViewportView` selection and view/projection resolution are already display-independent and outside Dear
-ImGui. The renderer consumes resolved view values. However, the concrete `ViewportRenderer`, its GLES render
-resources, and its offscreen target are still constructed and owned by `EditorUi`; rendering is not yet
-independent of UI lifetime/ownership.
+ImGui. Orbit navigation dispatch and sphere picking are also display-independent, while Scene Camera navigation
+is intentionally inert. The renderer consumes resolved view values. However, the concrete `ViewportRenderer`,
+its GLES render resources, and its offscreen target are still constructed and owned by `EditorUi`; rendering is
+not yet independent of UI lifetime/ownership.
 
 ## Scene content
 
