@@ -21,6 +21,12 @@ Scene Document v2 stores materials and their allocator/name metadata, sphere ass
 and linear light colors. V1 loading is a direct migration: spheres receive no assignment and the established
 blue fallback. No generalized migration framework is introduced.
 
+Unlit fallback, Lambert, and Phong are distinct linked concrete GLES3 programs. Material shading types map to
+their program rather than selecting branches in one material-type uber-shader. A small GLES-only RAII helper
+centralizes compilation, linking, diagnostics, uniform requirements, and deletion; it is not a shader system or
+renderer/backend abstraction. The M14 ambient material color is an artist-authored contribution used directly
+by the simplified Lambert/Phong equations, not a separate ambient or environment light.
+
 ## Consequences
 
 Material edits use existing snapshot transactions and update every assigned sphere immediately. History and

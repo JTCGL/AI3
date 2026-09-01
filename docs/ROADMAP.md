@@ -57,6 +57,8 @@ general-purpose framework.
 
 Reusable document-owned Lambert/Phong materials, sphere assignment with unlit fallback color, and the
 linear-RGB/sRGB-boundary contract are established. This is not a generalized asset or shader system.
+Current material shading models map to distinct concrete GLES programs; future concrete models should follow
+that direction without implying arbitrary shaders or a renderer/backend abstraction.
 
 ## Offscreen and headless rendering
 

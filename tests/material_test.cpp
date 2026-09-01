@@ -7,6 +7,22 @@
 
 #include <limits>
 #include <nlohmann/json.hpp>
+#include <vector>
+
+namespace
+{
+nlohmann::json encoded(const ai3::EditorState& state)
+{
+    std::string document;
+    REQUIRE(ai3::serialize_scene_document(state, document));
+    return nlohmann::json::parse(document);
+}
+
+bool load(const nlohmann::json& document, ai3::EditorState& state)
+{
+    return ai3::deserialize_scene_document(document.dump(), state);
+}
+} // namespace
 
 TEST_CASE("sRGB transfer functions use the standard piecewise curve")
 {
@@ -41,7 +57,13 @@ TEST_CASE("materials have independent monotonic identity and valid sphere assign
     CHECK(state.find_object(one)->sphere.fallback_color != fallback);
     REQUIRE(state.delete_object(one));
     CHECK(state.find_material(first) != nullptr);
-    CHECK(state.create_material("Material") == 2);
+    const ai3::MaterialId second = state.create_material("Material");
+    const ai3::MaterialId third = state.create_material("Material");
+    CHECK(second == 2);
+    CHECK(third == 3);
+    CHECK(state.find_material(second)->name == "Material 2");
+    CHECK(state.find_material(third)->name == "Material 3");
+    CHECK(state.materials().size() == 3);
 }
 
 TEST_CASE("material validation and semantic no-ops are transactional")
@@ -60,6 +82,26 @@ TEST_CASE("material validation and semantic no-ops are transactional")
     material.specular_power = std::numeric_limits<float>::quiet_NaN();
     CHECK_THROWS_AS(state.set_material(id, material), std::invalid_argument);
     CHECK(state.find_material(id)->specular_power == exact.specular_power);
+}
+
+TEST_CASE("material shading accepts only Lambert and Phong")
+{
+    ai3::EditorState state;
+    ai3::Material lambert;
+    lambert.shading = ai3::MaterialShading::lambert;
+    CHECK_NOTHROW(state.create_material("Material", lambert));
+    ai3::Material phong;
+    phong.shading = ai3::MaterialShading::phong;
+    const ai3::MaterialId phong_id = state.create_material("Material", phong);
+    const ai3::Material original = *state.find_material(phong_id);
+    const auto revision = state.document_revision();
+    ai3::Material invalid = original;
+    invalid.shading = static_cast<ai3::MaterialShading>(99);
+    CHECK_THROWS_AS(state.set_material(phong_id, invalid), std::invalid_argument);
+    CHECK(state.document_revision() == revision);
+    CHECK(state.find_material(phong_id)->shading == ai3::MaterialShading::phong);
+    CHECK_THROWS_AS(state.create_material("Material", invalid), std::invalid_argument);
+    CHECK(state.document_revision() == revision);
 }
 
 TEST_CASE("history restores material creation edits assignments and cancellation")
@@ -153,4 +195,61 @@ TEST_CASE("Scene Document v1 migrates visible colors and sphere defaults determi
           doctest::Approx(ai3::srgb_to_linear(0.5F)));
     CHECK(loaded.objects()[1].directional_light.color.y ==
           doctest::Approx(ai3::srgb_to_linear(0.25F)));
+}
+
+TEST_CASE("Scene Document v2 rejects invalid shading and linear colors transactionally")
+{
+    ai3::EditorState source;
+    source.create_material("Material");
+    source.create_sphere("Sphere");
+    source.create_directional_light("Light");
+    const nlohmann::json valid = encoded(source);
+
+    std::vector<nlohmann::json> invalid_documents;
+    auto shading = valid;
+    shading["materials"][0]["shading"] = "unknown";
+    invalid_documents.push_back(shading);
+    for (const char* field :
+         {"ambient_color_linear", "diffuse_color_linear", "specular_color_linear"})
+    {
+        auto material_color = valid;
+        material_color["materials"][0][field][0] = 1.01;
+        invalid_documents.push_back(material_color);
+    }
+    auto material_non_finite = valid;
+    material_non_finite["materials"][0]["diffuse_color_linear"][0] =
+        std::numeric_limits<double>::infinity();
+    invalid_documents.push_back(material_non_finite);
+    auto fallback_high = valid;
+    fallback_high["objects"][0]["payload"]["fallback_color_linear"][1] = 1.01;
+    invalid_documents.push_back(fallback_high);
+    auto fallback_low = valid;
+    fallback_low["objects"][0]["payload"]["fallback_color_linear"][1] = -0.01;
+    invalid_documents.push_back(fallback_low);
+    auto fallback_non_finite = valid;
+    fallback_non_finite["objects"][0]["payload"]["fallback_color_linear"][1] =
+        std::numeric_limits<double>::infinity();
+    invalid_documents.push_back(fallback_non_finite);
+    auto light_high = valid;
+    light_high["objects"][1]["payload"]["color_linear"][2] = 1.01;
+    invalid_documents.push_back(light_high);
+    auto light_low = valid;
+    light_low["objects"][1]["payload"]["color_linear"][2] = -0.01;
+    invalid_documents.push_back(light_low);
+    auto light_non_finite = valid;
+    light_non_finite["objects"][1]["payload"]["color_linear"][2] =
+        std::numeric_limits<double>::infinity();
+    invalid_documents.push_back(light_non_finite);
+
+    for (const nlohmann::json& candidate : invalid_documents)
+    {
+        ai3::EditorState destination;
+        const ai3::ObjectId existing = destination.create_sphere("Existing");
+        REQUIRE(destination.select(existing));
+        const auto revision = destination.document_revision();
+        CHECK_FALSE(load(candidate, destination));
+        CHECK(destination.objects().size() == 1);
+        CHECK(destination.selection() == existing);
+        CHECK(destination.document_revision() == revision);
+    }
 }

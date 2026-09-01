@@ -48,7 +48,7 @@ split is:
 - `localization`: external resource discovery and UTF-8 string lookup.
 - `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
 - `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, and the
-  offscreen viewport framebuffer.
+  offscreen viewport framebuffer. A concrete GLES program helper owns compilation/linking and lifetime.
 - `ui`: Dear ImGui lifecycle and editor presentation/control. `EditorUi` receives references to authoritative
   `EditorState` and `ViewportView`, presents the display-independent document-session policy and SDL
   native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
@@ -73,7 +73,8 @@ Sphere radius/fallback color/material assignment, perspective projection paramet
 parameters, and independent reusable materials are authoritative semantic editor data. Sphere meshes are
 deterministic derived data. Unassigned spheres render their unlit fallback; assigned spheres use Lambert or
 classic Phong. Materials have separate monotonic identity, may exist unassigned, and are not owned by cameras
-or lights.
+or lights. The Material Editor navigates all document materials while its active material remains workspace
+state and it edits one material at a time.
 
 ## Scene Documents
 
@@ -143,6 +144,11 @@ paths. The renderer draws the scene into its GLES color/depth target, sized from
 after framebuffer scaling. Dear ImGui presents that texture in the visible editor window. Display-independent
 view semantics are already separated from UI ownership, but construction and lifetime of `ViewportRenderer`
 and its GLES resources remain inside `EditorUi`.
+
+Unlit fallback, Lambert, and Phong use distinct linked GLES3 programs with only their required uniforms.
+Material shading models map to concrete programs rather than a runtime-branched uber-shader; this direction
+does not introduce a generalized shader system or renderer/backend abstraction. Material ambient color is an
+artist-authored contribution in the simplified lighting equations, not a global ambient-light source.
 
 ## Localization, DPI, and editor shell
 

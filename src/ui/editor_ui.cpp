@@ -834,20 +834,39 @@ void EditorUi::draw_material_editor()
         return;
     }
     EditorHistory& history = document_session_.history();
+    if (state_.find_material(active_material_id_) == nullptr && !state_.materials().empty())
+        active_material_id_ = state_.materials().front().id;
+    const Material* active_material = state_.find_material(active_material_id_);
+    const std::string active_name =
+        active_material == nullptr ? localization_.text("material.none") : active_material->name;
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(localization_.text("material.instance").c_str());
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-ImGui::GetFrameHeight() * 4.0F);
+    if (ImGui::BeginCombo(stable_imgui_label("", "active_material").c_str(), active_name.c_str()))
+    {
+        for (const Material& candidate : state_.materials())
+        {
+            ImGui::PushID(reinterpret_cast<void*>(static_cast<std::uintptr_t>(candidate.id)));
+            if (ImGui::Selectable(candidate.name.c_str(), candidate.id == active_material_id_))
+                active_material_id_ = candidate.id;
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(localization_.text("material.new").c_str()))
+        apply_discrete_edit(history,
+                            [&]
+                            {
+                                active_material_id_ = state_.create_material(
+                                    localization_.text("material.default_name"));
+                            });
     if (state_.materials().empty())
     {
-        if (ImGui::Button(localization_.text("material.create").c_str()))
-            apply_discrete_edit(history,
-                                [&]
-                                {
-                                    active_material_id_ = state_.create_material(
-                                        localization_.text("material.default_name"));
-                                });
         ImGui::End();
         return;
     }
-    if (state_.find_material(active_material_id_) == nullptr)
-        active_material_id_ = state_.materials().front().id;
     Material material = *state_.find_material(active_material_id_);
     char name[128];
     std::snprintf(name, sizeof(name), "%s", material.name.c_str());

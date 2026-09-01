@@ -134,6 +134,7 @@ if(NOT AI3_HEADLESS)
         src/main.cpp
         src/app/application.cpp
         src/platform/sdl_gl_platform.cpp
+        src/render/gles_program.cpp
         src/render/viewport_renderer.cpp
         src/ui/editor_ui.cpp
         src/ui/imgui_layer.cpp

@@ -47,7 +47,9 @@ bool equal(const Material& left, const Material& right)
 
 void validate_material(const Material& material)
 {
-    if (!valid_linear_color(material.ambient_color) ||
+    if ((material.shading != MaterialShading::lambert &&
+         material.shading != MaterialShading::phong) ||
+        !valid_linear_color(material.ambient_color) ||
         !valid_linear_color(material.diffuse_color) ||
         !valid_linear_color(material.specular_color) || !std::isfinite(material.specular_power) ||
         material.specular_power <= 0.0F)

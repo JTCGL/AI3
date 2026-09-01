@@ -91,6 +91,8 @@ struct Material
     MaterialId id = no_material;
     std::string name;
     MaterialShading shading = MaterialShading::lambert;
+    // Artist-authored ambient contribution for M14's simplified lighting model; no ambient light
+    // exists.
     glm::vec3 ambient_color{0.02F};
     glm::vec3 diffuse_color{0.214041F};
     glm::vec3 specular_color{1.0F};

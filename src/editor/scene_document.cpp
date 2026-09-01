@@ -134,8 +134,9 @@ Json encode_payload(const SceneObject& object)
 {
     if (object.primitive_kind == PrimitiveKind::sphere)
     {
-        if (!std::isfinite(object.sphere.radius_meters) || object.sphere.radius_meters <= 0.0F)
-            invalid("scene contains an invalid sphere radius");
+        if (!std::isfinite(object.sphere.radius_meters) || object.sphere.radius_meters <= 0.0F ||
+            !valid_linear_color(object.sphere.fallback_color))
+            invalid("scene contains invalid sphere parameters");
         return {{"radius_meters", object.sphere.radius_meters},
                 {"material_id", object.sphere.material_id},
                 {"fallback_color_linear", encode_vec3(object.sphere.fallback_color)}};
@@ -155,8 +156,7 @@ Json encode_payload(const SceneObject& object)
     if (object.light_kind == LightKind::directional)
     {
         const DirectionalLight& light = object.directional_light;
-        if (!std::isfinite(light.color.x) || !std::isfinite(light.color.y) ||
-            !std::isfinite(light.color.z) || !std::isfinite(light.intensity) ||
+        if (!valid_linear_color(light.color) || !std::isfinite(light.intensity) ||
             light.intensity < 0.0F)
             invalid("scene contains invalid directional-light parameters");
         return {{"color_linear", encode_vec3(light.color)}, {"intensity", light.intensity}};
@@ -247,6 +247,8 @@ class SceneDocumentCodec
         for (const Material& material : scene.materials_)
         {
             if (material.id == no_material || !material_ids.insert(material.id).second ||
+                (material.shading != MaterialShading::lambert &&
+                 material.shading != MaterialShading::phong) ||
                 !valid_linear_color(material.ambient_color) ||
                 !valid_linear_color(material.diffuse_color) ||
                 !valid_linear_color(material.specular_color) ||
