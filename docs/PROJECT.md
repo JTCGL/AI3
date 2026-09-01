@@ -41,14 +41,14 @@ split is:
 - `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
   viewport state.
 - `editor`: display-independent object identity, lifecycle, hierarchy, selection, authoritative transforms,
-  semantic object data, undo/redo transactions, document revision/session workflow, transactional Scene Document
+  semantic object and material data, undo/redo transactions, document revision/session workflow, transactional Scene Document
   serialization/filesystem I/O, panel visibility, layout-reset intent, and console data.
 - `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
   sizing, orbit view construction, and viewport-view selection/resolution.
 - `localization`: external resource discovery and UTF-8 string lookup.
 - `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
 - `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, and the
-  offscreen viewport framebuffer.
+  offscreen viewport framebuffer. A concrete GLES program helper owns compilation/linking and lifetime.
 - `ui`: Dear ImGui lifecycle and editor presentation/control. `EditorUi` receives references to authoritative
   `EditorState` and `ViewportView`, presents the display-independent document-session policy and SDL
   native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
@@ -69,17 +69,21 @@ Deleting an object deletes only that object. Its direct children become scene ro
 poses; deeper descendants retain their existing parents. Deletion is transactional if any direct child cannot
 be faithfully unparented as TRS. Selection is cleared only when the deleted object was selected.
 
-Sphere radius, perspective projection parameters, and directional-light parameters are authoritative semantic
-editor data. Sphere meshes are deterministic derived data in the scene layer. The renderer draws all enabled,
-visible spheres, caches their derived GLES geometry by object ID and radius, and uses the first enabled
-directional light in scene order; without one it uses ambient-only lighting.
+Sphere radius/fallback color/material assignment, perspective projection parameters, directional-light
+parameters, and independent reusable materials are authoritative semantic editor data. Sphere meshes are
+deterministic derived data. Unassigned spheres render their unlit fallback; assigned spheres use Lambert or
+classic Phong. Materials have separate monotonic identity, may exist unassigned, and are not owned by cameras
+or lights. The Material Editor navigates all document materials while its active material remains workspace
+state and it edits one material at a time.
 
 ## Scene Documents
 
 AI3 Scene Documents are strict, versioned UTF-8 JSON files with the `.ai3scene` extension, format identifier
-`ai3-scene`, and current version `1`. They persist exact nonzero object IDs and ordering, names, enabled and
+`ai3-scene`, and current version `2`, with strict v1 migration. They persist exact nonzero object and material
+IDs and ordering, names, enabled and
 visible state, parent IDs, authoritative local TRS, durable category/subtype names, current semantic payloads,
-the next-ID allocator, and subtype default-name counters. Quaternion arrays have stable `[w, x, y, z]` order
+object/material allocators and default-name counters, material definitions, sphere assignments/fallback colors,
+and linear light colors. Quaternion arrays have stable `[w, x, y, z]` order
 and are normalized. World transforms, Euler presentation, derived geometry, renderer state, and editor
 workspace/session state are outside the format.
 
@@ -135,10 +139,16 @@ camera falls back deterministically to the unchanged Orbit state; Reset Scene re
 Orbit state. `ViewportRenderer` consumes only resolved view/projection values and does not know which mode
 constructed them. See [ADR 0005](decisions/0005-viewport-view-ownership.md).
 
-The renderer draws the scene into its GLES color/depth target, sized from the ImGui viewport content region
+Resolved views include derived world-space eye position for view-dependent shading in both Orbit and scene-camera
+paths. The renderer draws the scene into its GLES color/depth target, sized from the ImGui viewport content region
 after framebuffer scaling. Dear ImGui presents that texture in the visible editor window. Display-independent
 view semantics are already separated from UI ownership, but construction and lifetime of `ViewportRenderer`
 and its GLES resources remain inside `EditorUi`.
+
+Unlit fallback, Lambert, and Phong use distinct linked GLES3 programs with only their required uniforms.
+Material shading models map to concrete programs rather than a runtime-branched uber-shader; this direction
+does not introduce a generalized shader system or renderer/backend abstraction. Material ambient color is an
+artist-authored contribution in the simplified lighting equations, not a global ambient-light source.
 
 ## Localization, DPI, and editor shell
 
@@ -159,3 +169,8 @@ relative to the shell working directory. Smoke mode disables settings persistenc
 installation may require a per-user configuration location, which is not implemented by the current
 development runtime. Reset Layout requests reconstruction. The demo and diagnostic windows remain compiled and
 available.
+
+Authored material, directional-light, and primitive fallback colors are finite `[0,1]` linear RGB.
+Artist-facing controls present sRGB through centralized standard transfer functions; shaders light in linear
+RGB and explicitly encode output to sRGB for the ordinary RGBA8 target. See
+[ADR 0008](decisions/0008-materials-and-linear-color.md).

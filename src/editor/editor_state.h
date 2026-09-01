@@ -16,8 +16,10 @@ namespace ai3
 class SceneDocumentCodec;
 class EditorHistory;
 using ObjectId = std::uint64_t;
+using MaterialId = std::uint64_t;
 using DocumentRevision = std::uint64_t;
 constexpr ObjectId no_object = 0;
+constexpr MaterialId no_material = 0;
 
 struct Transform
 {
@@ -62,6 +64,9 @@ enum class LightKind
 struct SpherePrimitive
 {
     float radius_meters = 1.0F;
+    MaterialId material_id = no_material;
+    // Linear RGB equivalent of the established artist-facing sRGB blue (0.22, 0.58, 0.92).
+    glm::vec3 fallback_color{0.0396819F, 0.2957F, 0.827571F};
 };
 struct PerspectiveCamera
 {
@@ -73,6 +78,25 @@ struct DirectionalLight
 {
     glm::vec3 color{1.0F};
     float intensity = 1.0F;
+};
+
+enum class MaterialShading
+{
+    lambert,
+    phong
+};
+
+struct Material
+{
+    MaterialId id = no_material;
+    std::string name;
+    MaterialShading shading = MaterialShading::lambert;
+    // Artist-authored ambient contribution for M14's simplified lighting model; no ambient light
+    // exists.
+    glm::vec3 ambient_color{0.02F};
+    glm::vec3 diffuse_color{0.214041F};
+    glm::vec3 specular_color{1.0F};
+    float specular_power = 32.0F;
 };
 
 struct SceneObject
@@ -156,6 +180,11 @@ class EditorState
     bool set_sphere(ObjectId id, SpherePrimitive sphere);
     bool set_perspective_camera(ObjectId id, PerspectiveCamera camera);
     bool set_directional_light(ObjectId id, DirectionalLight light);
+    MaterialId create_material(std::string localized_base_name, Material material = {});
+    bool rename_material(MaterialId id, std::string name);
+    bool set_material(MaterialId id, Material material);
+    bool assign_material(ObjectId id, MaterialId material_id);
+    bool set_sphere_fallback_color(ObjectId id, glm::vec3 linear_color);
     bool rename_object(ObjectId id, std::string name);
     bool set_object_enabled(ObjectId id, bool enabled);
     bool set_object_visible(ObjectId id, bool visible);
@@ -169,6 +198,8 @@ class EditorState
     DocumentRevision document_revision() const;
     const std::vector<SceneObject>& objects() const;
     const SceneObject* find_object(ObjectId id) const;
+    const std::vector<Material>& materials() const;
+    const Material* find_material(MaterialId id) const;
     std::vector<ObjectId> children_of(ObjectId parent) const;
     std::vector<const SceneObject*> objects_by_category(ObjectCategory category,
                                                         ObjectQueryFilter filter = {}) const;
@@ -211,10 +242,14 @@ class EditorState
     ObjectId create_named_object(std::string localized_base_name, CreateObject object,
                                  SubtypeKey subtype);
     SceneObject* find_object_mutable(ObjectId id);
+    Material* find_material_mutable(MaterialId id);
     void advance_document_revision();
 
     std::vector<SceneObject> objects_;
+    std::vector<Material> materials_;
     ObjectId next_object_id_ = 1;
+    MaterialId next_material_id_ = 1;
+    std::uint64_t default_material_name_count_ = 0;
     std::map<SubtypeKey, std::uint64_t> default_name_counts_;
     DocumentRevision document_revision_ = 0;
     ObjectId selection_ = no_object;

@@ -94,3 +94,15 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   checkpoint-based clean/dirty semantics, undoable discrete and continuous inspector edits, localized Undo/Redo
   access, and document-replacement history baselines. Runtime verification passed on Termux ARM64 and T5600
   Linux x86-64, and GitHub Actions passed.
+
+## Milestone 14 — Foundational material system
+
+- Final reviewed implementation head for [PR #33](https://github.com/JTCGL/AI3/pull/33):
+  `9b66780393e82dc49bea7a6118c735dbb4bff7e0`
+- Added multiple reusable document-owned materials with stable identity, sphere assignment and independent
+  unlit fallback color, Lambert and classic reflection-vector Phong shading, and a floating Material Editor
+  with active-material selection and creation. Established three distinct GLES3 programs through a small
+  concrete program helper, view-dependent Phong from the resolved world-space eye position, linear-RGB storage
+  with sRGB-facing controls and explicit output encoding, and strict Scene Document v2/v1 migration integrated
+  with Undo/Redo, dirty state, persistence, and headless tests. Runtime verification passed on Termux ARM64 and
+  T5600 Linux x86-64, and GitHub Actions passed.

@@ -42,6 +42,7 @@ TEST_CASE("orbit viewport resolves its view and aspect-dependent projection")
     const ai3::ResolvedViewportView square = viewport.resolve(scene, 1.0F);
 
     check_matrix(wide.view, viewport.orbit().view_matrix());
+    check_vec3(wide.eye_position, viewport.orbit().position());
     check_matrix(wide.projection, viewport.orbit().projection_matrix(16.0F / 9.0F));
     CHECK(wide.projection[0][0] < square.projection[0][0]);
     CHECK(wide.projection[1][1] == doctest::Approx(square.projection[1][1]));
@@ -78,6 +79,7 @@ TEST_CASE("scene-camera view uses current authoritative world transform")
     REQUIRE(viewport.use_scene_camera(scene, camera));
 
     ai3::ResolvedViewportView resolved = viewport.resolve(scene, 1.0F);
+    check_vec3(resolved.eye_position, scene.world_position(camera));
     check_vec3(glm::vec3{resolved.view * glm::vec4{scene.world_position(camera), 1.0F}},
                glm::vec3{0.0F});
     const glm::vec3 forward = scene.world_orientation(camera) * glm::vec3{0.0F, 0.0F, -1.0F};
@@ -108,6 +110,7 @@ TEST_CASE("parented scene-camera view uses resolved parent transform")
     REQUIRE(viewport.use_scene_camera(scene, camera));
 
     const ai3::ResolvedViewportView first = viewport.resolve(scene, 1.0F);
+    check_vec3(first.eye_position, scene.world_position(camera));
     const glm::vec3 first_world_position = scene.world_position(camera);
     check_vec3(glm::vec3{first.view * glm::vec4{scene.world_position(camera), 1.0F}},
                glm::vec3{0.0F});

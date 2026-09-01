@@ -1,5 +1,7 @@
 #include "editor/scene_document.h"
+#include "scene/color_space.h"
 
+#include <glm/common.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -16,7 +18,7 @@ namespace
 {
 using Json = nlohmann::json;
 constexpr std::string_view format_name = "ai3-scene";
-constexpr std::uint64_t format_version = 1;
+constexpr std::uint64_t format_version = 2;
 
 [[noreturn]] void invalid(const std::string& message) { throw std::invalid_argument(message); }
 
@@ -132,9 +134,12 @@ Json encode_payload(const SceneObject& object)
 {
     if (object.primitive_kind == PrimitiveKind::sphere)
     {
-        if (!std::isfinite(object.sphere.radius_meters) || object.sphere.radius_meters <= 0.0F)
-            invalid("scene contains an invalid sphere radius");
-        return {{"radius_meters", object.sphere.radius_meters}};
+        if (!std::isfinite(object.sphere.radius_meters) || object.sphere.radius_meters <= 0.0F ||
+            !valid_linear_color(object.sphere.fallback_color))
+            invalid("scene contains invalid sphere parameters");
+        return {{"radius_meters", object.sphere.radius_meters},
+                {"material_id", object.sphere.material_id},
+                {"fallback_color_linear", encode_vec3(object.sphere.fallback_color)}};
     }
     if (object.camera_kind == CameraKind::perspective)
     {
@@ -151,17 +156,16 @@ Json encode_payload(const SceneObject& object)
     if (object.light_kind == LightKind::directional)
     {
         const DirectionalLight& light = object.directional_light;
-        if (!std::isfinite(light.color.x) || !std::isfinite(light.color.y) ||
-            !std::isfinite(light.color.z) || !std::isfinite(light.intensity) ||
+        if (!valid_linear_color(light.color) || !std::isfinite(light.intensity) ||
             light.intensity < 0.0F)
             invalid("scene contains invalid directional-light parameters");
-        return {{"color", encode_vec3(light.color)}, {"intensity", light.intensity}};
+        return {{"color_linear", encode_vec3(light.color)}, {"intensity", light.intensity}};
     }
     return Json::object();
 }
 
 void decode_semantics(const std::string& category, const std::string& subtype, const Json& payload,
-                      SceneObject& object)
+                      SceneObject& object, bool legacy)
 {
     if (category == "general" && subtype == "none")
     {
@@ -170,10 +174,22 @@ void decode_semantics(const std::string& category, const std::string& subtype, c
     }
     if (category == "primitive" && subtype == "sphere")
     {
-        require_fields(payload, {"radius_meters"}, "sphere payload");
+        if (legacy)
+            require_fields(payload, {"radius_meters"}, "sphere payload");
+        else
+            require_fields(payload, {"radius_meters", "material_id", "fallback_color_linear"},
+                           "sphere payload");
         object.category = ObjectCategory::primitive;
         object.primitive_kind = PrimitiveKind::sphere;
         object.sphere.radius_meters = number(payload.at("radius_meters"), "sphere radius");
+        if (!legacy)
+        {
+            object.sphere.material_id = unsigned_value(payload.at("material_id"), "material ID");
+            object.sphere.fallback_color =
+                vec3(payload.at("fallback_color_linear"), "fallback color");
+            if (!valid_linear_color(object.sphere.fallback_color))
+                invalid("sphere fallback color is invalid");
+        }
         if (object.sphere.radius_meters <= 0.0F)
             invalid("sphere radius must be positive");
         return;
@@ -195,10 +211,17 @@ void decode_semantics(const std::string& category, const std::string& subtype, c
     }
     if (category == "light" && subtype == "directional")
     {
-        require_fields(payload, {"color", "intensity"}, "directional-light payload");
+        require_fields(payload, {legacy ? "color" : "color_linear", "intensity"},
+                       "directional-light payload");
         object.category = ObjectCategory::light;
         object.light_kind = LightKind::directional;
-        object.directional_light.color = vec3(payload.at("color"), "directional-light color");
+        object.directional_light.color =
+            vec3(payload.at(legacy ? "color" : "color_linear"), "directional-light color");
+        if (legacy)
+            object.directional_light.color = srgb_to_linear(
+                glm::clamp(object.directional_light.color, glm::vec3{0.0F}, glm::vec3{1.0F}));
+        if (!valid_linear_color(object.directional_light.color))
+            invalid("directional-light color is invalid");
         object.directional_light.intensity = number(payload.at("intensity"), "light intensity");
         if (object.directional_light.intensity < 0.0F)
             invalid("directional-light intensity must be non-negative");
@@ -218,6 +241,29 @@ class SceneDocumentCodec
     public:
     static Json encode(const EditorState& scene)
     {
+        Json materials = Json::array();
+        std::set<MaterialId> material_ids;
+        MaterialId maximum_material_id = no_material;
+        for (const Material& material : scene.materials_)
+        {
+            if (material.id == no_material || !material_ids.insert(material.id).second ||
+                (material.shading != MaterialShading::lambert &&
+                 material.shading != MaterialShading::phong) ||
+                !valid_linear_color(material.ambient_color) ||
+                !valid_linear_color(material.diffuse_color) ||
+                !valid_linear_color(material.specular_color) ||
+                !std::isfinite(material.specular_power) || material.specular_power <= 0.0F)
+                invalid("scene contains an invalid material");
+            maximum_material_id = std::max(maximum_material_id, material.id);
+            materials.push_back(
+                {{"id", material.id},
+                 {"name", material.name},
+                 {"shading", material.shading == MaterialShading::lambert ? "lambert" : "phong"},
+                 {"ambient_color_linear", encode_vec3(material.ambient_color)},
+                 {"diffuse_color_linear", encode_vec3(material.diffuse_color)},
+                 {"specular_color_linear", encode_vec3(material.specular_color)},
+                 {"specular_power", material.specular_power}});
+        }
         Json objects = Json::array();
         std::set<ObjectId> ids;
         ObjectId maximum_id = no_object;
@@ -243,6 +289,14 @@ class SceneDocumentCodec
         for (const SceneObject& object : scene.objects_)
             if (object.parent_id_ != no_object && ids.count(object.parent_id_) == 0)
                 invalid("scene contains a missing parent");
+            else if (object.sphere.material_id != no_material &&
+                     material_ids.count(object.sphere.material_id) == 0)
+                invalid("scene contains a missing material reference");
+        if (scene.next_material_id_ == no_material ||
+            scene.next_material_id_ == std::numeric_limits<MaterialId>::max() ||
+            scene.next_material_id_ <= maximum_material_id ||
+            scene.default_material_name_count_ >= scene.next_material_id_)
+            invalid("scene material allocator state is inconsistent");
 
         const auto counter = [&](ObjectCategory category, int subtype)
         {
@@ -262,19 +316,38 @@ class SceneDocumentCodec
                 {"version", format_version},
                 {"metadata",
                  {{"next_object_id", scene.next_object_id_},
+                  {"next_material_id", scene.next_material_id_},
+                  {"default_material_name_count", scene.default_material_name_count_},
                   {"default_name_counters", std::move(counters)}}},
+                {"materials", std::move(materials)},
                 {"objects", std::move(objects)}};
     }
 
     static void decode(const Json& root, EditorState& destination)
     {
-        require_fields(root, {"format", "version", "metadata", "objects"}, "document");
+        if (!root.is_object() || !root.contains("version"))
+            invalid("document is missing version");
+        const std::uint64_t version = unsigned_value(root.at("version"), "document version");
+        const bool legacy = version == 1;
+        if (!legacy && version != format_version)
+            invalid("document version is unsupported");
+        require_fields(root,
+                       legacy ? std::initializer_list<std::string_view>{"format", "version",
+                                                                        "metadata", "objects"}
+                              : std::initializer_list<std::string_view>{"format", "version",
+                                                                        "metadata", "materials",
+                                                                        "objects"},
+                       "document");
         if (!root.at("format").is_string() || root.at("format").get<std::string>() != format_name)
             invalid("document format is not ai3-scene");
-        if (unsigned_value(root.at("version"), "document version") != format_version)
-            invalid("document version is unsupported");
         const Json& metadata = root.at("metadata");
-        require_fields(metadata, {"next_object_id", "default_name_counters"}, "metadata");
+        if (legacy)
+            require_fields(metadata, {"next_object_id", "default_name_counters"}, "metadata");
+        else
+            require_fields(metadata,
+                           {"next_object_id", "next_material_id", "default_material_name_count",
+                            "default_name_counters"},
+                           "metadata");
         const ObjectId next_id = unsigned_value(metadata.at("next_object_id"), "next object ID");
         if (next_id == no_object || next_id == std::numeric_limits<ObjectId>::max())
             invalid("next object ID cannot be allocated safely");
@@ -296,6 +369,53 @@ class SceneDocumentCodec
         candidate.objects_.clear();
         candidate.next_object_id_ = next_id;
         candidate.default_name_counts_.clear();
+        if (!legacy)
+        {
+            candidate.next_material_id_ =
+                unsigned_value(metadata.at("next_material_id"), "next material ID");
+            candidate.default_material_name_count_ =
+                unsigned_value(metadata.at("default_material_name_count"), "material name counter");
+            if (candidate.next_material_id_ == no_material ||
+                candidate.next_material_id_ == std::numeric_limits<MaterialId>::max() ||
+                candidate.default_material_name_count_ >= candidate.next_material_id_)
+                invalid("material allocator metadata is invalid");
+            const Json& material_values = root.at("materials");
+            if (!material_values.is_array())
+                invalid("materials must be an array");
+            MaterialId max_material = no_material;
+            for (const Json& value : material_values)
+            {
+                require_fields(value,
+                               {"id", "name", "shading", "ambient_color_linear",
+                                "diffuse_color_linear", "specular_color_linear", "specular_power"},
+                               "material");
+                Material material;
+                material.id = unsigned_value(value.at("id"), "material ID");
+                if (material.id == no_material || candidate.find_material(material.id) != nullptr ||
+                    !value.at("name").is_string() || !value.at("shading").is_string())
+                    invalid("material identity or text is invalid");
+                material.name = value.at("name").get<std::string>();
+                const std::string shading = value.at("shading").get<std::string>();
+                if (shading == "lambert")
+                    material.shading = MaterialShading::lambert;
+                else if (shading == "phong")
+                    material.shading = MaterialShading::phong;
+                else
+                    invalid("material shading is unsupported");
+                material.ambient_color = vec3(value.at("ambient_color_linear"), "ambient color");
+                material.diffuse_color = vec3(value.at("diffuse_color_linear"), "diffuse color");
+                material.specular_color = vec3(value.at("specular_color_linear"), "specular color");
+                material.specular_power = number(value.at("specular_power"), "specular power");
+                if (!valid_linear_color(material.ambient_color) ||
+                    !valid_linear_color(material.diffuse_color) ||
+                    !valid_linear_color(material.specular_color) || material.specular_power <= 0.0F)
+                    invalid("material payload is invalid");
+                max_material = std::max(max_material, material.id);
+                candidate.materials_.push_back(std::move(material));
+            }
+            if (candidate.next_material_id_ <= max_material)
+                invalid("next material ID must exceed stored IDs");
+        }
         std::unordered_map<ObjectId, std::size_t> indices;
         ObjectId maximum_id = no_object;
         for (const Json& value : values)
@@ -320,7 +440,8 @@ class SceneDocumentCodec
             object.parent_id_ = unsigned_value(value.at("parent_id"), "parent ID");
             object.transform = decode_transform(value.at("transform"));
             decode_semantics(value.at("category").get<std::string>(),
-                             value.at("subtype").get<std::string>(), value.at("payload"), object);
+                             value.at("subtype").get<std::string>(), value.at("payload"), object,
+                             legacy);
             candidate.objects_.push_back(std::move(object));
         }
         if (next_id <= maximum_id)
@@ -331,6 +452,9 @@ class SceneDocumentCodec
                 invalid("object cannot parent itself");
             if (object.parent_id_ != no_object && indices.count(object.parent_id_) == 0)
                 invalid("object parent does not exist");
+            if (object.sphere.material_id != no_material &&
+                candidate.find_material(object.sphere.material_id) == nullptr)
+                invalid("sphere material does not exist");
             std::set<ObjectId> ancestors;
             for (ObjectId parent = object.parent_id_; parent != no_object;)
             {
@@ -348,7 +472,10 @@ class SceneDocumentCodec
 
         const bool changed = encode(destination) != encode(candidate);
         destination.objects_ = std::move(candidate.objects_);
+        destination.materials_ = std::move(candidate.materials_);
         destination.next_object_id_ = candidate.next_object_id_;
+        destination.next_material_id_ = candidate.next_material_id_;
+        destination.default_material_name_count_ = candidate.default_material_name_count_;
         destination.default_name_counts_ = std::move(candidate.default_name_counts_);
         destination.selection_ = no_object;
         if (changed)

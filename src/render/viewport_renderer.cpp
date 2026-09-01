@@ -1,5 +1,6 @@
 #include "render/viewport_renderer.h"
 
+#include "render/gles_program.h"
 #include "scene/scene_math.h"
 #include "scene/sphere_mesh.h"
 
@@ -16,92 +17,92 @@ namespace ai3
 {
 namespace
 {
-constexpr const char* vertex_shader_source = R"(#version 300 es
+constexpr const char* unlit_vertex_source = R"(#version 300 es
+layout(location = 0) in vec3 a_position;
+uniform mat4 u_mvp;
+void main()
+{
+    gl_Position = u_mvp * vec4(a_position, 1.0);
+}
+)";
+
+constexpr const char* lit_vertex_source = R"(#version 300 es
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_normal;
 uniform mat4 u_mvp;
 uniform mat4 u_model;
 out vec3 v_normal;
+out vec3 v_world_position;
 void main()
 {
     v_normal = mat3(transpose(inverse(u_model))) * a_normal;
+    v_world_position = vec3(u_model * vec4(a_position, 1.0));
     gl_Position = u_mvp * vec4(a_position, 1.0);
 }
 )";
 
-constexpr const char* fragment_shader_source = R"(#version 300 es
-precision mediump float;
-in vec3 v_normal;
-uniform vec3 u_light_direction;
-uniform vec3 u_light_color;
-uniform float u_light_intensity;
-out vec4 out_color;
-void main()
+constexpr const char* linear_to_srgb_source = R"(
+vec3 linear_to_srgb(vec3 color)
 {
-    vec3 normal = normalize(v_normal);
-    float diffuse = max(dot(normal, -u_light_direction), 0.0);
-    vec3 base = vec3(0.22, 0.58, 0.92);
-    out_color = vec4(base * (0.1 + u_light_color * diffuse * u_light_intensity), 1.0);
+    bvec3 cutoff = lessThanEqual(color, vec3(0.0031308));
+    vec3 low = color * 12.92;
+    vec3 high = 1.055 * pow(max(color, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055;
+    return mix(high, low, cutoff);
 }
 )";
 
-std::uint32_t compile_shader(GLenum type, const char* source)
+std::string fragment_source(std::string_view declarations, std::string_view body)
 {
-    const std::uint32_t shader = glCreateShader(type);
-    if (shader == 0)
-        throw std::runtime_error("Viewport shader creation failed");
-    glShaderSource(shader, 1, &source, nullptr);
-    glCompileShader(shader);
-    GLint compiled = GL_FALSE;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-    if (compiled == GL_TRUE)
-        return shader;
-    GLint length = 0;
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-    std::string log(static_cast<std::size_t>(length > 0 ? length : 1), '\0');
-    glGetShaderInfoLog(shader, length, nullptr, log.data());
-    glDeleteShader(shader);
-    throw std::runtime_error("Viewport shader compilation failed: " + log);
+    return std::string{"#version 300 es\nprecision mediump float;\n"} + std::string{declarations} +
+           linear_to_srgb_source + "\nvoid main()\n{\n" + std::string{body} + "\n}\n";
 }
 
-std::uint32_t create_program()
-{
-    const std::uint32_t vertex = compile_shader(GL_VERTEX_SHADER, vertex_shader_source);
-    std::uint32_t fragment = 0;
-    std::uint32_t program = 0;
-    try
+const std::string unlit_fragment_source = fragment_source(
+    R"(uniform vec3 u_fallback_color;
+out vec4 out_color;
+)",
+    R"(    out_color = vec4(linear_to_srgb(clamp(u_fallback_color, 0.0, 1.0)), 1.0);)");
+
+const std::string lambert_fragment_source = fragment_source(
+    R"(in vec3 v_normal;
+uniform vec3 u_light_direction;
+uniform vec3 u_light_color;
+uniform float u_light_intensity;
+uniform vec3 u_ambient_contribution;
+uniform vec3 u_diffuse_color;
+out vec4 out_color;
+)",
+    R"(    vec3 normal = normalize(v_normal);
+    float diffuse_factor = max(dot(normal, -u_light_direction), 0.0);
+    vec3 linear_color = u_ambient_contribution +
+                        u_diffuse_color * u_light_color * diffuse_factor * u_light_intensity;
+    out_color = vec4(linear_to_srgb(clamp(linear_color, 0.0, 1.0)), 1.0);)");
+
+const std::string phong_fragment_source = fragment_source(
+    R"(in vec3 v_normal;
+in vec3 v_world_position;
+uniform vec3 u_light_direction;
+uniform vec3 u_light_color;
+uniform float u_light_intensity;
+uniform vec3 u_ambient_contribution;
+uniform vec3 u_diffuse_color;
+uniform vec3 u_specular_color;
+uniform float u_specular_power;
+uniform vec3 u_eye_position;
+out vec4 out_color;
+)",
+    R"(    vec3 normal = normalize(v_normal);
+    float diffuse_factor = max(dot(normal, -u_light_direction), 0.0);
+    vec3 linear_color = u_ambient_contribution +
+                        u_diffuse_color * u_light_color * diffuse_factor * u_light_intensity;
+    if (diffuse_factor > 0.0)
     {
-        fragment = compile_shader(GL_FRAGMENT_SHADER, fragment_shader_source);
-        program = glCreateProgram();
-        if (program == 0)
-            throw std::runtime_error("Viewport shader program creation failed");
-        glAttachShader(program, vertex);
-        glAttachShader(program, fragment);
-        glLinkProgram(program);
-        GLint linked = GL_FALSE;
-        glGetProgramiv(program, GL_LINK_STATUS, &linked);
-        if (linked != GL_TRUE)
-        {
-            GLint length = 0;
-            glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-            std::string log(static_cast<std::size_t>(length > 0 ? length : 1), '\0');
-            glGetProgramInfoLog(program, length, nullptr, log.data());
-            throw std::runtime_error("Viewport shader link failed: " + log);
-        }
+        vec3 reflected = reflect(u_light_direction, normal);
+        vec3 to_eye = normalize(u_eye_position - v_world_position);
+        float highlight = pow(max(dot(reflected, to_eye), 0.0), u_specular_power);
+        linear_color += u_specular_color * u_light_color * highlight * u_light_intensity;
     }
-    catch (...)
-    {
-        if (program != 0)
-            glDeleteProgram(program);
-        if (fragment != 0)
-            glDeleteShader(fragment);
-        glDeleteShader(vertex);
-        throw;
-    }
-    glDeleteShader(fragment);
-    glDeleteShader(vertex);
-    return program;
-}
+    out_color = vec4(linear_to_srgb(clamp(linear_color, 0.0, 1.0)), 1.0);)");
 
 std::string gl_string(GLenum name)
 {
@@ -118,38 +119,83 @@ void require_no_gl_error(const char* operation)
 }
 } // namespace
 
+struct ViewportRenderer::UnlitProgram
+{
+    UnlitProgram()
+        : program{"unlit fallback", unlit_vertex_source, unlit_fragment_source.c_str()},
+          mvp{program.required_uniform("u_mvp")},
+          fallback_color{program.required_uniform("u_fallback_color")}
+    {
+    }
+    GlesProgram program;
+    int mvp;
+    int fallback_color;
+};
+
+struct ViewportRenderer::LambertProgram
+{
+    LambertProgram()
+        : program{"Lambert", lit_vertex_source, lambert_fragment_source.c_str()},
+          mvp{program.required_uniform("u_mvp")}, model{program.required_uniform("u_model")},
+          light_direction{program.required_uniform("u_light_direction")},
+          light_color{program.required_uniform("u_light_color")},
+          light_intensity{program.required_uniform("u_light_intensity")},
+          ambient{program.required_uniform("u_ambient_contribution")},
+          diffuse{program.required_uniform("u_diffuse_color")}
+    {
+    }
+    GlesProgram program;
+    int mvp;
+    int model;
+    int light_direction;
+    int light_color;
+    int light_intensity;
+    int ambient;
+    int diffuse;
+};
+
+struct ViewportRenderer::PhongProgram
+{
+    PhongProgram()
+        : program{"Phong", lit_vertex_source, phong_fragment_source.c_str()},
+          mvp{program.required_uniform("u_mvp")}, model{program.required_uniform("u_model")},
+          light_direction{program.required_uniform("u_light_direction")},
+          light_color{program.required_uniform("u_light_color")},
+          light_intensity{program.required_uniform("u_light_intensity")},
+          ambient{program.required_uniform("u_ambient_contribution")},
+          diffuse{program.required_uniform("u_diffuse_color")},
+          specular{program.required_uniform("u_specular_color")},
+          specular_power{program.required_uniform("u_specular_power")},
+          eye_position{program.required_uniform("u_eye_position")}
+    {
+    }
+    GlesProgram program;
+    int mvp;
+    int model;
+    int light_direction;
+    int light_color;
+    int light_intensity;
+    int ambient;
+    int diffuse;
+    int specular;
+    int specular_power;
+    int eye_position;
+};
+
 ViewportRenderer::ViewportRenderer()
 {
-    try
-    {
-        program_ = create_program();
-        mvp_location_ = glGetUniformLocation(program_, "u_mvp");
-        model_location_ = glGetUniformLocation(program_, "u_model");
-        light_direction_location_ = glGetUniformLocation(program_, "u_light_direction");
-        light_color_location_ = glGetUniformLocation(program_, "u_light_color");
-        light_intensity_location_ = glGetUniformLocation(program_, "u_light_intensity");
-        if (mvp_location_ < 0 || model_location_ < 0 || light_direction_location_ < 0 ||
-            light_color_location_ < 0 || light_intensity_location_ < 0)
-            throw std::runtime_error("Viewport shader uniforms are unavailable");
-
-        gl_description_ =
-            gl_string(GL_VERSION) + " | " + gl_string(GL_VENDOR) + " | " + gl_string(GL_RENDERER);
-        require_no_gl_error("Viewport renderer initialization");
-    }
-    catch (...)
-    {
-        if (program_ != 0)
-            glDeleteProgram(program_);
-        throw;
-    }
+    unlit_program_ = std::make_unique<UnlitProgram>();
+    lambert_program_ = std::make_unique<LambertProgram>();
+    phong_program_ = std::make_unique<PhongProgram>();
+    gl_description_ =
+        gl_string(GL_VERSION) + " | " + gl_string(GL_VENDOR) + " | " + gl_string(GL_RENDERER);
+    require_no_gl_error("Viewport renderer initialization");
 }
 
 ViewportRenderer::~ViewportRenderer()
 {
     clear_geometry_cache();
     destroy_render_target();
-    if (program_ != 0)
-        glDeleteProgram(program_);
 }
 
 void ViewportRenderer::destroy_geometry(SphereGeometry& geometry)
@@ -291,7 +337,6 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
     glDepthFunc(GL_LESS);
     glClearColor(0.055F, 0.07F, 0.10F, 1.0F);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glUseProgram(program_);
     const glm::mat4 view_projection = view.projection * view.view;
     glm::vec3 light_direction{0.0F, 0.0F, -1.0F};
     glm::vec3 light_color{1.0F};
@@ -303,17 +348,49 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
         light_color = lights.front()->directional_light.color;
         light_intensity = lights.front()->directional_light.intensity;
     }
-    glUniform3fv(light_direction_location_, 1, glm::value_ptr(light_direction));
-    glUniform3fv(light_color_location_, 1, glm::value_ptr(light_color));
-    glUniform1f(light_intensity_location_, light_intensity);
     for (const SceneObject* object : scene.primitives(PrimitiveKind::sphere, {true, true}))
     {
         const SphereGeometry& geometry = sphere_geometry(*object);
         glBindVertexArray(geometry.vertex_array);
         const glm::mat4 model = scene.world_transform_matrix(object->id);
         const glm::mat4 mvp = view_projection * model;
-        glUniformMatrix4fv(mvp_location_, 1, GL_FALSE, glm::value_ptr(mvp));
-        glUniformMatrix4fv(model_location_, 1, GL_FALSE, glm::value_ptr(model));
+        const Material* material = scene.find_material(object->sphere.material_id);
+        if (material == nullptr)
+        {
+            const UnlitProgram& program = *unlit_program_;
+            glUseProgram(program.program.id());
+            glUniformMatrix4fv(program.mvp, 1, GL_FALSE, glm::value_ptr(mvp));
+            glUniform3fv(program.fallback_color, 1, glm::value_ptr(object->sphere.fallback_color));
+        }
+        else if (material->shading == MaterialShading::lambert)
+        {
+            const LambertProgram& program = *lambert_program_;
+            glUseProgram(program.program.id());
+            glUniformMatrix4fv(program.mvp, 1, GL_FALSE, glm::value_ptr(mvp));
+            glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform3fv(program.light_direction, 1, glm::value_ptr(light_direction));
+            glUniform3fv(program.light_color, 1, glm::value_ptr(light_color));
+            glUniform1f(program.light_intensity, light_intensity);
+            glUniform3fv(program.ambient, 1, glm::value_ptr(material->ambient_color));
+            glUniform3fv(program.diffuse, 1, glm::value_ptr(material->diffuse_color));
+        }
+        else if (material->shading == MaterialShading::phong)
+        {
+            const PhongProgram& program = *phong_program_;
+            glUseProgram(program.program.id());
+            glUniformMatrix4fv(program.mvp, 1, GL_FALSE, glm::value_ptr(mvp));
+            glUniformMatrix4fv(program.model, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform3fv(program.light_direction, 1, glm::value_ptr(light_direction));
+            glUniform3fv(program.light_color, 1, glm::value_ptr(light_color));
+            glUniform1f(program.light_intensity, light_intensity);
+            glUniform3fv(program.ambient, 1, glm::value_ptr(material->ambient_color));
+            glUniform3fv(program.diffuse, 1, glm::value_ptr(material->diffuse_color));
+            glUniform3fv(program.specular, 1, glm::value_ptr(material->specular_color));
+            glUniform1f(program.specular_power, material->specular_power);
+            glUniform3fv(program.eye_position, 1, glm::value_ptr(view.eye_position));
+        }
+        else
+            throw std::runtime_error("Viewport material shading type is invalid");
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(geometry.index_count), GL_UNSIGNED_INT,
                        nullptr);
     }

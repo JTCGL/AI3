@@ -33,6 +33,8 @@ bool equal(const SceneObject& left, const SceneObject& right)
            left.primitive_kind == right.primitive_kind && left.camera_kind == right.camera_kind &&
            left.light_kind == right.light_kind &&
            left.sphere.radius_meters == right.sphere.radius_meters &&
+           left.sphere.material_id == right.sphere.material_id &&
+           equal(left.sphere.fallback_color, right.sphere.fallback_color) &&
            left.perspective_camera.vertical_fov_degrees ==
                right.perspective_camera.vertical_fov_degrees &&
            left.perspective_camera.near_plane_meters ==
@@ -41,13 +43,26 @@ bool equal(const SceneObject& left, const SceneObject& right)
            equal(left.directional_light.color, right.directional_light.color) &&
            left.directional_light.intensity == right.directional_light.intensity;
 }
+bool equal(const Material& left, const Material& right)
+{
+    return left.id == right.id && left.name == right.name && left.shading == right.shading &&
+           equal(left.ambient_color, right.ambient_color) &&
+           equal(left.diffuse_color, right.diffuse_color) &&
+           equal(left.specular_color, right.specular_color) &&
+           left.specular_power == right.specular_power;
+}
 } // namespace
 
 EditorHistory::EditorHistory(EditorState& state) : state_(state) {}
 
 EditorHistory::Snapshot EditorHistory::capture() const
 {
-    return {state_.objects_, state_.next_object_id_, state_.default_name_counts_};
+    return {state_.objects_,
+            state_.materials_,
+            state_.next_object_id_,
+            state_.next_material_id_,
+            state_.default_material_name_count_,
+            state_.default_name_counts_};
 }
 
 bool EditorHistory::begin_transaction()
@@ -130,7 +145,10 @@ void EditorHistory::restore(const Snapshot& snapshot)
     if (snapshots_equal(current, snapshot))
         return;
     state_.objects_ = snapshot.objects;
+    state_.materials_ = snapshot.materials;
     state_.next_object_id_ = snapshot.next_object_id;
+    state_.next_material_id_ = snapshot.next_material_id;
+    state_.default_material_name_count_ = snapshot.default_material_name_count;
     state_.default_name_counts_ = snapshot.default_name_counts;
     if (state_.selection_ != no_object && state_.find_object(state_.selection_) == nullptr)
         state_.selection_ = no_object;
@@ -140,7 +158,12 @@ void EditorHistory::restore(const Snapshot& snapshot)
 bool EditorHistory::snapshots_equal(const Snapshot& left, const Snapshot& right)
 {
     return left.next_object_id == right.next_object_id &&
+           left.next_material_id == right.next_material_id &&
+           left.default_material_name_count == right.default_material_name_count &&
            left.default_name_counts == right.default_name_counts &&
+           left.materials.size() == right.materials.size() &&
+           std::equal(left.materials.begin(), left.materials.end(), right.materials.begin(),
+                      [](const Material& a, const Material& b) { return equal(a, b); }) &&
            left.objects.size() == right.objects.size() &&
            std::equal(left.objects.begin(), left.objects.end(), right.objects.begin(),
                       [](const SceneObject& left_object, const SceneObject& right_object)

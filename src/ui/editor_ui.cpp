@@ -2,6 +2,7 @@
 #include "editor/scene_document.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "scene/color_space.h"
 #include "scene/length_units.h"
 #include "scene/scene_math.h"
 #include "ui/ui_identity.h"
@@ -485,6 +486,8 @@ void EditorUi::draw_main_menu(bool& running)
         }
         if (ImGui::BeginMenu(localization_.text("menu.window").c_str()))
         {
+            ImGui::MenuItem(localization_.text("panel.material_editor").c_str(), nullptr,
+                            &show_material_editor_);
             if (ImGui::MenuItem(localization_.text("action.reset_layout").c_str()))
                 state_.request_layout_reset();
             ImGui::MenuItem(localization_.text("diagnostics.title").c_str(), nullptr,
@@ -666,10 +669,28 @@ void EditorUi::draw_object_inspector()
                     document_session_.history(), changed,
                     [&]
                     {
-                        state_.set_sphere(
-                            object->id, {std::max(0.001F, length_to_meters(displayed_radius,
-                                                                           display_length_unit_))});
+                        SpherePrimitive sphere = object->sphere;
+                        sphere.radius_meters = std::max(
+                            0.001F, length_to_meters(displayed_radius, display_length_unit_));
+                        state_.set_sphere(object->id, sphere);
                     });
+                const Material* assigned = state_.find_material(object->sphere.material_id);
+                const std::string material_name =
+                    assigned == nullptr ? localization_.text("material.none") : assigned->name;
+                ImGui::Text("%s: %s", localization_.text("inspector.material").c_str(),
+                            material_name.c_str());
+                glm::vec3 fallback_srgb = linear_to_srgb(object->sphere.fallback_color);
+                const bool fallback_changed = ImGui::ColorEdit3(
+                    stable_imgui_label(localization_.text("inspector.fallback_color"),
+                                       "sphere_fallback_color")
+                        .c_str(),
+                    glm::value_ptr(fallback_srgb));
+                apply_continuous_edit(document_session_.history(), fallback_changed,
+                                      [&]
+                                      {
+                                          state_.set_sphere_fallback_color(
+                                              object->id, srgb_to_linear(fallback_srgb));
+                                      });
             }
             if (object->camera_kind == CameraKind::perspective)
             {
@@ -729,10 +750,15 @@ void EditorUi::draw_object_inspector()
                         localization_.text("inspector.color"), "directional_light_color");
                     const std::string intensity_label = stable_imgui_label(
                         localization_.text("inspector.intensity"), "directional_light_intensity");
+                    glm::vec3 color_srgb = linear_to_srgb(light.color);
                     bool changed =
-                        ImGui::ColorEdit3(color_label.c_str(), glm::value_ptr(light.color));
+                        ImGui::ColorEdit3(color_label.c_str(), glm::value_ptr(color_srgb));
                     apply_continuous_edit(document_session_.history(), changed,
-                                          [&] { state_.set_directional_light(object->id, light); });
+                                          [&]
+                                          {
+                                              light.color = srgb_to_linear(color_srgb);
+                                              state_.set_directional_light(object->id, light);
+                                          });
                     light = state_.find_object(object->id)->directional_light;
                     changed =
                         ImGui::DragFloat(intensity_label.c_str(), &light.intensity, 0.05F, 0.0F);
@@ -793,6 +819,120 @@ void EditorUi::draw_object_inspector()
         ImGui::End();
     }
     state_.set_panel_visible(EditorPanel::object_inspector, visible);
+}
+
+void EditorUi::draw_material_editor()
+{
+    if (!show_material_editor_)
+        return;
+    const std::string title = window_title("panel.material_editor", "ai3_material_editor");
+    ImGui::SetNextWindowSize(ImVec2{380.0F * ui_scale_, 420.0F * ui_scale_},
+                             ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(title.c_str(), &show_material_editor_, ImGuiWindowFlags_NoDocking))
+    {
+        ImGui::End();
+        return;
+    }
+    EditorHistory& history = document_session_.history();
+    if (state_.find_material(active_material_id_) == nullptr && !state_.materials().empty())
+        active_material_id_ = state_.materials().front().id;
+    const Material* active_material = state_.find_material(active_material_id_);
+    const std::string active_name =
+        active_material == nullptr ? localization_.text("material.none") : active_material->name;
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(localization_.text("material.instance").c_str());
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-ImGui::GetFrameHeight() * 4.0F);
+    if (ImGui::BeginCombo(stable_imgui_label("", "active_material").c_str(), active_name.c_str()))
+    {
+        for (const Material& candidate : state_.materials())
+        {
+            ImGui::PushID(reinterpret_cast<void*>(static_cast<std::uintptr_t>(candidate.id)));
+            if (ImGui::Selectable(candidate.name.c_str(), candidate.id == active_material_id_))
+                active_material_id_ = candidate.id;
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(localization_.text("material.new").c_str()))
+        apply_discrete_edit(history,
+                            [&]
+                            {
+                                active_material_id_ = state_.create_material(
+                                    localization_.text("material.default_name"));
+                            });
+    if (state_.materials().empty())
+    {
+        ImGui::End();
+        return;
+    }
+    Material material = *state_.find_material(active_material_id_);
+    char name[128];
+    std::snprintf(name, sizeof(name), "%s", material.name.c_str());
+    const bool name_changed = ImGui::InputText(
+        stable_imgui_label(localization_.text("material.name"), "material_name").c_str(), name,
+        sizeof(name));
+    apply_continuous_edit(history, name_changed,
+                          [&] { state_.rename_material(material.id, name); });
+    material = *state_.find_material(active_material_id_);
+    const char* shading =
+        material.shading == MaterialShading::lambert ? "material.lambert" : "material.phong";
+    if (ImGui::BeginCombo(
+            stable_imgui_label(localization_.text("material.shading"), "material_shading").c_str(),
+            localization_.text(shading).c_str()))
+    {
+        for (MaterialShading value : {MaterialShading::lambert, MaterialShading::phong})
+        {
+            const char* key =
+                value == MaterialShading::lambert ? "material.lambert" : "material.phong";
+            if (ImGui::Selectable(localization_.text(key).c_str(), material.shading == value))
+                apply_discrete_edit(history,
+                                    [&]
+                                    {
+                                        material.shading = value;
+                                        state_.set_material(material.id, material);
+                                    });
+        }
+        ImGui::EndCombo();
+    }
+    material = *state_.find_material(active_material_id_);
+    const auto color_control = [&](const char* key, const char* stable, glm::vec3 Material::* field)
+    {
+        glm::vec3 srgb = linear_to_srgb(material.*field);
+        const bool changed = ImGui::ColorEdit3(
+            stable_imgui_label(localization_.text(key), stable).c_str(), glm::value_ptr(srgb));
+        apply_continuous_edit(history, changed,
+                              [&]
+                              {
+                                  Material changed_material =
+                                      *state_.find_material(active_material_id_);
+                                  changed_material.*field = srgb_to_linear(srgb);
+                                  state_.set_material(active_material_id_, changed_material);
+                              });
+    };
+    color_control("material.ambient", "material_ambient", &Material::ambient_color);
+    color_control("material.diffuse", "material_diffuse", &Material::diffuse_color);
+    if (material.shading == MaterialShading::phong)
+    {
+        color_control("material.specular", "material_specular", &Material::specular_color);
+        material = *state_.find_material(active_material_id_);
+        const bool changed = ImGui::DragFloat(
+            stable_imgui_label(localization_.text("material.shininess"), "material_shininess")
+                .c_str(),
+            &material.specular_power, 1.0F, 1.0F, 1024.0F);
+        apply_continuous_edit(history, changed,
+                              [&] { state_.set_material(material.id, material); });
+    }
+    const SceneObject* selected = state_.find_object(state_.selection());
+    const bool assignable =
+        selected != nullptr && selected->primitive_kind == PrimitiveKind::sphere;
+    ImGui::BeginDisabled(!assignable);
+    if (ImGui::Button(localization_.text("material.assign_selected").c_str()))
+        apply_discrete_edit(history,
+                            [&] { state_.assign_material(selected->id, active_material_id_); });
+    ImGui::EndDisabled();
+    ImGui::End();
 }
 
 void EditorUi::draw_viewport()
@@ -914,6 +1054,7 @@ void EditorUi::draw(bool& running)
     draw_scene_graph();
     draw_viewport();
     draw_object_inspector();
+    draw_material_editor();
     draw_console();
 
     if (show_ai3_diagnostics_)

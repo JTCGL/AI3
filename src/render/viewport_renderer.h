@@ -5,6 +5,7 @@
 #include "scene/resolved_view.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -42,15 +43,16 @@ class ViewportRenderer
     SphereGeometry& sphere_geometry(const SceneObject& object);
     static void destroy_geometry(SphereGeometry& geometry);
 
-    std::uint32_t program_ = 0;
+    struct UnlitProgram;
+    struct LambertProgram;
+    struct PhongProgram;
+
+    std::unique_ptr<UnlitProgram> unlit_program_;
+    std::unique_ptr<LambertProgram> lambert_program_;
+    std::unique_ptr<PhongProgram> phong_program_;
     std::uint32_t framebuffer_ = 0;
     std::uint32_t color_texture_ = 0;
     std::uint32_t depth_renderbuffer_ = 0;
-    int mvp_location_ = -1;
-    int model_location_ = -1;
-    int light_direction_location_ = -1;
-    int light_color_location_ = -1;
-    int light_intensity_location_ = -1;
     RenderTargetSize size_{};
     std::uint64_t resize_count_ = 0;
     std::string gl_description_;

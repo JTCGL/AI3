@@ -1,4 +1,5 @@
 #include "editor/editor_state.h"
+#include "scene/color_space.h"
 
 #include <glm/ext/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
@@ -34,6 +35,25 @@ bool equal(const Transform& left, const Transform& right)
 {
     return equal(left.position, right.position) && equal(left.orientation, right.orientation) &&
            equal(left.scale, right.scale);
+}
+bool equal(const Material& left, const Material& right)
+{
+    return left.id == right.id && left.name == right.name && left.shading == right.shading &&
+           equal(left.ambient_color, right.ambient_color) &&
+           equal(left.diffuse_color, right.diffuse_color) &&
+           equal(left.specular_color, right.specular_color) &&
+           left.specular_power == right.specular_power;
+}
+
+void validate_material(const Material& material)
+{
+    if ((material.shading != MaterialShading::lambert &&
+         material.shading != MaterialShading::phong) ||
+        !valid_linear_color(material.ambient_color) ||
+        !valid_linear_color(material.diffuse_color) ||
+        !valid_linear_color(material.specular_color) || !std::isfinite(material.specular_power) ||
+        material.specular_power <= 0.0F)
+        throw std::invalid_argument("Material parameters are invalid");
 }
 
 bool finite(const glm::mat4& matrix)
@@ -100,6 +120,9 @@ void validate(const CreateObject& object)
     if (object.primitive_kind == PrimitiveKind::sphere &&
         (!std::isfinite(object.sphere.radius_meters) || object.sphere.radius_meters <= 0.0F))
         throw std::invalid_argument("Sphere radius must be positive");
+    if (object.primitive_kind == PrimitiveKind::sphere &&
+        !valid_linear_color(object.sphere.fallback_color))
+        throw std::invalid_argument("Sphere fallback color is invalid");
     if (object.camera_kind == CameraKind::perspective)
     {
         const PerspectiveCamera& camera = object.perspective_camera;
@@ -115,9 +138,8 @@ void validate(const CreateObject& object)
     if (object.light_kind == LightKind::directional)
     {
         const DirectionalLight& light = object.directional_light;
-        if (!std::isfinite(light.color.x) || !std::isfinite(light.color.y) ||
-            !std::isfinite(light.color.z))
-            throw std::invalid_argument("Directional light color must be finite");
+        if (!valid_linear_color(light.color))
+            throw std::invalid_argument("Directional light color is invalid");
         if (!std::isfinite(light.intensity) || light.intensity < 0.0F)
             throw std::invalid_argument("Directional light intensity must be non-negative");
     }
@@ -151,6 +173,9 @@ ObjectId EditorState::create_object(CreateObject object)
     if (object.parent != no_object && find_object(object.parent) == nullptr)
         throw std::invalid_argument("Scene object parent does not exist");
     validate(object);
+    if (object.sphere.material_id != no_material &&
+        find_material(object.sphere.material_id) == nullptr)
+        throw std::invalid_argument("Sphere material does not exist");
     const ObjectId id = next_object_id_++;
     SceneObject created;
     created.id = id;
@@ -224,9 +249,77 @@ bool EditorState::set_sphere(ObjectId id, SpherePrimitive sphere)
     candidate.primitive_kind = PrimitiveKind::sphere;
     candidate.sphere = sphere;
     validate(candidate);
-    if (object->sphere.radius_meters == sphere.radius_meters)
+    if (sphere.material_id != no_material && find_material(sphere.material_id) == nullptr)
+        return false;
+    if (object->sphere.radius_meters == sphere.radius_meters &&
+        object->sphere.material_id == sphere.material_id &&
+        equal(object->sphere.fallback_color, sphere.fallback_color))
         return true;
     object->sphere = sphere;
+    advance_document_revision();
+    return true;
+}
+
+MaterialId EditorState::create_material(std::string localized_base_name, Material material)
+{
+    validate_material(material);
+    const MaterialId id = next_material_id_++;
+    material.id = id;
+    material.name =
+        std::move(localized_base_name) + " " + std::to_string(++default_material_name_count_);
+    materials_.push_back(std::move(material));
+    advance_document_revision();
+    return id;
+}
+
+bool EditorState::rename_material(MaterialId id, std::string name)
+{
+    Material* material = find_material_mutable(id);
+    if (material == nullptr)
+        return false;
+    if (material->name == name)
+        return true;
+    material->name = std::move(name);
+    advance_document_revision();
+    return true;
+}
+
+bool EditorState::set_material(MaterialId id, Material material)
+{
+    Material* current = find_material_mutable(id);
+    if (current == nullptr)
+        return false;
+    material.id = id;
+    validate_material(material);
+    if (equal(*current, material))
+        return true;
+    *current = std::move(material);
+    advance_document_revision();
+    return true;
+}
+
+bool EditorState::assign_material(ObjectId id, MaterialId material_id)
+{
+    SceneObject* object = find_object_mutable(id);
+    if (object == nullptr || object->primitive_kind != PrimitiveKind::sphere ||
+        (material_id != no_material && find_material(material_id) == nullptr))
+        return false;
+    if (object->sphere.material_id == material_id)
+        return true;
+    object->sphere.material_id = material_id;
+    advance_document_revision();
+    return true;
+}
+
+bool EditorState::set_sphere_fallback_color(ObjectId id, glm::vec3 linear_color)
+{
+    SceneObject* object = find_object_mutable(id);
+    if (object == nullptr || object->primitive_kind != PrimitiveKind::sphere ||
+        !valid_linear_color(linear_color))
+        return false;
+    if (equal(object->sphere.fallback_color, linear_color))
+        return true;
+    object->sphere.fallback_color = linear_color;
     advance_document_revision();
     return true;
 }
@@ -378,17 +471,36 @@ bool EditorState::delete_object(ObjectId id)
 
 bool EditorState::reset_scene()
 {
-    if (objects_.empty() && next_object_id_ == 1 && default_name_counts_.empty())
+    if (objects_.empty() && materials_.empty() && next_object_id_ == 1 && next_material_id_ == 1 &&
+        default_name_counts_.empty() && default_material_name_count_ == 0)
         return false;
     objects_.clear();
+    materials_.clear();
     selection_ = no_object;
     next_object_id_ = 1;
+    next_material_id_ = 1;
+    default_material_name_count_ = 0;
     default_name_counts_.clear();
     advance_document_revision();
     return true;
 }
 DocumentRevision EditorState::document_revision() const { return document_revision_; }
 const std::vector<SceneObject>& EditorState::objects() const { return objects_; }
+const std::vector<Material>& EditorState::materials() const { return materials_; }
+Material* EditorState::find_material_mutable(MaterialId id)
+{
+    for (Material& material : materials_)
+        if (material.id == id)
+            return &material;
+    return nullptr;
+}
+const Material* EditorState::find_material(MaterialId id) const
+{
+    for (const Material& material : materials_)
+        if (material.id == id)
+            return &material;
+    return nullptr;
+}
 SceneObject* EditorState::find_object_mutable(ObjectId id)
 {
     for (SceneObject& object : objects_)
