@@ -148,12 +148,12 @@ after framebuffer scaling. Dear ImGui presents that texture in the visible edito
 view semantics are already separated from UI ownership, but construction and lifetime of `ViewportRenderer`
 and its GLES resources remain inside `EditorUi`.
 
-Navigation intent is dispatched through `ViewportView`. It changes retained Orbit parameters only while Orbit
-is the active source; a Scene Camera remains authoritative scene data and is never changed by viewport
-navigation. Selection mode constructs a bounded world ray from normalized viewport coordinates and the resolved
-view/projection, then tests enabled, visible spheres by transforming the ray through each authoritative inverse
-world matrix. This preserves exact ellipsoid behavior under non-uniform and reflected scale, safely excludes
-non-invertible candidates, and keeps picking independent of ImGui and GLES.
+Navigation intent is dispatched through `ViewportView`. It changes retained Orbit parameters only while
+Navigation mode and the Orbit source are both active; a Scene Camera remains authoritative scene data and is
+never changed by viewport navigation. Selection mode constructs a bounded world ray from normalized viewport
+coordinates and the resolved view/projection, then tests enabled, visible spheres by transforming the ray
+through each authoritative inverse world matrix. This preserves exact ellipsoid behavior under non-uniform and
+reflected scale, safely excludes non-invertible candidates, and keeps picking independent of ImGui and GLES.
 
 Unlit fallback, Lambert, and Phong use distinct linked GLES3 programs with only their required uniforms.
 Material shading models map to concrete programs rather than a runtime-branched uber-shader; this direction

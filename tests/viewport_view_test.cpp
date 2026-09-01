@@ -75,26 +75,48 @@ TEST_CASE("viewport interaction mode is workspace state")
     CHECK(viewport.interaction_mode() == ai3::ViewportInteractionMode::navigation);
 }
 
-TEST_CASE("navigation dispatch changes only an active orbit source")
+TEST_CASE("navigation dispatch requires navigation mode and an active orbit source")
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene);
     ai3::ViewportView viewport;
     const float initial_yaw = viewport.orbit().yaw_degrees();
+    const float initial_pitch = viewport.orbit().pitch_degrees();
     const float initial_distance = viewport.orbit().distance();
+
+    CHECK_FALSE(viewport.navigate(4.0F, -2.0F));
+    CHECK_FALSE(viewport.zoom(1.0F));
+    CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(initial_yaw));
+    CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(initial_pitch));
+    CHECK(viewport.orbit().distance() == doctest::Approx(initial_distance));
+
+    viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
     REQUIRE(viewport.navigate(4.0F, -2.0F));
     REQUIRE(viewport.zoom(1.0F));
     CHECK(viewport.orbit().yaw_degrees() != doctest::Approx(initial_yaw));
     CHECK(viewport.orbit().distance() != doctest::Approx(initial_distance));
     const float orbit_yaw = viewport.orbit().yaw_degrees();
+    const float orbit_pitch = viewport.orbit().pitch_degrees();
     const float orbit_distance = viewport.orbit().distance();
     const ai3::Transform camera_before = scene.find_object(camera)->transform;
     const ai3::DocumentRevision revision = scene.document_revision();
 
+    viewport.set_interaction_mode(ai3::ViewportInteractionMode::selection);
     REQUIRE(viewport.use_scene_camera(scene, camera));
     CHECK_FALSE(viewport.navigate(10.0F, 10.0F));
     CHECK_FALSE(viewport.zoom(3.0F));
     CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(orbit_yaw));
+    CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(orbit_pitch));
+    CHECK(viewport.orbit().distance() == doctest::Approx(orbit_distance));
+    CHECK(scene.find_object(camera)->transform.position == camera_before.position);
+    CHECK(scene.find_object(camera)->transform.orientation == camera_before.orientation);
+    CHECK(scene.document_revision() == revision);
+
+    viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
+    CHECK_FALSE(viewport.navigate(10.0F, 10.0F));
+    CHECK_FALSE(viewport.zoom(3.0F));
+    CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(orbit_yaw));
+    CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(orbit_pitch));
     CHECK(viewport.orbit().distance() == doctest::Approx(orbit_distance));
     CHECK(scene.find_object(camera)->transform.position == camera_before.position);
     CHECK(scene.find_object(camera)->transform.orientation == camera_before.orientation);

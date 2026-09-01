@@ -39,7 +39,8 @@ does not know which view mode constructed them. This is the local seam for addin
 modes without changing renderer fundamentals; no plugin, renderer abstraction, or additional view mode is
 introduced by this decision.
 
-Navigation intent enters through `ViewportView`, which mutates Orbit only while Orbit is the active source.
+Navigation intent enters through `ViewportView`, which mutates Orbit only while Navigation mode and the Orbit
+source are both active.
 Navigation against a Scene Camera is inert because its transform is authoritative object data, not retained
 viewport navigation state. Selection uses display-independent CPU picking: normalized viewport coordinates and
 the resolved matrices construct a near-to-far world ray, and enabled, visible spheres are tested in their local

@@ -131,6 +131,24 @@ TEST_CASE("nearest visible enabled sphere wins and misses clear to no object")
     CHECK(ai3::pick_sphere(scene, {{20.0F, 0.0F, 0.0F}, {0.0F, 0.0F, -1.0F}}) == ai3::no_object);
 }
 
+TEST_CASE("nearest hit comparison retains the shared world-ray parameter across scales")
+{
+    ai3::EditorState scene;
+    ai3::Transform farther_stretched;
+    farther_stretched.position = {0.0F, 0.0F, -10.0F};
+    farther_stretched.scale = {0.5F, 2.0F, 5.0F};
+    create_sphere(scene, farther_stretched);
+
+    ai3::Transform nearer_compressed;
+    nearer_compressed.position = {0.0F, 0.0F, -4.0F};
+    nearer_compressed.scale = {3.0F, 0.25F, 0.5F};
+    const ai3::ObjectId true_nearest = create_sphere(scene, nearer_compressed);
+
+    // World-space front hits are 5.0 m and 3.5 m respectively. Normalizing each inverse-
+    // transformed local direction would instead compare incompatible parameters 1.0 and 7.0.
+    CHECK(ai3::pick_sphere(scene, {{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, -1.0F}}) == true_nearest);
+}
+
 TEST_CASE("non-invertible sphere transforms fail safely")
 {
     ai3::EditorState scene;

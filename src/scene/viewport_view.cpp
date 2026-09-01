@@ -70,7 +70,7 @@ void ViewportView::set_interaction_mode(ViewportInteractionMode mode) { interact
 
 bool ViewportView::navigate(float yaw_delta_degrees, float pitch_delta_degrees)
 {
-    if (source_ != ViewSource::orbit)
+    if (interaction_mode_ != ViewportInteractionMode::navigation || source_ != ViewSource::orbit)
         return false;
     orbit_.orbit(yaw_delta_degrees, pitch_delta_degrees);
     return true;
@@ -78,7 +78,7 @@ bool ViewportView::navigate(float yaw_delta_degrees, float pitch_delta_degrees)
 
 bool ViewportView::zoom(float wheel_delta)
 {
-    if (source_ != ViewSource::orbit)
+    if (interaction_mode_ != ViewportInteractionMode::navigation || source_ != ViewSource::orbit)
         return false;
     orbit_.zoom(wheel_delta);
     return true;
