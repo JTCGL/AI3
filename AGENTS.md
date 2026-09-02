@@ -86,6 +86,7 @@ PR branch without switching branches.
 - Preserve the normal GitHub Actions workflow; these constraints apply to local Termux agent work.
 
 ## Repository workflow
+- Read `docs/WORKFLOW.md` for durable machine checkout paths, collaboration roles, milestone lifecycle, merge ownership, and new-conversation handoff policy.
 - Treat main as the known-good branch.
 - Do substantial implementation on short-lived feature branches.
 - Open a pull request into main.
@@ -118,7 +119,8 @@ Do not silently change established architecture. Record deliberate architectural
 At the start of a milestone implementation, normally inspect the applicable `AGENTS.md` files,
 `docs/PROJECT.md`, `docs/ROADMAP.md`, relevant ADRs, `docs/MILESTONES.md`, the active brief under
 `docs/milestones/`, relevant implementation and tests, and recent Git history. Repository implementation and
-tests are authoritative when documentation conflicts. Keep current truth, rationale, future plans, and history
+tests are authoritative when documentation conflicts. Keep current truth, rationale, future plans, workflow, and history
 in their respective documentation layers rather than repeating the complete project story in prompts or files.
+New-conversation handoffs should stay concise and point back to repository documentation rather than reproducing it.
 
 More local AGENTS.md files may add directory-specific rules.
