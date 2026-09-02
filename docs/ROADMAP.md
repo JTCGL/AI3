@@ -20,22 +20,27 @@ console, diagnostics, renderer, or other workspace/session state.
 
 ## Transform tools and editing workflow
 
-- Build transform gizmos incrementally: axis translation, planar/free translation, rotation, and scale.
+- Extend the established axis-translation gizmo incrementally with planar/free translation, rotation, and
+  scale only when their interaction semantics are approved.
 - Evolve the established snapshot-backed undo/redo representation to focused deltas/coalescing when edit cost
   requires proportional storage and restoration.
 - Add snapping where its interaction and storage semantics are specified.
-- Apply the established gesture transaction contract to transform gizmos: begin at gesture start, perform live
-  authoritative mutations, commit on completion, and cancel to restore the start.
 - Extend selection to multi-selection and define multi-object transform/editing behavior.
+- Evaluate future editor preferences for overall gizmo size and view-aligned-axis depth behavior. Candidate
+  depth policies include screen-vertical depth motion, disabling/fading strongly aligned axes, and stricter
+  direct-axis-only interaction requiring a view change. The current view-derived fallback plane remains fixed.
+- Define persistent editor preferences separately before adding configurable key bindings or similar options.
 
-AI3 already distinguishes Local, Parent, World, and View reference spaces and centrally resolves world
-transforms. Those semantics are inputs to future tools; they do not by themselves define gizmo interaction,
-snapping, multi-object pivots, or transaction policy.
+AI3's first transform tool provides single-object X/Y/Z translation in Local, Parent, World, and View spaces.
+It establishes frozen gesture-start constraints, one history transaction per drag, and an ImGui overlay with
+approximately constant apparent size. It does not define planar/free translation, rotation, scale, snapping,
+multi-object pivots, a generalized gizmo framework, or persistent preferences. GLES helper rendering remains a
+future fallback only if runtime review finds the overlay inadequate.
 
 The viewport now has explicit Selection and Navigation interaction modes plus a minimal contextual toolbar.
-Selection currently supports only enabled, visible spheres through display-independent CPU picking. Future
-gizmos may extend the established interaction boundary and toolbar context, but no generalized tool or toolbar
-framework is established.
+Selection uses display-independent CPU picking for enabled, visible spheres and gives the selected object's
+translation handles first refusal on pointer-down. Non-sphere objects selected through the Scene Graph can be
+translated. No generalized tool or toolbar framework is established.
 
 ## Viewports and cameras
 

@@ -61,6 +61,7 @@ add_library(ai3_scene STATIC
     src/scene/render_target_size.cpp
     src/scene/scene_math.cpp
     src/scene/sphere_mesh.cpp
+    src/scene/translation_gizmo.cpp
     src/scene/viewport_picking.cpp
     src/scene/viewport_view.cpp
 )
@@ -175,6 +176,7 @@ if(AI3_BUILD_TESTS)
         tests/runtime_paths_test.cpp
         tests/scene_document_test.cpp
         tests/scene_test.cpp
+        tests/translation_gizmo_test.cpp
         tests/ui_identity_test.cpp
         tests/viewport_picking_test.cpp
         tests/viewport_view_test.cpp

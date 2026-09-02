@@ -409,6 +409,30 @@ bool EditorState::set_local_transform(ObjectId id, Transform transform)
     return true;
 }
 
+bool EditorState::set_world_position(ObjectId id, glm::vec3 world_position)
+{
+    SceneObject* object = find_object_mutable(id);
+    if (object == nullptr || !std::isfinite(world_position.x) || !std::isfinite(world_position.y) ||
+        !std::isfinite(world_position.z))
+        return false;
+    glm::vec3 local_position = world_position;
+    if (object->parent_id_ != no_object)
+    {
+        const glm::mat4 parent_world = world_transform_matrix(object->parent_id_);
+        const float determinant = glm::determinant(parent_world);
+        if (!std::isfinite(determinant) || std::abs(determinant) <= 0.000001F)
+            return false;
+        const glm::vec4 local = glm::inverse(parent_world) * glm::vec4{world_position, 1.0F};
+        if (!std::isfinite(local.x) || !std::isfinite(local.y) || !std::isfinite(local.z) ||
+            !std::isfinite(local.w) || std::abs(local.w) <= 0.000001F)
+            return false;
+        local_position = glm::vec3{local} / local.w;
+    }
+    Transform transform = object->transform;
+    transform.position = local_position;
+    return set_local_transform(id, transform);
+}
+
 bool EditorState::reparent_object(ObjectId id, ObjectId new_parent)
 {
     SceneObject* object = find_object_mutable(id);

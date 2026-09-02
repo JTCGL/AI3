@@ -48,6 +48,19 @@ space through the inverse authoritative world transform. Hit ordering uses the s
 non-uniform and reflected scale remain exact; non-invertible candidates are ignored safely. This is a narrow
 sphere operation, not a collision system or generic geometry interface.
 
+Selection mode also owns single-object axis translation. `ViewportView` retains the active translation tool and
+Local/Parent/World/View reference-space selection as non-document workspace state. A visible gizmo handle gets
+first refusal on pointer-down; only a miss proceeds to sphere picking. Acquisition freezes the selected object,
+resolved reference axis and view, constraint method, viewport dimensions, and DPI-derived sizing so later
+workspace changes cannot reinterpret the drag. Scene Camera views use their resolved basis exactly as Orbit
+does. The existing Selection/Navigation enum is not a Move/Rotate/Scale tool enum.
+
+The M16 overlay projects the authoritative pivot and reference axes through the current resolved view. Its
+display-independent drag policy selects once between a ray/axis closest-point solve and, when near parallel, a
+camera-derived plane that contains the axis; plane displacement is projected back onto the axis. This avoids
+switching constraints or accumulating frame deltas during a gesture. The choice establishes neither a general
+gizmo framework nor a permanent preference policy for view-aligned axes.
+
 ## Consequences
 
 Viewport selection, interaction-mode state, Orbit interaction, sphere picking, scene-camera hierarchy
