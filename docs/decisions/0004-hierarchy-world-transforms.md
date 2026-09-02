@@ -31,6 +31,12 @@ Local, Parent, World, and View are separate reference-space concepts for future 
 change local-to-parent storage semantics. Local and Parent bases use resolved scene orientations, World uses
 canonical scene axes, and View uses the independently supplied viewport/editor camera basis.
 
+Axis translation uses a narrower authoritative operation than reparenting. A desired world pivot is converted
+through the inverse authoritative parent world matrix to a new local position; a root uses the desired position
+directly. The operation preserves local orientation, local scale, and hierarchy exactly, and rejects non-finite
+input or a parent determinant at or below the existing `1e-6` invertibility threshold without mutation. It does
+not decompose a desired world matrix or establish a general world-transform setter.
+
 ## Consequences
 
 Render, camera, light, picking, gizmo, and animation consumers must use the authoritative world resolver

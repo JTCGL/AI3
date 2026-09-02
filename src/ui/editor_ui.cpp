@@ -5,6 +5,7 @@
 #include "scene/color_space.h"
 #include "scene/length_units.h"
 #include "scene/scene_math.h"
+#include "scene/translation_gizmo.h"
 #include "scene/viewport_picking.h"
 #include "ui/ui_identity.h"
 
@@ -203,6 +204,7 @@ void EditorUi::request_open_dialog()
 
 void EditorUi::request_save_as_dialog()
 {
+    finish_translation_gesture();
     {
         std::lock_guard<std::mutex> lock(dialog_state_->mutex);
         if (dialog_state_->active)
@@ -218,6 +220,7 @@ void EditorUi::request_save_as_dialog()
 
 void EditorUi::save_document()
 {
+    finish_translation_gesture();
     if (document_session_.document_path().empty())
     {
         request_save_as_dialog();
@@ -316,6 +319,7 @@ void EditorUi::perform_transition(DocumentTransition transition, bool& running)
 
 void EditorUi::request_transition(DocumentTransition transition, bool& running)
 {
+    finish_translation_gesture();
     if (document_session_.request_transition(transition) == TransitionRequestResult::proceed)
         perform_transition(transition, running);
 }
@@ -382,6 +386,7 @@ void EditorUi::draw_main_menu(bool& running)
             ImGui::Separator();
             if (ImGui::MenuItem(localization_.text("action.reset_scene").c_str()))
             {
+                finish_translation_gesture();
                 document_session_.reset_scene();
                 viewport_renderer_.clear_geometry_cache();
                 viewport_view_.reset();
@@ -558,10 +563,37 @@ void EditorUi::draw_editor_toolbar()
     ImGui::SameLine();
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
-    ImGui::TextDisabled(
-        "%s",
-        localization_.text(selection ? "toolbar.selection_context" : "toolbar.navigation_context")
-            .c_str());
+    if (selection)
+    {
+        const std::string translate_label = stable_imgui_label(
+            localization_.text("toolbar.translate"), "viewport_transform_translate");
+        if (ImGui::Selectable(translate_label.c_str(), true, 0, {0.0F, ImGui::GetFrameHeight()}))
+            viewport_view_.set_transform_tool(ViewportTransformTool::translation);
+        ImGui::SameLine();
+        const std::array<std::pair<CoordinateSpace, const char*>, 4> spaces = {
+            {{CoordinateSpace::local, "space.local"},
+             {CoordinateSpace::parent, "space.parent"},
+             {CoordinateSpace::world, "space.world"},
+             {CoordinateSpace::view, "space.view"}}};
+        const std::string space_label = stable_imgui_label(
+            localization_.text("toolbar.reference_space"), "viewport_reference_space");
+        const auto current =
+            std::find_if(spaces.begin(), spaces.end(), [&](const auto& entry)
+                         { return entry.first == viewport_view_.reference_space(); });
+        ImGui::SetNextItemWidth(9.0F * font_size_);
+        if (ImGui::BeginCombo(space_label.c_str(), localization_.text(current->second).c_str()))
+        {
+            for (const auto& [space, key] : spaces)
+            {
+                const bool selected = viewport_view_.reference_space() == space;
+                if (ImGui::Selectable(localization_.text(key).c_str(), selected))
+                    viewport_view_.set_reference_space(space);
+            }
+            ImGui::EndCombo();
+        }
+    }
+    else
+        ImGui::TextDisabled("%s", localization_.text("toolbar.navigation_context").c_str());
     ImGui::End();
 }
 
@@ -1022,9 +1054,119 @@ void EditorUi::draw_viewport()
             viewport_renderer_.render(state_, resolved, requested);
             ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
                          {0.0F, 1.0F}, {1.0F, 0.0F});
+            const ImVec2 minimum = ImGui::GetItemRectMin();
+            const glm::vec2 viewport_size{region.x, region.y};
+            ImGuiIO& io = ImGui::GetIO();
+
+            if (translation_gesture_.has_value())
+            {
+                AxisTranslationGesture& gesture = *translation_gesture_;
+                if (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
+                    state_.find_object(gesture.object_id) == nullptr)
+                    cancel_translation_gesture();
+                else if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                {
+                    const glm::vec2 coordinates{
+                        (io.MousePos.x - minimum.x) / gesture.frozen_viewport_size.x,
+                        (io.MousePos.y - minimum.y) / gesture.frozen_viewport_size.y};
+                    const WorldRay ray = viewport_world_ray(coordinates, gesture.frozen_view);
+                    const std::optional<glm::vec3> desired =
+                        constrained_axis_position(gesture.constraint, ray);
+                    if (desired.has_value() &&
+                        !state_.set_world_position(gesture.object_id, *desired))
+                        cancel_translation_gesture();
+                }
+                else
+                    finish_translation_gesture();
+            }
+
+            const ObjectId gizmo_object = translation_gesture_.has_value()
+                                              ? translation_gesture_->object_id
+                                              : state_.selection();
+            const SceneObject* selected = state_.find_object(gizmo_object);
+            std::array<glm::vec2, 3> axis_starts{};
+            std::array<glm::vec2, 3> axis_ends{};
+            bool gizmo_visible = false;
+            glm::vec3 pivot{};
+            glm::mat3 basis{1.0F};
+            float world_axis_length = 0.0F;
+            if (selected != nullptr &&
+                viewport_view_.interaction_mode() == ViewportInteractionMode::selection)
+            {
+                pivot = state_.world_position(selected->id);
+                basis =
+                    translation_gesture_.has_value()
+                        ? translation_gesture_->frozen_basis
+                        : coordinate_space_basis(state_, selected->id,
+                                                 viewport_view_.reference_space(), resolved.view);
+                const std::optional<float> idle_length =
+                    translation_gesture_.has_value()
+                        ? std::optional<float>{translation_gesture_->frozen_world_axis_length}
+                        : translation_gizmo_world_length(pivot, resolved, 72.0F * ui_scale_,
+                                                         region.y);
+                const std::optional<glm::vec2> projected_pivot =
+                    project_world_to_viewport(pivot, resolved, viewport_size);
+                if (projected_pivot.has_value() && idle_length.has_value())
+                {
+                    world_axis_length = *idle_length;
+                    gizmo_visible = true;
+                    for (std::size_t index = 0; index < 3; ++index)
+                    {
+                        const glm::vec3 direction = basis[index];
+                        const std::optional<glm::vec2> endpoint = project_world_to_viewport(
+                            pivot + direction * world_axis_length, resolved, viewport_size);
+                        if (!endpoint.has_value())
+                        {
+                            gizmo_visible = false;
+                            break;
+                        }
+                        axis_starts[index] = *projected_pivot;
+                        axis_ends[index] = *endpoint;
+                    }
+                }
+            }
+
+            bool acquired_gizmo = false;
+            if (gizmo_visible && !translation_gesture_.has_value() && ImGui::IsItemHovered() &&
+                ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            {
+                const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
+                const float hit_tolerance = 10.0F * ui_scale_;
+                const TranslationAxis axis =
+                    pick_translation_axis(pointer, axis_starts, axis_ends, hit_tolerance);
+                if (axis != TranslationAxis::none)
+                {
+                    const std::size_t index = static_cast<std::size_t>(axis);
+                    const glm::vec2 coordinates{pointer.x / region.x, pointer.y / region.y};
+                    const WorldRay ray = viewport_world_ray(coordinates, resolved);
+                    const glm::vec3 direction = glm::normalize(basis[index]);
+                    const AxisDragConstraint constraint =
+                        begin_axis_drag_constraint(ray, pivot, direction, resolved);
+                    if (constraint.valid && document_session_.history().begin_transaction())
+                    {
+                        translation_gesture_ = AxisTranslationGesture{
+                            selected->id,      axis,          pivot,         direction, basis,
+                            world_axis_length, hit_tolerance, viewport_size, resolved,  constraint};
+                        acquired_gizmo = true;
+                    }
+                }
+            }
+
+            if (gizmo_visible)
+            {
+                ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                constexpr std::array<ImU32, 3> colors = {IM_COL32(230, 70, 70, 255),
+                                                         IM_COL32(70, 210, 90, 255),
+                                                         IM_COL32(70, 130, 240, 255)};
+                for (std::size_t index = 0; index < 3; ++index)
+                    draw_list->AddLine(
+                        {minimum.x + axis_starts[index].x, minimum.y + axis_starts[index].y},
+                        {minimum.x + axis_ends[index].x, minimum.y + axis_ends[index].y},
+                        colors[index], 2.5F * ui_scale_);
+            }
+
             if (ImGui::IsItemHovered())
             {
-                ImGuiIO& io = ImGui::GetIO();
                 if (viewport_view_.interaction_mode() == ViewportInteractionMode::navigation)
                 {
                     if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
@@ -1032,9 +1174,9 @@ void EditorUi::draw_viewport()
                     if (io.MouseWheel != 0.0F)
                         viewport_view_.zoom(io.MouseWheel);
                 }
-                else if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+                else if (!acquired_gizmo && !translation_gesture_.has_value() &&
+                         ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                 {
-                    const ImVec2 minimum = ImGui::GetItemRectMin();
                     const ImVec2 maximum = ImGui::GetItemRectMax();
                     const glm::vec2 coordinates{
                         (io.MousePos.x - minimum.x) / (maximum.x - minimum.x),
@@ -1051,6 +1193,22 @@ void EditorUi::draw_viewport()
         ImGui::End();
     }
     state_.set_panel_visible(EditorPanel::viewport, visible);
+}
+
+void EditorUi::cancel_translation_gesture()
+{
+    if (!translation_gesture_.has_value())
+        return;
+    document_session_.history().cancel_transaction();
+    translation_gesture_.reset();
+}
+
+void EditorUi::finish_translation_gesture()
+{
+    if (!translation_gesture_.has_value())
+        return;
+    document_session_.history().commit_transaction();
+    translation_gesture_.reset();
 }
 
 void EditorUi::draw_console()

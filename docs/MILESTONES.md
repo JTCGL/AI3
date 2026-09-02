@@ -114,3 +114,13 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   dockspace. Selection, mode changes, and navigation remain workspace actions outside Scene Document revision,
   history, dirty state, and persistence. Headless tests cover mode ownership, navigation dispatch, ray
   construction, transformed-sphere picking, eligibility, nearest hits, clipping, and invalid transforms.
+
+## Milestone 16 — Single-object axis translation gizmo
+
+- Added a localized DPI-aware X/Y/Z translation overlay for the selected object in Local, Parent, World, and
+  View spaces, with handle-first Selection-mode ownership and unchanged Orbit-only Navigation behavior.
+- Added a narrow authoritative world-position mutation, frozen gesture-start closest-point/fallback-plane
+  constraints, approximately constant apparent sizing, and one existing history transaction per drag.
+  Headless coverage includes hierarchy and invertibility cases, constraint degeneracies, projection/hit math,
+  history cancellation/Undo/Redo/checkpoints, and workspace-state exclusions. Physical overlay review remains
+  required on Termux ARM64 and T5600 Linux x86-64.

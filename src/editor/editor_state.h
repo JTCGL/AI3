@@ -189,6 +189,9 @@ class EditorState
     bool set_object_enabled(ObjectId id, bool enabled);
     bool set_object_visible(ObjectId id, bool visible);
     bool set_local_transform(ObjectId id, Transform transform);
+    // Places the object pivot in world space while preserving local orientation, scale, and
+    // hierarchy exactly.
+    bool set_world_position(ObjectId id, glm::vec3 world_position);
     // Changes hierarchy transactionally while preserving the object's complete world pose.
     // Returns false for invalid hierarchy or a local affine matrix not faithfully representable as
     // TRS.

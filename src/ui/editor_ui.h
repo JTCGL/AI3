@@ -4,10 +4,12 @@
 #include "localization/localization.h"
 #include "render/viewport_renderer.h"
 #include "scene/length_units.h"
+#include "scene/translation_gizmo.h"
 #include "scene/viewport_view.h"
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -37,6 +39,8 @@ class EditorUi
     void accept_reparent_drop(ObjectId new_parent);
     void apply_pending_reparent();
     void draw_viewport();
+    void finish_translation_gesture();
+    void cancel_translation_gesture();
     void draw_object_inspector();
     void draw_material_editor();
     void draw_console();
@@ -68,5 +72,6 @@ class EditorUi
     bool show_material_editor_ = false;
     MaterialId active_material_id_ = no_material;
     std::pair<ObjectId, ObjectId> pending_reparent_ = {no_object, no_object};
+    std::optional<AxisTranslationGesture> translation_gesture_;
 };
 } // namespace ai3
