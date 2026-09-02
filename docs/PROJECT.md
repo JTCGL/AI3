@@ -44,7 +44,8 @@ split is:
   semantic object and material data, undo/redo transactions, document revision/session workflow, transactional Scene Document
   serialization/filesystem I/O, panel visibility, layout-reset intent, and console data.
 - `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
-  sizing, orbit view construction, and viewport-view selection/resolution.
+  sizing, orbit view construction, viewport-view selection/resolution and interaction mode, and sphere
+  picking.
 - `localization`: external resource discovery and UTF-8 string lookup.
 - `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
 - `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, and the
@@ -132,6 +133,8 @@ transform storage semantics. See [ADR 0004](decisions/0004-hierarchy-world-trans
 The application has one viewport with display-independent `ViewportView` state outside Dear ImGui. Its source
 is Orbit or Scene Camera. Orbit state remains independent of scene hierarchy. Scene-camera selection belongs
 to the viewport, not to a global active-camera concept, and currently accepts perspective-camera objects only.
+Its independent interaction mode is Selection or Navigation and is workspace state excluded from document
+revision, dirty state, history, and persistence.
 
 Views are resolved on demand from current state. Scene-camera resolution uses the authoritative resolved world
 position/orientation, current projection parameters, and current viewport aspect ratio. Deleting the selected
@@ -144,6 +147,13 @@ paths. The renderer draws the scene into its GLES color/depth target, sized from
 after framebuffer scaling. Dear ImGui presents that texture in the visible editor window. Display-independent
 view semantics are already separated from UI ownership, but construction and lifetime of `ViewportRenderer`
 and its GLES resources remain inside `EditorUi`.
+
+Navigation intent is dispatched through `ViewportView`. It changes retained Orbit parameters only while
+Navigation mode and the Orbit source are both active; a Scene Camera remains authoritative scene data and is
+never changed by viewport navigation. Selection mode constructs a bounded world ray from normalized viewport
+coordinates and the resolved view/projection, then tests enabled, visible spheres by transforming the ray
+through each authoritative inverse world matrix. This preserves exact ellipsoid behavior under non-uniform and
+reflected scale, safely excludes non-invertible candidates, and keeps picking independent of ImGui and GLES.
 
 Unlit fallback, Lambert, and Phong use distinct linked GLES3 programs with only their required uniforms.
 Material shading models map to concrete programs rather than a runtime-branched uber-shader; this direction
@@ -161,7 +171,11 @@ SDL window display scale is the UI-scale source of truth. Scale changes rebuild 
 derive style metrics from unscaled defaults without replacing editor or docking state. See
 [ADR 0002](decisions/0002-localization-and-ui-scale.md).
 
-The Edit menu provides localized Undo and Redo with enabled states and Ctrl+Z/Ctrl+Shift+Z shortcuts. Current
+The Edit menu provides localized Undo and Redo with enabled states and Ctrl+Z/Ctrl+Shift+Z shortcuts. A
+localized, editor-owned toolbar occupies a DPI-scaled main-viewport sidebar directly below the menu and reserves
+the remaining work area for the persistent dockspace. Its mutually exclusive Selection and Navigation controls
+drive the viewport interaction mode and leave a narrow contextual region for later approved mode-specific
+controls. It is not a dockable panel or a generalized toolbar/tool framework. Current
 name, numeric, color, and transform controls group one ImGui interaction into one transaction. The docked shell
 contains Scene Graph, Viewport, Object Inspector, and Console panels. Normal Dear ImGui `.ini` persistence owns
 user layout after first-use construction; its `imgui.ini` is stored beside the running executable rather than

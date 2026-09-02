@@ -106,3 +106,11 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   with sRGB-facing controls and explicit output encoding, and strict Scene Document v2/v1 migration integrated
   with Undo/Redo, dirty state, persistence, and headless tests. Runtime verification passed on Termux ARM64 and
   T5600 Linux x86-64, and GitHub Actions passed.
+
+## Milestone 15 — Viewport interaction modes, object picking, and minimal editor toolbar
+
+- Added independent Selection and Navigation viewport interaction modes, source-aware Orbit navigation,
+  display-independent inverse-local CPU sphere picking, and a localized DPI-aware editor toolbar above the
+  dockspace. Selection, mode changes, and navigation remain workspace actions outside Scene Document revision,
+  history, dirty state, and persistence. Headless tests cover mode ownership, navigation dispatch, ray
+  construction, transformed-sphere picking, eligibility, nearest hits, clipping, and invalid transforms.
