@@ -168,9 +168,10 @@ through each authoritative inverse world matrix. This preserves exact ellipsoid 
 reflected scale, safely excludes non-invertible candidates, and keeps picking independent of ImGui and GLES.
 
 The translation gizmo is a Dear ImGui viewport overlay, while projection, axis hit testing, apparent-size
-calculation, and drag constraints are display-independent scene logic. Idle axes derive world length from
-resolved depth and projection to remain approximately constant in screen pixels. Gesture size is frozen until
-completion or cancellation. Dragging normally uses a closest-point ray/axis solve; a near-parallel axis chooses
+construction, viewport-geometry validation, and drag constraints are display-independent scene logic. Projected
+axis directions are normalized to a DPI-derived screen-space length, which is frozen for a gesture even while
+its pivot changes depth. A material change to the frozen viewport rectangle safely cancels the gesture rather
+than mixing coordinate frames. Dragging normally uses a closest-point ray/axis solve; a near-parallel axis chooses
 once at acquisition a view-derived plane containing that axis, intersects subsequent pointer rays with that
 plane, and projects displacement back onto the axis. One gesture owns one existing `EditorHistory` transaction:
 live changes participate in dirty protection, release commits, Escape or unsafe mutation cancels/restores, and

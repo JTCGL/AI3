@@ -1055,20 +1055,25 @@ void EditorUi::draw_viewport()
             ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
                          {0.0F, 1.0F}, {1.0F, 0.0F});
             const ImVec2 minimum = ImGui::GetItemRectMin();
+            const glm::vec2 viewport_origin{minimum.x, minimum.y};
             const glm::vec2 viewport_size{region.x, region.y};
             ImGuiIO& io = ImGui::GetIO();
 
             if (translation_gesture_.has_value())
             {
                 AxisTranslationGesture& gesture = *translation_gesture_;
-                if (ImGui::IsKeyPressed(ImGuiKey_Escape) ||
+                if (!viewport_geometry_matches(gesture.frozen_viewport_origin,
+                                               gesture.frozen_viewport_size, viewport_origin,
+                                               viewport_size) ||
+                    ImGui::IsKeyPressed(ImGuiKey_Escape) ||
                     state_.find_object(gesture.object_id) == nullptr)
                     cancel_translation_gesture();
                 else if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
                 {
-                    const glm::vec2 coordinates{
-                        (io.MousePos.x - minimum.x) / gesture.frozen_viewport_size.x,
-                        (io.MousePos.y - minimum.y) / gesture.frozen_viewport_size.y};
+                    const glm::vec2 coordinates{(io.MousePos.x - gesture.frozen_viewport_origin.x) /
+                                                    gesture.frozen_viewport_size.x,
+                                                (io.MousePos.y - gesture.frozen_viewport_origin.y) /
+                                                    gesture.frozen_viewport_size.y};
                     const WorldRay ray = viewport_world_ray(coordinates, gesture.frozen_view);
                     const std::optional<glm::vec3> desired =
                         constrained_axis_position(gesture.constraint, ray);
@@ -1084,12 +1089,9 @@ void EditorUi::draw_viewport()
                                               ? translation_gesture_->object_id
                                               : state_.selection();
             const SceneObject* selected = state_.find_object(gizmo_object);
-            std::array<glm::vec2, 3> axis_starts{};
-            std::array<glm::vec2, 3> axis_ends{};
-            bool gizmo_visible = false;
+            std::optional<ProjectedTranslationGizmo> projected_gizmo;
             glm::vec3 pivot{};
             glm::mat3 basis{1.0F};
-            float world_axis_length = 0.0F;
             if (selected != nullptr &&
                 viewport_view_.interaction_mode() == ViewportInteractionMode::selection)
             {
@@ -1099,41 +1101,24 @@ void EditorUi::draw_viewport()
                         ? translation_gesture_->frozen_basis
                         : coordinate_space_basis(state_, selected->id,
                                                  viewport_view_.reference_space(), resolved.view);
-                const std::optional<float> idle_length =
+                const float screen_axis_length =
                     translation_gesture_.has_value()
-                        ? std::optional<float>{translation_gesture_->frozen_world_axis_length}
-                        : translation_gizmo_world_length(pivot, resolved, 72.0F * ui_scale_,
-                                                         region.y);
-                const std::optional<glm::vec2> projected_pivot =
-                    project_world_to_viewport(pivot, resolved, viewport_size);
-                if (projected_pivot.has_value() && idle_length.has_value())
-                {
-                    world_axis_length = *idle_length;
-                    gizmo_visible = true;
-                    for (std::size_t index = 0; index < 3; ++index)
-                    {
-                        const glm::vec3 direction = basis[index];
-                        const std::optional<glm::vec2> endpoint = project_world_to_viewport(
-                            pivot + direction * world_axis_length, resolved, viewport_size);
-                        if (!endpoint.has_value())
-                        {
-                            gizmo_visible = false;
-                            break;
-                        }
-                        axis_starts[index] = *projected_pivot;
-                        axis_ends[index] = *endpoint;
-                    }
-                }
+                        ? translation_gesture_->frozen_screen_axis_length
+                        : 72.0F * ui_scale_;
+                const ResolvedViewportView& presentation_view =
+                    translation_gesture_.has_value() ? translation_gesture_->frozen_view : resolved;
+                projected_gizmo = project_translation_gizmo(pivot, basis, presentation_view,
+                                                            viewport_size, screen_axis_length);
             }
 
             bool acquired_gizmo = false;
-            if (gizmo_visible && !translation_gesture_.has_value() && ImGui::IsItemHovered() &&
-                ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
+                ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
                 const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
                 const float hit_tolerance = 10.0F * ui_scale_;
                 const TranslationAxis axis =
-                    pick_translation_axis(pointer, axis_starts, axis_ends, hit_tolerance);
+                    pick_translation_axis(pointer, *projected_gizmo, hit_tolerance);
                 if (axis != TranslationAxis::none)
                 {
                     const std::size_t index = static_cast<std::size_t>(axis);
@@ -1144,25 +1129,34 @@ void EditorUi::draw_viewport()
                         begin_axis_drag_constraint(ray, pivot, direction, resolved);
                     if (constraint.valid && document_session_.history().begin_transaction())
                     {
-                        translation_gesture_ = AxisTranslationGesture{
-                            selected->id,      axis,          pivot,         direction, basis,
-                            world_axis_length, hit_tolerance, viewport_size, resolved,  constraint};
+                        translation_gesture_ =
+                            AxisTranslationGesture{selected->id,  axis,
+                                                   pivot,         direction,
+                                                   basis,         72.0F * ui_scale_,
+                                                   hit_tolerance, viewport_origin,
+                                                   viewport_size, resolved,
+                                                   constraint};
                         acquired_gizmo = true;
                     }
                 }
             }
 
-            if (gizmo_visible)
+            if (projected_gizmo.has_value())
             {
                 ImDrawList* draw_list = ImGui::GetWindowDrawList();
                 constexpr std::array<ImU32, 3> colors = {IM_COL32(230, 70, 70, 255),
                                                          IM_COL32(70, 210, 90, 255),
                                                          IM_COL32(70, 130, 240, 255)};
                 for (std::size_t index = 0; index < 3; ++index)
-                    draw_list->AddLine(
-                        {minimum.x + axis_starts[index].x, minimum.y + axis_starts[index].y},
-                        {minimum.x + axis_ends[index].x, minimum.y + axis_ends[index].y},
-                        colors[index], 2.5F * ui_scale_);
+                {
+                    if (!projected_gizmo->endpoints[index].has_value())
+                        continue;
+                    draw_list->AddLine({minimum.x + projected_gizmo->pivot.x,
+                                        minimum.y + projected_gizmo->pivot.y},
+                                       {minimum.x + projected_gizmo->endpoints[index]->x,
+                                        minimum.y + projected_gizmo->endpoints[index]->y},
+                                       colors[index], 2.5F * ui_scale_);
+                }
             }
 
             if (ImGui::IsItemHovered())

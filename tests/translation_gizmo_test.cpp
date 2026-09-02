@@ -117,20 +117,51 @@ TEST_CASE("gizmo sizing projection and hit testing are display independent")
     ai3::EditorState state;
     ai3::ViewportView viewport;
     const ai3::ResolvedViewportView view = viewport.resolve(state, 1.0F);
-    const auto near_length = ai3::translation_gizmo_world_length({}, view, 72.0F, 600.0F);
+    const glm::mat3 basis{1.0F};
+    const auto near_gizmo =
+        ai3::project_translation_gizmo({}, basis, view, {800.0F, 600.0F}, 72.0F);
     const glm::vec3 farther = glm::normalize(view.eye_position) * -4.0F;
-    const auto far_length = ai3::translation_gizmo_world_length(farther, view, 72.0F, 600.0F);
-    REQUIRE(near_length.has_value());
-    REQUIRE(far_length.has_value());
-    CHECK(*far_length > *near_length);
-    CHECK_FALSE(ai3::translation_gizmo_world_length({}, view, 0.0F, 600.0F).has_value());
-    const auto pivot = ai3::project_world_to_viewport({}, view, {800.0F, 600.0F});
-    REQUIRE(pivot.has_value());
-    std::array<glm::vec2, 3> starts{*pivot, *pivot, *pivot};
-    std::array<glm::vec2, 3> ends{*pivot + glm::vec2{50.0F, 0.0F}, *pivot + glm::vec2{0.0F, 50.0F},
-                                  *pivot + glm::vec2{-40.0F, -40.0F}};
-    CHECK(ai3::pick_translation_axis(*pivot + glm::vec2{30.0F, 2.0F}, starts, ends, 8.0F) ==
-          ai3::TranslationAxis::x);
+    const auto far_gizmo =
+        ai3::project_translation_gizmo(farther, basis, view, {800.0F, 600.0F}, 72.0F);
+    REQUIRE(near_gizmo.has_value());
+    REQUIRE(far_gizmo.has_value());
+    for (std::size_t index = 0; index < 3; ++index)
+    {
+        REQUIRE(near_gizmo->endpoints[index].has_value());
+        REQUIRE(far_gizmo->endpoints[index].has_value());
+        CHECK(glm::length(*near_gizmo->endpoints[index] - near_gizmo->pivot) ==
+              doctest::Approx(72.0F));
+        CHECK(glm::length(*far_gizmo->endpoints[index] - far_gizmo->pivot) ==
+              doctest::Approx(72.0F));
+    }
+    CHECK(ai3::pick_translation_axis(
+              near_gizmo->pivot +
+                  glm::normalize(*near_gizmo->endpoints[0] - near_gizmo->pivot) * 30.0F,
+              *near_gizmo, 8.0F) == ai3::TranslationAxis::x);
+
+    const glm::vec3 view_aligned = glm::transpose(glm::mat3{view.view})[2];
+    const glm::mat3 collapsed_basis{view_aligned, view_aligned, view_aligned};
+    const auto collapsed =
+        ai3::project_translation_gizmo({}, collapsed_basis, view, {800.0F, 600.0F}, 72.0F);
+    REQUIRE(collapsed.has_value());
+    CHECK_FALSE(collapsed->endpoints[0].has_value());
+    CHECK(ai3::pick_translation_axis(collapsed->pivot, *collapsed, 8.0F) ==
+          ai3::TranslationAxis::none);
+    CHECK_FALSE(
+        ai3::project_translation_gizmo({}, basis, view, {800.0F, 600.0F}, 0.0F).has_value());
+    CHECK_FALSE(ai3::project_translation_gizmo(
+                    {}, basis, view, {std::numeric_limits<float>::quiet_NaN(), 600.0F}, 72.0F)
+                    .has_value());
+}
+
+TEST_CASE("frozen viewport geometry rejects material coordinate frame changes")
+{
+    CHECK(ai3::viewport_geometry_matches({100.0F, 200.0F}, {800.0F, 600.0F}, {100.25F, 199.75F},
+                                         {800.25F, 600.25F}));
+    CHECK_FALSE(ai3::viewport_geometry_matches({100.0F, 200.0F}, {800.0F, 600.0F}, {101.0F, 200.0F},
+                                               {800.0F, 600.0F}));
+    CHECK_FALSE(ai3::viewport_geometry_matches({100.0F, 200.0F}, {800.0F, 600.0F}, {100.0F, 200.0F},
+                                               {799.0F, 600.0F}));
 }
 
 TEST_CASE("translation gesture is one history transaction with checkpoint semantics")

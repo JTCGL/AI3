@@ -11,11 +11,14 @@ namespace ai3
 namespace
 {
 constexpr float epsilon = 0.000001F;
+constexpr float projected_direction_epsilon = 0.01F;
 
 bool finite(glm::vec3 value)
 {
     return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
 }
+
+bool finite(glm::vec2 value) { return std::isfinite(value.x) && std::isfinite(value.y); }
 
 std::optional<float> line_parameter(const WorldRay& ray, glm::vec3 pivot, glm::vec3 axis)
 {
@@ -104,54 +107,65 @@ std::optional<glm::vec3> constrained_axis_position(const AxisDragConstraint& con
     return finite(position) ? std::optional<glm::vec3>{position} : std::nullopt;
 }
 
-std::optional<float> translation_gizmo_world_length(glm::vec3 pivot,
-                                                    const ResolvedViewportView& view,
-                                                    float desired_pixels,
-                                                    float viewport_height_pixels)
-{
-    if (!finite(pivot) || !std::isfinite(desired_pixels) || desired_pixels <= 0.0F ||
-        !std::isfinite(viewport_height_pixels) || viewport_height_pixels <= 0.0F)
-        return std::nullopt;
-    const glm::vec4 view_pivot = view.view * glm::vec4{pivot, 1.0F};
-    const float depth = std::abs(view_pivot.z);
-    const float projection_scale = std::abs(view.projection[1][1]);
-    if (!std::isfinite(depth) || depth <= epsilon || !std::isfinite(projection_scale) ||
-        projection_scale <= epsilon)
-        return std::nullopt;
-    const float length =
-        (2.0F * desired_pixels / viewport_height_pixels) * depth / projection_scale;
-    return std::isfinite(length) ? std::optional<float>{length} : std::nullopt;
-}
-
 std::optional<glm::vec2> project_world_to_viewport(glm::vec3 point,
                                                    const ResolvedViewportView& view,
                                                    glm::vec2 viewport_size)
 {
     const glm::vec4 clip = view.projection * view.view * glm::vec4{point, 1.0F};
     if (!finite(point) || !std::isfinite(clip.x) || !std::isfinite(clip.y) ||
-        !std::isfinite(clip.w) || clip.w <= epsilon || viewport_size.x <= 0.0F ||
-        viewport_size.y <= 0.0F)
+        !std::isfinite(clip.w) || clip.w <= epsilon || !finite(viewport_size) ||
+        viewport_size.x <= 0.0F || viewport_size.y <= 0.0F)
         return std::nullopt;
     const glm::vec2 normalized_device{clip.x / clip.w, clip.y / clip.w};
     return glm::vec2{(normalized_device.x * 0.5F + 0.5F) * viewport_size.x,
                      (0.5F - normalized_device.y * 0.5F) * viewport_size.y};
 }
 
-TranslationAxis pick_translation_axis(glm::vec2 pointer, const std::array<glm::vec2, 3>& starts,
-                                      const std::array<glm::vec2, 3>& ends, float tolerance)
+std::optional<ProjectedTranslationGizmo>
+project_translation_gizmo(glm::vec3 pivot, const glm::mat3& basis, const ResolvedViewportView& view,
+                          glm::vec2 viewport_size, float screen_axis_length)
 {
+    if (!std::isfinite(screen_axis_length) || screen_axis_length <= 0.0F)
+        return std::nullopt;
+    const std::optional<glm::vec2> projected_pivot =
+        project_world_to_viewport(pivot, view, viewport_size);
+    if (!projected_pivot.has_value())
+        return std::nullopt;
+    ProjectedTranslationGizmo result;
+    result.pivot = *projected_pivot;
+    for (std::size_t index = 0; index < result.endpoints.size(); ++index)
+    {
+        const std::optional<glm::vec2> projected_axis =
+            project_world_to_viewport(pivot + basis[index], view, viewport_size);
+        if (!projected_axis.has_value())
+            continue;
+        const glm::vec2 direction = *projected_axis - result.pivot;
+        const float length = glm::length(direction);
+        if (!std::isfinite(length) || length <= projected_direction_epsilon)
+            continue;
+        result.endpoints[index] = result.pivot + direction * (screen_axis_length / length);
+    }
+    return result;
+}
+
+TranslationAxis pick_translation_axis(glm::vec2 pointer, const ProjectedTranslationGizmo& gizmo,
+                                      float tolerance)
+{
+    if (!std::isfinite(tolerance) || tolerance < 0.0F)
+        return TranslationAxis::none;
     float best = tolerance;
     TranslationAxis result = TranslationAxis::none;
     for (std::size_t index = 0; index < 3; ++index)
     {
-        const glm::vec2 segment = ends[index] - starts[index];
+        if (!gizmo.endpoints[index].has_value())
+            continue;
+        const glm::vec2 segment = *gizmo.endpoints[index] - gizmo.pivot;
         const float squared_length = glm::dot(segment, segment);
         const float amount =
             squared_length > epsilon
-                ? std::clamp(glm::dot(pointer - starts[index], segment) / squared_length, 0.0F,
-                             1.0F)
+                ? std::clamp(glm::dot(pointer - gizmo.pivot, segment) / squared_length, 0.0F, 1.0F)
                 : 0.0F;
-        const float distance = glm::length(pointer - (starts[index] + segment * amount));
+        const float distance = glm::length(pointer - (gizmo.pivot + segment * amount));
         if (distance <= best)
         {
             best = distance;
@@ -159,5 +173,20 @@ TranslationAxis pick_translation_axis(glm::vec2 pointer, const std::array<glm::v
         }
     }
     return result;
+}
+
+bool viewport_geometry_matches(glm::vec2 frozen_origin, glm::vec2 frozen_size,
+                               glm::vec2 current_origin, glm::vec2 current_size)
+{
+    if (!std::isfinite(frozen_origin.x) || !std::isfinite(frozen_origin.y) ||
+        !std::isfinite(frozen_size.x) || !std::isfinite(frozen_size.y) ||
+        !std::isfinite(current_origin.x) || !std::isfinite(current_origin.y) ||
+        !std::isfinite(current_size.x) || !std::isfinite(current_size.y))
+        return false;
+    constexpr float geometry_tolerance = 0.5F;
+    return glm::all(glm::lessThanEqual(glm::abs(frozen_origin - current_origin),
+                                       glm::vec2{geometry_tolerance})) &&
+           glm::all(glm::lessThanEqual(glm::abs(frozen_size - current_size),
+                                       glm::vec2{geometry_tolerance}));
 }
 } // namespace ai3

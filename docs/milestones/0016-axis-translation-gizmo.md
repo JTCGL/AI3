@@ -11,13 +11,15 @@ object, without generalizing the viewport tool, toolbar, rendering, or input arc
   selected transformable scene object is eligible; existing viewport picking remains sphere-specific. A gizmo
   handle gets pointer-down ownership before ordinary selection, while Navigation remains effective only for an
   Orbit view.
-- Display-independent logic resolves the chosen reference-space axis, projects overlay endpoints, computes
-  approximately constant screen-space size, hit-tests a distinct invisible tolerance, and constrains pointer
-  rays. The overlay itself is drawn through Dear ImGui rather than duplicated as GLES helper geometry.
+- Display-independent logic resolves the chosen reference-space axis, normalizes projected directions to a
+  DPI-derived screen-space length, hit-tests a distinct invisible tolerance, validates the frozen viewport
+  coordinate frame, and constrains pointer rays. The overlay itself is drawn through Dear ImGui rather than
+  duplicated as GLES helper geometry. Collapsed/view-aligned projected axes are omitted safely.
 - Acquisition freezes the object, axis/basis, starting world pivot, resolved view, viewport dimensions,
   DPI-derived size, and constraint method. Every live result is derived from that gesture-start state rather
-  than accumulated frame deltas. Changing workspace controls cannot reinterpret an active drag, and apparent
-  size does not rescale until the gesture ends.
+  than accumulated frame deltas. Changing workspace controls cannot reinterpret an active drag, and the frozen
+  pixel length does not rescale as the pivot changes depth. A material viewport-origin or size change
+  cancels/restores the gesture rather than combining frozen dimensions with a different coordinate origin.
 - The normal constraint is the closest-point parameter between pointer ray and world axis. When the two are
   near parallel at acquisition, the fixed fallback selects the better-conditioned of camera-right- and
   camera-up-derived planes containing the axis, intersects pointer rays with that plane, and projects motion
@@ -36,7 +38,8 @@ object, without generalizing the viewport tool, toolbar, rendering, or input arc
 `bash scripts/check.sh` builds the graphical application and runs all tests. Headless regression coverage
 includes root and translated/rotated/uniform/non-uniform/reflected parent placement, singular and invalid
 failure, exact preserved local orientation/scale/hierarchy, semantic no-ops, all four established bases,
-normal/fallback/degenerate constraints, gesture-start determinism, projection/apparent sizing/hit testing,
+normal/fallback/degenerate constraints, gesture-start determinism, near/far and frozen-depth screen sizing,
+collapsed projection, hit testing, viewport-geometry invalidation,
 single-transaction live edits, cancellation, Undo/Redo/checkpoint dirty behavior, and workspace exclusions.
 
 Physical review remains required on Termux ARM64 and T5600 Linux x86-64 for overlay appearance, DPI behavior,
