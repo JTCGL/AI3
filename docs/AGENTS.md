@@ -9,6 +9,7 @@ Document decisions that future implementers or agents should not have to redisco
 - `ROADMAP.md` records planned or deferred areas and known boundaries without promising fixed ordering.
 - `MILESTONES.md` is a concise historical ledger, not current architectural authority.
 - `milestones/` holds approved milestone briefs and acceptance criteria when useful.
+- `WORKFLOW.md` records stable development operations, physical checkout paths, collaboration roles, merge ownership, milestone lifecycle, and handoff policy.
 
 When documentation conflicts, verify against repository implementation, tests, and Git history and correct the
 documentation. Avoid copying ADR rationale or milestone history into `PROJECT.md`.
