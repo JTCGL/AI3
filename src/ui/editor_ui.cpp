@@ -565,9 +565,13 @@ void EditorUi::draw_editor_toolbar()
     ImGui::SameLine();
     if (selection)
     {
-        const std::string translate_label = stable_imgui_label(
-            localization_.text("toolbar.translate"), "viewport_transform_translate");
-        if (ImGui::Selectable(translate_label.c_str(), true, 0, {0.0F, ImGui::GetFrameHeight()}))
+        const std::string& translate_text = localization_.text("toolbar.translate");
+        const std::string translate_label =
+            stable_imgui_label(translate_text, "viewport_transform_translate");
+        const ImVec2 translate_size{ImGui::CalcTextSize(translate_text.c_str()).x +
+                                        ImGui::GetStyle().FramePadding.x * 2.0F,
+                                    ImGui::GetFrameHeight()};
+        if (ImGui::Selectable(translate_label.c_str(), true, 0, translate_size))
             viewport_view_.set_transform_tool(ViewportTransformTool::translation);
         ImGui::SameLine();
         const std::array<std::pair<CoordinateSpace, const char*>, 4> spaces = {
@@ -575,13 +579,14 @@ void EditorUi::draw_editor_toolbar()
              {CoordinateSpace::parent, "space.parent"},
              {CoordinateSpace::world, "space.world"},
              {CoordinateSpace::view, "space.view"}}};
-        const std::string space_label = stable_imgui_label(
-            localization_.text("toolbar.reference_space"), "viewport_reference_space");
+        ImGui::Text("%s:", localization_.text("toolbar.reference_space").c_str());
+        ImGui::SameLine();
+        constexpr const char* space_combo_id = "###viewport_reference_space";
         const auto current =
             std::find_if(spaces.begin(), spaces.end(), [&](const auto& entry)
                          { return entry.first == viewport_view_.reference_space(); });
         ImGui::SetNextItemWidth(9.0F * font_size_);
-        if (ImGui::BeginCombo(space_label.c_str(), localization_.text(current->second).c_str()))
+        if (ImGui::BeginCombo(space_combo_id, localization_.text(current->second).c_str()))
         {
             for (const auto& [space, key] : spaces)
             {
@@ -1112,13 +1117,19 @@ void EditorUi::draw_viewport()
             }
 
             bool acquired_gizmo = false;
+            TranslationAxis hovered_axis = TranslationAxis::none;
+            if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
+                ImGui::IsItemHovered())
+            {
+                const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
+                hovered_axis = pick_translation_axis(pointer, *projected_gizmo, 10.0F * ui_scale_);
+            }
             if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
                 ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
                 const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
                 const float hit_tolerance = 10.0F * ui_scale_;
-                const TranslationAxis axis =
-                    pick_translation_axis(pointer, *projected_gizmo, hit_tolerance);
+                const TranslationAxis axis = hovered_axis;
                 if (axis != TranslationAxis::none)
                 {
                     const std::size_t index = static_cast<std::size_t>(axis);
@@ -1144,18 +1155,39 @@ void EditorUi::draw_viewport()
             if (projected_gizmo.has_value())
             {
                 ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                constexpr std::array<ImU32, 3> colors = {IM_COL32(230, 70, 70, 255),
-                                                         IM_COL32(70, 210, 90, 255),
-                                                         IM_COL32(70, 130, 240, 255)};
+                constexpr std::array<ImU32, 3> inactive_colors = {IM_COL32(150, 55, 55, 255),
+                                                                  IM_COL32(50, 140, 65, 255),
+                                                                  IM_COL32(55, 85, 155, 255)};
+                constexpr std::array<ImU32, 3> highlighted_colors = {IM_COL32(255, 90, 90, 255),
+                                                                     IM_COL32(90, 240, 105, 255),
+                                                                     IM_COL32(90, 150, 255, 255)};
+                const TranslationAxis highlighted_axis = translation_gesture_.has_value()
+                                                             ? translation_gesture_->selected_axis
+                                                             : hovered_axis;
+                const float arrow_length = 10.0F * ui_scale_;
+                const float arrow_half_width = 5.0F * ui_scale_;
                 for (std::size_t index = 0; index < 3; ++index)
                 {
                     if (!projected_gizmo->endpoints[index].has_value())
                         continue;
-                    draw_list->AddLine({minimum.x + projected_gizmo->pivot.x,
-                                        minimum.y + projected_gizmo->pivot.y},
-                                       {minimum.x + projected_gizmo->endpoints[index]->x,
-                                        minimum.y + projected_gizmo->endpoints[index]->y},
-                                       colors[index], 2.5F * ui_scale_);
+                    const ImU32 color = static_cast<std::size_t>(highlighted_axis) == index
+                                            ? highlighted_colors[index]
+                                            : inactive_colors[index];
+                    const glm::vec2 endpoint = *projected_gizmo->endpoints[index];
+                    const glm::vec2 direction = glm::normalize(endpoint - projected_gizmo->pivot);
+                    const glm::vec2 perpendicular{-direction.y, direction.x};
+                    const glm::vec2 arrow_base = endpoint - direction * arrow_length;
+                    const ImVec2 screen_pivot{minimum.x + projected_gizmo->pivot.x,
+                                              minimum.y + projected_gizmo->pivot.y};
+                    const ImVec2 screen_endpoint{minimum.x + endpoint.x, minimum.y + endpoint.y};
+                    draw_list->AddLine(screen_pivot, screen_endpoint, color, 2.5F * ui_scale_);
+                    draw_list->AddTriangleFilled(
+                        screen_endpoint,
+                        {minimum.x + arrow_base.x + perpendicular.x * arrow_half_width,
+                         minimum.y + arrow_base.y + perpendicular.y * arrow_half_width},
+                        {minimum.x + arrow_base.x - perpendicular.x * arrow_half_width,
+                         minimum.y + arrow_base.y - perpendicular.y * arrow_half_width},
+                        color);
                 }
             }
 

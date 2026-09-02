@@ -167,8 +167,10 @@ coordinates and the resolved view/projection, then tests enabled, visible sphere
 through each authoritative inverse world matrix. This preserves exact ellipsoid behavior under non-uniform and
 reflected scale, safely excludes non-invertible candidates, and keeps picking independent of ImGui and GLES.
 
-The translation gizmo is a Dear ImGui viewport overlay, while projection, axis hit testing, apparent-size
-construction, viewport-geometry validation, and drag constraints are display-independent scene logic. Projected
+The translation gizmo is a Dear ImGui viewport overlay with DPI-scaled arrowheads. Each axis retains a darker
+red, green, or blue identity while idle; hover and the acquired axis use brighter variants. Projection, axis hit
+testing, apparent-size construction, viewport-geometry validation, and drag constraints are display-independent
+scene logic. Projected
 axis directions are normalized to a DPI-derived screen-space length, which is frozen for a gesture even while
 its pivot changes depth. A material change to the frozen viewport rectangle safely cancels the gesture rather
 than mixing coordinate frames. Dragging normally uses a closest-point ray/axis solve; a near-parallel axis chooses
@@ -176,6 +178,11 @@ once at acquisition a view-derived plane containing that axis, intersects subseq
 plane, and projects displacement back onto the axis. One gesture owns one existing `EditorHistory` transaction:
 live changes participate in dirty protection, release commits, Escape or unsafe mutation cancels/restores, and
 semantic no-ops create no entry.
+
+All currently transformable scene objects receive the translation gizmo. Consequently, translating a
+Directional Light changes its authoritative position but not current lighting, which derives direction from
+orientation; future positional light types will require translation. Tool applicability may be refined when a
+concrete tool semantic requires it rather than by special-casing directional lights now.
 
 Unlit fallback, Lambert, and Phong use distinct linked GLES3 programs with only their required uniforms.
 Material shading models map to concrete programs rather than a runtime-branched uber-shader; this direction
@@ -197,8 +204,9 @@ The Edit menu provides localized Undo and Redo with enabled states and Ctrl+Z/Ct
 localized, editor-owned toolbar occupies a DPI-scaled main-viewport sidebar directly below the menu and reserves
 the remaining work area for the persistent dockspace. Its mutually exclusive Selection and Navigation controls
 drive the viewport interaction mode and leave a narrow contextual region for later approved mode-specific
-controls. In Selection mode that concrete context exposes the translation tool and Local/Parent/World/View
-selector; it remains neither a dockable panel nor a generalized toolbar/tool framework. Current
+controls. In Selection mode that concrete context exposes Translate as its own fixed-width status/control,
+followed by a separate localized Reference Space label and Local/Parent/World/View combo; it remains neither a
+dockable panel nor a generalized toolbar/tool framework. Current
 name, numeric, color, and transform controls group one ImGui interaction into one transaction. The docked shell
 contains Scene Graph, Viewport, Object Inspector, and Console panels. Normal Dear ImGui `.ini` persistence owns
 user layout after first-use construction; its `imgui.ini` is stored beside the running executable rather than

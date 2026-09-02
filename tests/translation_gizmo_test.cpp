@@ -204,7 +204,10 @@ TEST_CASE("reference space and transform tool choices remain workspace state")
     viewport.set_transform_tool(ai3::ViewportTransformTool::translation);
     for (ai3::CoordinateSpace space : {ai3::CoordinateSpace::local, ai3::CoordinateSpace::parent,
                                        ai3::CoordinateSpace::world, ai3::CoordinateSpace::view})
+    {
         viewport.set_reference_space(space);
+        CHECK(viewport.reference_space() == space);
+    }
     CHECK(state.document_revision() == revision);
     CHECK(session.history().current_state_id() == history);
     CHECK_FALSE(session.dirty());

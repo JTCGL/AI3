@@ -7,14 +7,17 @@ object, without generalizing the viewport tool, toolbar, rendering, or input arc
 
 ## Implemented scope
 
-- Selection mode presents a localized, DPI-aware translation tool and Local/Parent/World/View selector. Any
+- Selection mode presents a localized, DPI-aware Translate control followed by a distinct Reference Space label
+  and Local/Parent/World/View combo. Any
   selected transformable scene object is eligible; existing viewport picking remains sphere-specific. A gizmo
   handle gets pointer-down ownership before ordinary selection, while Navigation remains effective only for an
   Orbit view.
 - Display-independent logic resolves the chosen reference-space axis, normalizes projected directions to a
   DPI-derived screen-space length, hit-tests a distinct invisible tolerance, validates the frozen viewport
-  coordinate frame, and constrains pointer rays. The overlay itself is drawn through Dear ImGui rather than
-  duplicated as GLES helper geometry. Collapsed/view-aligned projected axes are omitted safely.
+  coordinate frame, and constrains pointer rays. The overlay itself is drawn through Dear ImGui with DPI-scaled
+  filled arrowheads rather than duplicated as GLES helper geometry. Collapsed/view-aligned projected axes are
+  omitted safely. Idle axes use darker red/green/blue colors; the hovered or acquired axis uses its brighter
+  counterpart while the other axes remain inactive.
 - Acquisition freezes the object, axis/basis, starting world pivot, resolved view, viewport dimensions,
   DPI-derived size, and constraint method. Every live result is derived from that gesture-start state rather
   than accumulated frame deltas. Changing workspace controls cannot reinterpret an active drag, and the frozen
@@ -32,6 +35,9 @@ object, without generalizing the viewport tool, toolbar, rendering, or input arc
   one entry, Undo/Redo restores the complete state, a no-op commits no entry, and Escape or unsafe mutation
   cancels and restores the gesture start. Tool, reference-space, selection, view, and gesture state remain
   workspace data outside revision, history, dirty state, and Scene Documents.
+- Every currently transformable scene object is eligible. A Directional Light can therefore be translated even
+  though its position has no current lighting effect because its behavior derives from orientation/direction;
+  future positional light types need translation, and applicability remains open to later concrete tool needs.
 
 ## Verification
 
