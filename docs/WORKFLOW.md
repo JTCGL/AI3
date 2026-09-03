@@ -24,7 +24,9 @@ bash scripts/sync-current-and-check.sh
 Use the command that matches the intent. Platform-specific instructions should use the checkout paths above and
 be presented separately for Termux and T5600 when physical verification is appropriate. Continue to provide
 post-merge update instructions for both machines so both checkouts remain synchronized, including when one is
-updated remotely or is unavailable for runtime testing.
+updated remotely or is unavailable for runtime testing. Synchronization and verification instructions should
+not automatically launch the graphical executable; provide a separate launch command only when a specific
+runtime test requires it.
 
 For milestones requiring physical/runtime review, a passing review on either Termux or T5600 is sufficient for
 milestone completion unless an approved milestone explicitly requires platform-specific behavior to be checked
