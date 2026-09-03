@@ -41,15 +41,15 @@ split is:
 - `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
   viewport state.
 - `editor`: display-independent object identity, lifecycle, hierarchy, selection, authoritative transforms,
-  semantic object and material data, undo/redo transactions, document revision/session workflow, transactional Scene Document
-  serialization/filesystem I/O, panel visibility, layout-reset intent, and console data.
+  semantic object/material data, derived local bounds, per-object bounds-display workspace state, undo/redo
+  transactions, and transactional Scene Document/workspace filesystem I/O.
 - `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
   sizing, orbit view construction, viewport-view selection/resolution and interaction mode, sphere picking,
-  and axis-translation projection, hit testing, and drag constraints.
+  axis-translation projection, hit testing and drag constraints, and shared API-independent helper geometry.
 - `localization`: external resource discovery and UTF-8 string lookup.
 - `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
-- `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, and the
-  offscreen viewport framebuffer. A concrete GLES program helper owns compilation/linking and lifetime.
+- `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, the
+  offscreen viewport framebuffer, and the depth-tested helper pass.
 - `ui`: Dear ImGui lifecycle and editor presentation/control. `EditorUi` receives references to authoritative
   `EditorState` and `ViewportView`, presents the display-independent document-session policy and SDL
   native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
@@ -72,7 +72,10 @@ be faithfully unparented as TRS. Selection is cleared only when the deleted obje
 
 Sphere radius/fallback color/material assignment, perspective projection parameters, directional-light
 parameters, and independent reusable materials are authoritative semantic editor data. Sphere meshes are
-deterministic derived data. Unassigned spheres render their unlit fallback; assigned spheres use Lambert or
+deterministic derived data. Each sphere also caches an object-local AABB and bounding sphere derived from its
+radius; creation, document loading, and real radius changes rebuild it, while transforms and unrelated changes
+do not. Directional lights and perspective cameras remain unbounded. Unassigned spheres render their unlit
+fallback; assigned spheres use Lambert or
 classic Phong. Materials have separate monotonic identity, may exist unassigned, and are not owned by cameras
 or lights. The Material Editor navigates all document materials while its active material remains workspace
 state and it edits one material at a time.
@@ -93,6 +96,12 @@ nlohmann/json. A narrowly friended codec reconstructs a complete candidate with 
 hierarchy data; normal object creation still uses the lifecycle allocator. Load validates the entire candidate
 before replacing scene-owned state, and failure leaves the destination unchanged. Successful load clears
 selection while preserving non-document editor state such as console, panel visibility, and layout intent.
+
+An associated `.ai3workspace` sidecar stores only each bounded object's default-off bounding-box,
+bounding-sphere, and hover-feedback switches by stable object ID. Missing data defaults off. Malformed data
+cannot invalidate an already loaded scene and is reported through the Console. Save and Save As atomically
+replace the associated sidecar; untitled workspace state remains in memory. Workspace state is excluded from
+Scene Documents, revision, dirty state, and history.
 
 `EditorHistory` uses internal authoritative before/after snapshots and exposes representation-independent
 begin/commit/cancel/undo/redo operations. Snapshots contain exact document state but exclude selection,
@@ -140,9 +149,11 @@ The application has one viewport with display-independent `ViewportView` state o
 is Orbit or Scene Camera. Orbit state remains independent of scene hierarchy. Scene-camera selection belongs
 to the viewport, not to a global active-camera concept, and currently accepts perspective-camera objects only.
 Its independent interaction mode is Selection or Navigation and is workspace state excluded from document
-revision, dirty state, history, and persistence.
+revision, dirty state, history, and persistence. Its transient helper-rendering mode selects Overlay or Depth
+Tested, defaults to Overlay, and is not yet persisted.
 
-Selection mode also owns the X/Y/Z translation gizmo for the selected object. `ViewportView` retains the
+The X/Y/Z translation gizmo is visible for the selected object in both modes but interactive only in Selection.
+`ViewportView` retains the
 translation-tool and Local/Parent/World/View reference-space choices as workspace state. A handle receives
 pointer-down before sphere picking; an acquired gesture freezes its object, axis basis, resolved view,
 constraint policy, viewport dimensions, and DPI-derived size. Navigation behavior remains restricted to
@@ -167,7 +178,13 @@ coordinates and the resolved view/projection, then tests enabled, visible sphere
 through each authoritative inverse world matrix. This preserves exact ellipsoid behavior under non-uniform and
 reflected scale, safely excludes non-invertible candidates, and keeps picking independent of ImGui and GLES.
 
-The translation gizmo is a Dear ImGui viewport overlay with DPI-scaled arrowheads. Each axis retains a darker
+Bounds and the translation gizmo resolve through shared world-space colored-line/triangle inputs. Dear ImGui
+projects them as an always-visible overlay, or the GLES presenter draws them after scene geometry against the
+existing depth buffer with a centralized visual-only depth bias. AABBs use transformed local edges and spheres
+use three transformed local great circles. Selected enabled bounds are white; hovered non-selected bounds are
+yellow only when hover feedback is enabled.
+
+Each gizmo axis retains a darker
 red, green, or blue identity while idle; hover and the acquired axis use brighter variants. Projection, axis hit
 testing, apparent-size construction, viewport-geometry validation, and drag constraints are display-independent
 scene logic. Projected
@@ -178,6 +195,7 @@ once at acquisition a view-derived plane containing that axis, intersects subseq
 plane, and projects displacement back onto the axis. One gesture owns one existing `EditorHistory` transaction:
 live changes participate in dirty protection, release commits, Escape or unsafe mutation cancels/restores, and
 semantic no-ops create no entry.
+Depth-tested gizmo hit testing remains screen-based, so a visually occluded handle can still be acquired.
 
 All currently transformable scene objects receive the translation gizmo. Consequently, translating a
 Directional Light changes its authoritative position but not current lighting, which derives direction from

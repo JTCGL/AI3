@@ -51,11 +51,13 @@ add_library(ai3_editor STATIC
     src/editor/editor_history.cpp
     src/editor/editor_state.cpp
     src/editor/scene_document.cpp
+    src/editor/workspace_document.cpp
 )
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3_editor PUBLIC glm::glm nlohmann_json::nlohmann_json)
 
 add_library(ai3_scene STATIC
+    src/scene/helper_geometry.cpp
     src/scene/length_units.cpp
     src/scene/orbit_camera.cpp
     src/scene/render_target_size.cpp
@@ -173,6 +175,7 @@ if(AI3_BUILD_TESTS)
         tests/hierarchy_test.cpp
         tests/localization_test.cpp
         tests/material_test.cpp
+        tests/milestone17_test.cpp
         tests/runtime_paths_test.cpp
         tests/scene_document_test.cpp
         tests/scene_test.cpp

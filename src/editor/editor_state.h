@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -80,6 +81,29 @@ struct DirectionalLight
     float intensity = 1.0F;
 };
 
+struct AxisAlignedBounds
+{
+    glm::vec3 minimum{0.0F};
+    glm::vec3 maximum{0.0F};
+};
+struct BoundingSphere
+{
+    glm::vec3 center{0.0F};
+    float radius = 0.0F;
+};
+struct ObjectBounds
+{
+    std::optional<AxisAlignedBounds> box;
+    std::optional<BoundingSphere> sphere;
+};
+
+struct BoundsDisplayState
+{
+    bool show_bounding_box = false;
+    bool show_bounding_sphere = false;
+    bool hover_feedback = false;
+};
+
 enum class MaterialShading
 {
     lambert,
@@ -114,6 +138,8 @@ struct SceneObject
     SpherePrimitive sphere;
     PerspectiveCamera perspective_camera;
     DirectionalLight directional_light;
+    // Derived object-local runtime cache. Authoritative semantic parameters remain the source.
+    ObjectBounds bounds;
 
     ObjectId parent_id() const { return parent_id_; }
 
@@ -198,6 +224,10 @@ class EditorState
     bool reparent_object(ObjectId id, ObjectId new_parent);
     bool delete_object(ObjectId id);
     bool reset_scene();
+    const BoundsDisplayState& bounds_display(ObjectId id) const;
+    bool set_bounds_display(ObjectId id, BoundsDisplayState display);
+    void replace_bounds_workspace(std::map<ObjectId, BoundsDisplayState> workspace);
+    const std::map<ObjectId, BoundsDisplayState>& bounds_workspace() const;
     DocumentRevision document_revision() const;
     const std::vector<SceneObject>& objects() const;
     const SceneObject* find_object(ObjectId id) const;
@@ -247,6 +277,7 @@ class EditorState
     SceneObject* find_object_mutable(ObjectId id);
     Material* find_material_mutable(MaterialId id);
     void advance_document_revision();
+    static void rebuild_bounds(SceneObject& object);
 
     std::vector<SceneObject> objects_;
     std::vector<Material> materials_;
@@ -256,6 +287,7 @@ class EditorState
     std::map<SubtypeKey, std::uint64_t> default_name_counts_;
     DocumentRevision document_revision_ = 0;
     ObjectId selection_ = no_object;
+    std::map<ObjectId, BoundsDisplayState> bounds_workspace_;
     std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,
                                                                                         true, true};
     std::vector<ConsoleMessage> console_messages_;

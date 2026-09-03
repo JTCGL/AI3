@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "scene/color_space.h"
+#include "scene/helper_geometry.h"
 #include "scene/length_units.h"
 #include "scene/scene_math.h"
 #include "scene/translation_gizmo.h"
@@ -599,6 +600,27 @@ void EditorUi::draw_editor_toolbar()
     }
     else
         ImGui::TextDisabled("%s", localization_.text("toolbar.navigation_context").c_str());
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+    ImGui::Text("%s:", localization_.text("toolbar.helper_rendering").c_str());
+    ImGui::SameLine();
+    const std::array<std::pair<HelperRenderingMode, const char*>, 2> helper_modes = {
+        {{HelperRenderingMode::overlay, "toolbar.overlay"},
+         {HelperRenderingMode::depth_tested, "toolbar.depth_tested"}}};
+    ImGui::SetNextItemWidth(8.0F * font_size_);
+    const auto helper_mode =
+        std::find_if(helper_modes.begin(), helper_modes.end(), [&](const auto& entry)
+                     { return entry.first == viewport_view_.helper_rendering_mode(); });
+    if (ImGui::BeginCombo("###helper_rendering_mode",
+                          localization_.text(helper_mode->second).c_str()))
+    {
+        for (const auto& [mode, key] : helper_modes)
+            if (ImGui::Selectable(localization_.text(key).c_str(),
+                                  mode == viewport_view_.helper_rendering_mode()))
+                viewport_view_.set_helper_rendering_mode(mode);
+        ImGui::EndCombo();
+    }
     ImGui::End();
 }
 
@@ -736,6 +758,27 @@ void EditorUi::draw_object_inspector()
                                     [&] { state_.set_object_visible(object->id, object_visible); });
             if (object->primitive_kind == PrimitiveKind::sphere)
             {
+                BoundsDisplayState bounds_display = state_.bounds_display(object->id);
+                bool workspace_changed = ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.show_bounding_box"),
+                                       "show_bounding_box")
+                        .c_str(),
+                    &bounds_display.show_bounding_box);
+                workspace_changed |= ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.show_bounding_sphere"),
+                                       "show_bounding_sphere")
+                        .c_str(),
+                    &bounds_display.show_bounding_sphere);
+                workspace_changed |= ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.hover_feedback"),
+                                       "hover_feedback")
+                        .c_str(),
+                    &bounds_display.hover_feedback);
+                if (workspace_changed)
+                {
+                    std::string error;
+                    document_session_.set_bounds_display(object->id, bounds_display, &error);
+                }
                 float displayed_radius =
                     length_from_meters(object->sphere.radius_meters, display_length_unit_);
                 const std::string radius_text = localization_.format(
@@ -1056,7 +1099,49 @@ void EditorUi::draw_viewport()
             const float aspect_ratio =
                 static_cast<float>(requested.width) / static_cast<float>(requested.height);
             const ResolvedViewportView resolved = viewport_view_.resolve(state_, aspect_ratio);
-            viewport_renderer_.render(state_, resolved, requested);
+            const SceneObject* helper_object = state_.find_object(state_.selection());
+            glm::vec3 helper_pivot{};
+            glm::mat3 helper_basis{1.0F};
+            if (helper_object != nullptr)
+            {
+                helper_pivot = state_.world_position(helper_object->id);
+                helper_basis = coordinate_space_basis(
+                    state_, helper_object->id, viewport_view_.reference_space(), resolved.view);
+            }
+            const ImVec2 future_minimum = ImGui::GetCursorScreenPos();
+            const ImVec2 mouse = ImGui::GetIO().MousePos;
+            if (mouse.x >= future_minimum.x && mouse.y >= future_minimum.y &&
+                mouse.x < future_minimum.x + region.x && mouse.y < future_minimum.y + region.y)
+            {
+                const glm::vec2 coordinates{(mouse.x - future_minimum.x) / region.x,
+                                            (mouse.y - future_minimum.y) / region.y};
+                hovered_object_ = pick_sphere(state_, viewport_world_ray(coordinates, resolved));
+            }
+            else
+                hovered_object_ = no_object;
+            int highlighted = translation_gesture_.has_value()
+                                  ? static_cast<int>(translation_gesture_->selected_axis)
+                                  : -1;
+            if (helper_object != nullptr && !translation_gesture_.has_value() &&
+                viewport_view_.interaction_mode() == ViewportInteractionMode::selection)
+            {
+                const auto projected = project_translation_gizmo(
+                    helper_pivot, helper_basis, resolved, {region.x, region.y}, 72.0F * ui_scale_);
+                if (projected)
+                    highlighted = static_cast<int>(pick_translation_axis(
+                        {mouse.x - future_minimum.x, mouse.y - future_minimum.y}, *projected,
+                        10.0F * ui_scale_));
+            }
+            const HelperGeometry helpers = resolve_helper_geometry(
+                state_, helper_object == nullptr ? no_object : helper_object->id, hovered_object_,
+                helper_pivot, helper_basis, resolved,
+                {static_cast<float>(requested.width), static_cast<float>(requested.height)},
+                72.0F * ui_scale_ * framebuffer_scale.x, highlighted);
+            viewport_renderer_.render(state_, resolved, requested,
+                                      viewport_view_.helper_rendering_mode() ==
+                                              HelperRenderingMode::depth_tested
+                                          ? &helpers
+                                          : nullptr);
             ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
                          {0.0F, 1.0F}, {1.0F, 0.0F});
             const ImVec2 minimum = ImGui::GetItemRectMin();
@@ -1097,8 +1182,7 @@ void EditorUi::draw_viewport()
             std::optional<ProjectedTranslationGizmo> projected_gizmo;
             glm::vec3 pivot{};
             glm::mat3 basis{1.0F};
-            if (selected != nullptr &&
-                viewport_view_.interaction_mode() == ViewportInteractionMode::selection)
+            if (selected != nullptr)
             {
                 pivot = state_.world_position(selected->id);
                 basis =
@@ -1125,6 +1209,7 @@ void EditorUi::draw_viewport()
                 hovered_axis = pick_translation_axis(pointer, *projected_gizmo, 10.0F * ui_scale_);
             }
             if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
+                viewport_view_.interaction_mode() == ViewportInteractionMode::selection &&
                 ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
                 const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
@@ -1152,42 +1237,43 @@ void EditorUi::draw_viewport()
                 }
             }
 
-            if (projected_gizmo.has_value())
+            if (viewport_view_.helper_rendering_mode() == HelperRenderingMode::overlay)
             {
                 ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                constexpr std::array<ImU32, 3> inactive_colors = {IM_COL32(150, 55, 55, 255),
-                                                                  IM_COL32(50, 140, 65, 255),
-                                                                  IM_COL32(55, 85, 155, 255)};
-                constexpr std::array<ImU32, 3> highlighted_colors = {IM_COL32(255, 90, 90, 255),
-                                                                     IM_COL32(90, 240, 105, 255),
-                                                                     IM_COL32(90, 150, 255, 255)};
-                const TranslationAxis highlighted_axis = translation_gesture_.has_value()
-                                                             ? translation_gesture_->selected_axis
-                                                             : hovered_axis;
-                const float arrow_length = 10.0F * ui_scale_;
-                const float arrow_half_width = 5.0F * ui_scale_;
-                for (std::size_t index = 0; index < 3; ++index)
+                HelperGeometry overlay_helpers = resolve_helper_geometry(
+                    state_, selected == nullptr ? no_object : selected->id, hovered_object_, pivot,
+                    basis, resolved, viewport_size, 72.0F * ui_scale_,
+                    static_cast<int>(translation_gesture_.has_value()
+                                         ? translation_gesture_->selected_axis
+                                         : hovered_axis));
+                const auto color = [](glm::vec3 value)
                 {
-                    if (!projected_gizmo->endpoints[index].has_value())
-                        continue;
-                    const ImU32 color = static_cast<std::size_t>(highlighted_axis) == index
-                                            ? highlighted_colors[index]
-                                            : inactive_colors[index];
-                    const glm::vec2 endpoint = *projected_gizmo->endpoints[index];
-                    const glm::vec2 direction = glm::normalize(endpoint - projected_gizmo->pivot);
-                    const glm::vec2 perpendicular{-direction.y, direction.x};
-                    const glm::vec2 arrow_base = endpoint - direction * arrow_length;
-                    const ImVec2 screen_pivot{minimum.x + projected_gizmo->pivot.x,
-                                              minimum.y + projected_gizmo->pivot.y};
-                    const ImVec2 screen_endpoint{minimum.x + endpoint.x, minimum.y + endpoint.y};
-                    draw_list->AddLine(screen_pivot, screen_endpoint, color, 2.5F * ui_scale_);
-                    draw_list->AddTriangleFilled(
-                        screen_endpoint,
-                        {minimum.x + arrow_base.x + perpendicular.x * arrow_half_width,
-                         minimum.y + arrow_base.y + perpendicular.y * arrow_half_width},
-                        {minimum.x + arrow_base.x - perpendicular.x * arrow_half_width,
-                         minimum.y + arrow_base.y - perpendicular.y * arrow_half_width},
-                        color);
+                    return IM_COL32(static_cast<int>(value.r * 255.0F),
+                                    static_cast<int>(value.g * 255.0F),
+                                    static_cast<int>(value.b * 255.0F), 255);
+                };
+                for (const ColoredLine& line : overlay_helpers.lines)
+                {
+                    const auto a = project_world_to_viewport(line.start, resolved, viewport_size);
+                    const auto b = project_world_to_viewport(line.end, resolved, viewport_size);
+                    if (a && b)
+                        draw_list->AddLine({minimum.x + a->x, minimum.y + a->y},
+                                           {minimum.x + b->x, minimum.y + b->y}, color(line.color),
+                                           2.0F * ui_scale_);
+                }
+                for (const ColoredTriangle& triangle : overlay_helpers.triangles)
+                {
+                    const auto a =
+                        project_world_to_viewport(triangle.first, resolved, viewport_size);
+                    const auto b =
+                        project_world_to_viewport(triangle.second, resolved, viewport_size);
+                    const auto c =
+                        project_world_to_viewport(triangle.third, resolved, viewport_size);
+                    if (a && b && c)
+                        draw_list->AddTriangleFilled({minimum.x + a->x, minimum.y + a->y},
+                                                     {minimum.x + b->x, minimum.y + b->y},
+                                                     {minimum.x + c->x, minimum.y + c->y},
+                                                     color(triangle.color));
                 }
             }
 

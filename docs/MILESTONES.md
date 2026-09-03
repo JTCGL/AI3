@@ -124,3 +124,11 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   Headless coverage includes hierarchy and invertibility cases, constraint degeneracies, projection/hit math,
   history cancellation/Undo/Redo/checkpoints, and workspace-state exclusions. Physical overlay review remains
   required on Termux ARM64 and T5600 Linux x86-64.
+
+## Milestone 17 — Cached object bounds, dual helper rendering, and per-document workspace foundation
+
+- Added cached object-local AABB/sphere data for spheres, atomic `.ai3workspace` sidecars for per-object bounds
+  display state, and localized controls excluded from document revision/history.
+- Added shared display-independent helper geometry consumed by an always-visible ImGui overlay and a
+  depth-tested GLES3 pass with visual depth bias. Gizmos render in Selection and Navigation but remain
+  interactive only in Selection. Physical runtime review remains required.

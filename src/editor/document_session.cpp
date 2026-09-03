@@ -1,5 +1,6 @@
 #include "editor/document_session.h"
 #include "editor/scene_document.h"
+#include "editor/workspace_document.h"
 
 #include <utility>
 
@@ -78,7 +79,7 @@ bool DocumentSession::save(std::string* error)
     if (!save_scene_document_file(state_, document_path_, error))
         return false;
     mark_saved();
-    return true;
+    return save_workspace(error);
 }
 
 bool DocumentSession::save_as(std::filesystem::path path, std::string* error)
@@ -86,7 +87,7 @@ bool DocumentSession::save_as(std::filesystem::path path, std::string* error)
     if (!save_scene_document_file(state_, path, error))
         return false;
     mark_saved_as(std::move(path));
-    return true;
+    return save_workspace(error);
 }
 
 bool DocumentSession::open(std::filesystem::path path, std::string* error)
@@ -94,7 +95,38 @@ bool DocumentSession::open(std::filesystem::path path, std::string* error)
     if (!load_scene_document_file(path, state_, error))
         return false;
     mark_opened(std::move(path));
+    std::map<ObjectId, BoundsDisplayState> workspace;
+    std::string workspace_error;
+    if (!load_workspace_file(workspace_path_for_scene(document_path_), workspace, &workspace_error))
+    {
+        state_.replace_bounds_workspace({});
+        state_.add_console_message("console.workspace_error", workspace_error);
+    }
+    else
+        state_.replace_bounds_workspace(std::move(workspace));
     return true;
+}
+
+bool DocumentSession::save_workspace(std::string* error)
+{
+    if (document_path_.empty())
+        return true;
+    std::string workspace_error;
+    if (save_workspace_file(state_.bounds_workspace(), workspace_path_for_scene(document_path_),
+                            &workspace_error))
+        return true;
+    state_.add_console_message("console.workspace_error", workspace_error);
+    if (error != nullptr)
+        *error = "Workspace save failed: " + workspace_error;
+    return false;
+}
+
+bool DocumentSession::set_bounds_display(ObjectId id, BoundsDisplayState display,
+                                         std::string* error)
+{
+    if (!state_.set_bounds_display(id, display))
+        return false;
+    return document_path_.empty() || save_workspace(error);
 }
 
 void DocumentSession::new_document()

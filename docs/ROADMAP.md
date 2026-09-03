@@ -29,21 +29,15 @@ console, diagnostics, renderer, or other workspace/session state.
 - Evaluate future editor preferences for overall gizmo size and view-aligned-axis depth behavior. Candidate
   depth policies include screen-vertical depth motion, disabling/fading strongly aligned axes, and stricter
   direct-axis-only interaction requiring a view change. The current view-derived fallback plane remains fixed.
-- Keep transform gizmos visible in both Selection and Navigation interaction modes. Rendering visibility is
-  separate from which interaction currently owns pointer input.
-- Add both the current always-visible ImGui overlay path and depth-tested GLES wire-geometry path for gizmos
-  and bounds so their behavior can be compared directly. Expose an explicit main-toolbar switch between the
-  two helper-rendering systems; do not silently choose one as the permanent policy.
 - Define persistent editor preferences separately before adding configurable key bindings or similar options.
   Known candidates include gizmo size, view-aligned-axis constraint policy, selected/hovered bounds colors,
   the Frame Selected key (initially F), and navigation/input preferences.
 
 AI3's first transform tool provides single-object X/Y/Z translation in Local, Parent, World, and View spaces.
-It establishes frozen gesture-start constraints, one history transaction per drag, and an ImGui overlay with
-approximately constant apparent size. It does not define planar/free translation, rotation, scale, snapping,
-multi-object pivots, a generalized gizmo framework, or persistent preferences. The current ImGui overlay is
-established behavior; a later approved milestone will add a depth-tested GLES wire-geometry alternative and
-a main-toolbar comparison switch rather than treating GLES as fallback-only.
+It establishes frozen gesture-start constraints, one history transaction per drag, shared helper inputs, and
+overlay/depth-tested presentations with approximately constant apparent size. It does not define planar/free
+translation, rotation, scale, snapping,
+multi-object pivots, a generalized gizmo framework, or persistent preferences.
 
 Future gizmos and non-rendered editor objects should share narrowly defined helper-geometry inputs such as
 pivot, axes, colors, and apparent scale across the overlay and depth-tested GLES presenters. This common path
@@ -63,17 +57,9 @@ its existing mode controls require explicit design. No generalized tool or toolb
 
 ## Bounds and viewport feedback
 
-- Cache both a local/object-space axis-aligned bounding box and a bounding sphere with each bounded object.
-  These are derived runtime data, updated only when authoritative dimensions or other shape-defining parameters
-  change, and reused unchanged by consumers while their source parameters remain unchanged. They are not saved
-  in Scene Documents and must not become a second independently editable source of geometric truth.
-- Make both cached primitives available without forcing every intersection system through the bounding sphere
-  first. Each consumer should choose a sphere, box, exact shape test, or staged combination according to its
-  concrete accuracy and performance needs.
-- Draw bounds as wire geometry only. The selected-object default is white and the hovered non-selected default
-  is yellow. Both colors are future editor preferences rather than fixed document data.
-- Support both an always-visible viewport overlay and a depth-tested GLES wire-geometry representation, sharing
-  the main-toolbar helper-rendering switch with gizmos so both systems can be compared in the running editor.
+- Extend the established cached local AABB/sphere and dual wire presenters to future bounded object types only
+  when their authoritative finite-shape semantics are defined. Intersection consumers remain free to choose
+  cached bounds, exact shapes, or staged tests.
 - Keep directional lights unbounded and without fabricated bounds. Future local lights should derive finite
   bounds from concrete range/radius parameters and participate in the same optional bounds visualization.
 - Give perspective-camera objects a finite bounding volume derived from their frustum corners, projection

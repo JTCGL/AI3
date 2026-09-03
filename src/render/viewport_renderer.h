@@ -1,6 +1,7 @@
 #pragma once
 
 #include "editor/editor_state.h"
+#include "scene/helper_geometry.h"
 #include "scene/render_target_size.h"
 #include "scene/resolved_view.h"
 
@@ -19,7 +20,8 @@ class ViewportRenderer
     ViewportRenderer(const ViewportRenderer&) = delete;
     ViewportRenderer& operator=(const ViewportRenderer&) = delete;
 
-    void render(const EditorState& scene, const ResolvedViewportView& view, RenderTargetSize size);
+    void render(const EditorState& scene, const ResolvedViewportView& view, RenderTargetSize size,
+                const HelperGeometry* helpers = nullptr);
     void synchronize_geometry_cache(const EditorState& scene);
     void clear_geometry_cache();
     std::uint32_t texture() const { return color_texture_; }
@@ -46,10 +48,14 @@ class ViewportRenderer
     struct UnlitProgram;
     struct LambertProgram;
     struct PhongProgram;
+    struct HelperProgram;
 
     std::unique_ptr<UnlitProgram> unlit_program_;
     std::unique_ptr<LambertProgram> lambert_program_;
     std::unique_ptr<PhongProgram> phong_program_;
+    std::unique_ptr<HelperProgram> helper_program_;
+    std::uint32_t helper_vertex_array_ = 0;
+    std::uint32_t helper_vertex_buffer_ = 0;
     std::uint32_t framebuffer_ = 0;
     std::uint32_t color_texture_ = 0;
     std::uint32_t depth_renderbuffer_ = 0;
