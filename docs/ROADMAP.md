@@ -45,6 +45,13 @@ multi-object pivots, a generalized gizmo framework, or persistent preferences. T
 established behavior; a later approved milestone will add a depth-tested GLES wire-geometry alternative and
 a main-toolbar comparison switch rather than treating GLES as fallback-only.
 
+Future gizmos and non-rendered editor objects should share narrowly defined helper-geometry inputs such as
+pivot, axes, colors, and apparent scale across the overlay and depth-tested GLES presenters. This common path
+must be grown from concrete consumers rather than becoming a speculative generalized gizmo framework. Expected
+consumers include transform gizmos; local-light range, radius, and direction indicators; helper/dummy-object
+geometry; camera view lines and planes; planar spacing/layout grids; and normal, binormal, and tangent
+visualization for points and geometric data.
+
 The viewport now has explicit Selection and Navigation interaction modes plus a minimal contextual toolbar.
 Selection uses display-independent CPU picking for enabled, visible spheres and gives the selected object's
 translation handles first refusal on pointer-down. Non-sphere objects selected through the Scene Graph can be
@@ -57,11 +64,12 @@ its existing mode controls require explicit design. No generalized tool or toolb
 ## Bounds and viewport feedback
 
 - Cache both a local/object-space axis-aligned bounding box and a bounding sphere with each bounded object.
-  These are derived runtime data, updated when authoritative dimensions or other shape-defining parameters
-  change, not recomputed every frame. Their relationship to Scene Document serialization must be decided
-  explicitly; they should not become a second independently editable source of geometric truth.
-- Use bounding spheres for coarse intersection rejection and bounding boxes for tighter tests, framing, and
-  wire visualization. Preserve exact primitive intersection where it is useful after coarse rejection.
+  These are derived runtime data, updated only when authoritative dimensions or other shape-defining parameters
+  change, and reused unchanged by consumers while their source parameters remain unchanged. They are not saved
+  in Scene Documents and must not become a second independently editable source of geometric truth.
+- Make both cached primitives available without forcing every intersection system through the bounding sphere
+  first. Each consumer should choose a sphere, box, exact shape test, or staged combination according to its
+  concrete accuracy and performance needs.
 - Draw bounds as wire geometry only. The selected-object default is white and the hovered non-selected default
   is yellow. Both colors are future editor preferences rather than fixed document data.
 - Support both an always-visible viewport overlay and a depth-tested GLES wire-geometry representation, sharing
