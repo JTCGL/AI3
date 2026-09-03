@@ -415,7 +415,6 @@ void EditorUi::draw_main_menu(bool& running)
                 document_session_.reset_scene();
                 viewport_renderer_.clear_geometry_cache();
                 viewport_view_.reset();
-                document_session_.set_helper_rendering_mode(WorkspaceHelperRenderingMode::overlay);
             }
             ImGui::Separator();
             if (ImGui::MenuItem(localization_.text("action.quit").c_str()))
@@ -1179,7 +1178,7 @@ void EditorUi::draw_viewport()
             const HelperGeometry gizmo_helpers = resolve_translation_helper_geometry(
                 helper_id, helper_pivot, helper_basis, helper_gizmo_view, helper_gizmo_viewport,
                 helper_gizmo_length, highlighted);
-            DepthTestedHelperInputs depth_helpers;
+            ViewportHelperInputs depth_helpers;
             if (viewport_view_.helper_rendering_mode() == HelperRenderingMode::depth_tested)
                 depth_helpers = {&bounds_helpers, &gizmo_helpers, &helper_gizmo_view};
             viewport_renderer_.render(state_, resolved, requested, depth_helpers);

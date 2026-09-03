@@ -131,7 +131,8 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   display state and helper-rendering mode, and localized controls excluded from document revision and ordinary
   history edits.
 - Added shared display-independent helper geometry consumed by an always-visible ImGui overlay and a
-  depth-tested GLES3 pass with visual depth bias. Gizmos render in Selection and Navigation but remain
+  GLES3 presentation whose biased bounds remain depth tested while gizmos render on top. Depth Tested is the
+  default; provisional Overlay remains selectable. Gizmos render in Selection and Navigation but remain
   interactive only in Selection; object hover feedback is Selection-only. Deletion Undo/Redo restores/removes
   the affected object's workspace switches without making workspace edits generally undoable. Physical runtime
   review remains required.

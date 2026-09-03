@@ -17,20 +17,22 @@ not authored, undoable, or dirtying.
 A narrow headless helper resolver emits world-space colored lines and triangles for transformed wire bounds
 and the translation gizmo. Dear ImGui projects them as an always-visible overlay; the concrete GLES3 renderer
 can instead draw them after scene geometry against the viewport depth buffer with a centralized visual depth
-bias. The localized toolbar selects Overlay (default) or Depth Tested and persists that choice in the
-workspace sidecar. Deletion history retains only the removed object's display switches so Undo restores them
-without making ordinary workspace edits undoable. World gizmo length is derived from raw axis projection and corrected against the supplied
-view/projection so its established DPI-scaled apparent size remains stable. Gizmos render in Selection and
+bias. Depth-tested bounds retain scene occlusion, while the GLES gizmo subpass disables depth testing and
+writes so gizmos remain on top. The localized toolbar selects Depth Tested (default) or provisional Overlay
+and persists that choice in the workspace sidecar; missing sidecars and missing mode fields use Depth Tested.
+Deletion history retains only the removed object's display switches so Undo restores them
+without making ordinary workspace edits undoable. World gizmo length is derived from raw axis projection and
+corrected against the supplied view/projection so its established DPI-scaled apparent size remains stable. Gizmos render in Selection and
 Navigation, while object hover feedback and hit acquisition remain Selection-only. Active gizmo geometry uses
 the same frozen view, basis, viewport policy, and apparent length in both presenters while bounds continue to
-follow current transforms. Depth-tested hit testing is still screen-based, so
-an occluded handle may be acquired.
+follow current transforms. Gizmo hit testing remains screen-based.
 
 ## Deferred
 
-Camera/local-light bounds, Frame Selected, preferences, workspace-dirty close protection, depth-aware or GPU
+Camera/local-light bounds, Frame Selected, preferences, workspace-dirty close protection, GPU
 picking, additional gizmos/helpers, middle-mouse Navigation, wheel changes, generalized frameworks, renderer
-abstractions, and other backends remain deferred.
+abstractions, and other backends remain deferred. Overlay remains temporarily available despite showing
+occluded bounds wires on top; later evaluation may remove its Dear ImGui presentation path.
 
 ## Verification
 

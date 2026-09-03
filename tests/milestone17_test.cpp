@@ -1,6 +1,7 @@
 #include "editor/document_session.h"
 #include "editor/scene_document.h"
 #include "editor/workspace_document.h"
+#include "render/viewport_renderer.h"
 #include "scene/helper_geometry.h"
 #include "scene/translation_gizmo.h"
 #include "scene/viewport_view.h"
@@ -178,14 +179,22 @@ TEST_CASE("workspace v1 is transactional defaulting and exact by object ID")
         loaded));
     CHECK(loaded.objects.at(12).show_bounding_box);
     CHECK_FALSE(loaded.objects.at(12).show_bounding_sphere);
+    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::depth_tested);
+    source.helper_rendering_mode = ai3::WorkspaceHelperRenderingMode::overlay;
+    REQUIRE(ai3::serialize_workspace(source, encoded));
+    REQUIRE(ai3::deserialize_workspace(encoded, loaded));
     CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::overlay);
+    source.helper_rendering_mode = ai3::WorkspaceHelperRenderingMode::depth_tested;
+    REQUIRE(ai3::serialize_workspace(source, encoded));
+    REQUIRE(ai3::deserialize_workspace(encoded, loaded));
+    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::depth_tested);
     const auto unchanged = loaded;
     CHECK_FALSE(ai3::deserialize_workspace("{bad", loaded));
     CHECK(loaded.objects.size() == unchanged.objects.size());
     CHECK_FALSE(ai3::deserialize_workspace(
         R"({"format":"ai3-workspace","version":1,"helperRenderingMode":"unknown","objects":{}})",
         loaded));
-    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::overlay);
+    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::depth_tested);
     CHECK_FALSE(
         ai3::deserialize_workspace(R"({"format":"wrong","version":1,"objects":{}})", loaded));
     CHECK_FALSE(ai3::deserialize_workspace(R"({"format":"ai3-workspace","version":2,"objects":{}})",
@@ -204,6 +213,7 @@ TEST_CASE("workspace sidecars follow document session lifecycle without dirtying
     CHECK(ai3::workspace_path_for_scene(first).filename() == "ai3-m17-first.ai3workspace");
     ai3::EditorState state;
     ai3::DocumentSession session(state);
+    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
     const auto id = state.create_sphere("Sphere");
     session.history().rebaseline();
     session.mark_saved();
@@ -237,6 +247,7 @@ TEST_CASE("workspace mutation waits for Save and helper mode round trips")
     std::filesystem::remove(workspace_path, ignored);
     ai3::EditorState state;
     ai3::DocumentSession session(state);
+    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
     const auto id = state.create_sphere("Sphere");
     REQUIRE(session.save_as(scene_path).scene_saved);
     std::filesystem::remove(workspace_path, ignored);
@@ -249,6 +260,16 @@ TEST_CASE("workspace mutation waits for Save and helper mode round trips")
     CHECK(saved.workspace_saved);
     REQUIRE(session.open(scene_path));
     CHECK(state.bounds_display(id).show_bounding_box);
+    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
+    session.set_helper_rendering_mode(ai3::WorkspaceHelperRenderingMode::overlay);
+    std::filesystem::remove(workspace_path, ignored);
+    REQUIRE(session.open(scene_path));
+    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
+    session.set_helper_rendering_mode(ai3::WorkspaceHelperRenderingMode::overlay);
+    REQUIRE(session.reset_scene());
+    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
+    session.set_helper_rendering_mode(ai3::WorkspaceHelperRenderingMode::overlay);
+    session.new_document();
     CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
     std::filesystem::remove(scene_path, ignored);
     std::filesystem::remove(workspace_path, ignored);
@@ -356,8 +377,10 @@ TEST_CASE("helper bounds are deterministic and apply the complete world transfor
     REQUIRE_FALSE(selected.lines.empty());
     CHECK(selected.lines[0].color == glm::vec3{1.0F});
     ai3::ViewportView viewport;
+    CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::depth_tested);
+    viewport.set_helper_rendering_mode(ai3::HelperRenderingMode::overlay);
     CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::overlay);
-    viewport.set_helper_rendering_mode(ai3::HelperRenderingMode::depth_tested);
+    viewport.reset();
     CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::depth_tested);
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
     CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::depth_tested);
@@ -370,6 +393,32 @@ TEST_CASE("helper bounds are deterministic and apply the complete world transfor
     const auto selection_bounds = ai3::resolve_bounds_helper_geometry(
         scene, ai3::no_object, viewport.helper_hover_object(id));
     CHECK_FALSE(selection_bounds.lines.empty());
+}
+
+TEST_CASE("GLES helper batches have explicit distinct depth policies")
+{
+    constexpr ai3::HelperDepthState scene = ai3::viewport_scene_depth_state;
+    constexpr ai3::HelperDepthState bounds = ai3::helper_depth_state(ai3::HelperRenderRole::bounds);
+    constexpr ai3::HelperDepthState gizmo = ai3::helper_depth_state(ai3::HelperRenderRole::gizmo);
+    constexpr ai3::HelperDepthState restored = ai3::restored_helper_depth_state;
+    CHECK(scene.depth_test_enabled);
+    CHECK(scene.depth_write_enabled);
+    CHECK(bounds.depth_test_enabled);
+    CHECK_FALSE(bounds.depth_write_enabled);
+    CHECK(bounds.depth_bias_enabled);
+    CHECK_FALSE(gizmo.depth_test_enabled);
+    CHECK_FALSE(gizmo.depth_write_enabled);
+    CHECK_FALSE(gizmo.depth_bias_enabled);
+    CHECK(restored.depth_test_enabled == scene.depth_test_enabled);
+    CHECK(restored.depth_write_enabled == scene.depth_write_enabled);
+    CHECK_FALSE(restored.depth_bias_enabled);
+
+    ai3::HelperGeometry bounds_geometry;
+    ai3::HelperGeometry gizmo_geometry;
+    const ai3::ViewportHelperInputs submitted{&bounds_geometry, &gizmo_geometry, nullptr};
+    CHECK(submitted.bounds == &bounds_geometry);
+    CHECK(submitted.gizmo == &gizmo_geometry);
+    CHECK(submitted.bounds != submitted.gizmo);
 }
 
 TEST_CASE("frozen gizmo inputs remain separate from current bounds and camera view")

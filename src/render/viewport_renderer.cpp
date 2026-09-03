@@ -44,6 +44,15 @@ void main()
 
 // Visual-only NDC depth bias. It does not modify semantic or cached geometry.
 constexpr float helper_depth_bias = 0.0001F;
+void apply_depth_state(HelperDepthState state)
+{
+    if (state.depth_test_enabled)
+        glEnable(GL_DEPTH_TEST);
+    else
+        glDisable(GL_DEPTH_TEST);
+    glDepthMask(state.depth_write_enabled ? GL_TRUE : GL_FALSE);
+}
+
 constexpr const char* helper_vertex_source = R"(#version 300 es
 layout(location = 0) in vec3 a_position;
 layout(location = 1) in vec3 a_color;
@@ -374,7 +383,7 @@ void ViewportRenderer::resize(RenderTargetSize size)
 }
 
 void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportView& view,
-                              RenderTargetSize size, DepthTestedHelperInputs helpers)
+                              RenderTargetSize size, ViewportHelperInputs helpers)
 {
     synchronize_geometry_cache(scene);
     if (requires_render_target_resize(size_, size))
@@ -384,7 +393,7 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
 
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
     glViewport(0, 0, size_.width, size_.height);
-    glEnable(GL_DEPTH_TEST);
+    apply_depth_state(viewport_scene_depth_state);
     glDepthFunc(GL_LESS);
     glClearColor(0.055F, 0.07F, 0.10F, 1.0F);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -446,12 +455,13 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
                        nullptr);
     }
     if (helpers.bounds != nullptr)
-        render_helpers(*helpers.bounds, view_projection);
+        render_helpers(*helpers.bounds, view_projection, HelperRenderRole::bounds);
     if (helpers.gizmo != nullptr)
     {
         const ResolvedViewportView& gizmo_view =
             helpers.gizmo_view == nullptr ? view : *helpers.gizmo_view;
-        render_helpers(*helpers.gizmo, gizmo_view.projection * gizmo_view.view);
+        render_helpers(*helpers.gizmo, gizmo_view.projection * gizmo_view.view,
+                       HelperRenderRole::gizmo);
     }
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -462,7 +472,7 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
 }
 
 void ViewportRenderer::render_helpers(const HelperGeometry& helpers,
-                                      const glm::mat4& view_projection)
+                                      const glm::mat4& view_projection, HelperRenderRole role)
 {
     if (helpers.lines.empty() && helpers.triangles.empty())
         return;
@@ -486,9 +496,13 @@ void ViewportRenderer::render_helpers(const HelperGeometry& helpers,
         vertices.push_back({triangle.third, triangle.color});
     }
     const HelperProgram& program = *helper_program_;
+    const HelperDepthState depth = helper_depth_state(role);
+    apply_depth_state(depth);
+    if (depth.depth_test_enabled)
+        glDepthFunc(GL_LESS);
     glUseProgram(program.program.id());
     glUniformMatrix4fv(program.view_projection, 1, GL_FALSE, glm::value_ptr(view_projection));
-    glUniform1f(program.depth_bias, helper_depth_bias);
+    glUniform1f(program.depth_bias, depth.depth_bias_enabled ? helper_depth_bias : 0.0F);
     glBindVertexArray(helper_vertex_array_);
     glBindBuffer(GL_ARRAY_BUFFER, helper_vertex_buffer_);
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(Vertex)),
@@ -498,10 +512,10 @@ void ViewportRenderer::render_helpers(const HelperGeometry& helpers,
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
                           reinterpret_cast<const void*>(offsetof(Vertex, color)));
-    glDepthMask(GL_FALSE);
     glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(line_vertices));
     glDrawArrays(GL_TRIANGLES, static_cast<GLint>(line_vertices),
                  static_cast<GLsizei>(vertices.size() - line_vertices));
-    glDepthMask(GL_TRUE);
+    apply_depth_state(restored_helper_depth_state);
+    glDepthFunc(GL_LESS);
 }
 } // namespace ai3

@@ -31,7 +31,10 @@ console, diagnostics, renderer, or other workspace/session state.
   direct-axis-only interaction requiring a view change. The current view-derived fallback plane remains fixed.
 - Define persistent editor preferences separately before adding configurable key bindings or similar options.
   Known candidates include gizmo size, view-aligned-axis constraint policy, selected/hovered bounds colors,
-  the Frame Selected key (initially F), Navigation-mode hover feedback, and navigation/input preferences.
+  the Frame Selected key (initially F), Navigation-mode hover feedback, key bindings, navigation/input
+  preferences, and a manual DPI/UI-scale override for deliberate sizing tests.
+- Bind Delete to delete the currently selected object in the next suitable editing milestone, unless approved
+  earlier as a focused maintenance correction.
 
 AI3's first transform tool provides single-object X/Y/Z translation in Local, Parent, World, and View spaces.
 It establishes frozen gesture-start constraints, one history transaction per drag, shared helper inputs, and
@@ -45,6 +48,10 @@ must be grown from concrete consumers rather than becoming a speculative general
 consumers include transform gizmos; local-light range, radius, and direction indicators; helper/dummy-object
 geometry; camera view lines and planes; planar spacing/layout grids; and normal, binormal, and tangent
 visualization for points and geometric data.
+
+Depth Tested is the primary helper presentation. Overlay remains temporarily available, but its ImGui-drawn
+bounds intentionally show rear/occluded wires over scene geometry and add a presentation dependency. Reassess
+and potentially remove Overlay in a later revision; M17 does not attempt depth-aware ImGui bounds.
 
 The viewport now has explicit Selection and Navigation interaction modes plus a minimal contextual toolbar.
 Selection uses display-independent CPU picking for enabled, visible spheres and gives the selected object's

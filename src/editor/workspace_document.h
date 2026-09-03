@@ -17,7 +17,7 @@ enum class WorkspaceHelperRenderingMode
 
 struct WorkspaceDocument
 {
-    WorkspaceHelperRenderingMode helper_rendering_mode = WorkspaceHelperRenderingMode::overlay;
+    WorkspaceHelperRenderingMode helper_rendering_mode = WorkspaceHelperRenderingMode::depth_tested;
     std::map<ObjectId, BoundsDisplayState> objects;
 };
 

@@ -156,7 +156,9 @@ is Orbit or Scene Camera. Orbit state remains independent of scene hierarchy. Sc
 to the viewport, not to a global active-camera concept, and currently accepts perspective-camera objects only.
 Its independent interaction mode is Selection or Navigation and is workspace state excluded from document
 revision, dirty state, history, and persistence. Its helper-rendering mode selects Overlay or Depth Tested,
-defaults to Overlay, and persists with the per-document workspace sidecar without dirtying the scene.
+defaults to Depth Tested, and persists with the per-document workspace sidecar without dirtying the scene.
+Missing sidecars and version-1 sidecars lacking the field also select Depth Tested; explicit stored values for
+either mode remain authoritative.
 
 The X/Y/Z translation gizmo is visible for the selected object in both modes but interactive only in Selection.
 `ViewportView` retains the
@@ -187,8 +189,10 @@ reflected scale, safely excludes non-invertible candidates, and keeps picking in
 Bounds and the translation gizmo resolve through shared world-space colored-line/triangle inputs. Bounds use
 current authoritative transforms, while an active translation's gizmo batch uses its frozen view, basis,
 viewport sizing policy, and DPI-derived apparent length in both presenters. Dear ImGui
-projects them as an always-visible overlay, or the GLES presenter draws them after scene geometry against the
-existing depth buffer with a centralized visual-only depth bias. AABBs use transformed local edges and spheres
+projects them as an always-visible overlay. In Depth Tested mode, the GLES presenter draws bounds after scene
+geometry with depth testing enabled, depth writes disabled, and a centralized visual-only depth bias; it then
+draws gizmos with depth testing and writes disabled and no bounds bias, so they remain on top. AABBs use
+transformed local edges and spheres
 use three transformed local great circles. Selected enabled bounds are white; hovered non-selected bounds are
 yellow only when hover feedback is enabled and the viewport is in Selection mode.
 
@@ -203,7 +207,7 @@ once at acquisition a view-derived plane containing that axis, intersects subseq
 plane, and projects displacement back onto the axis. One gesture owns one existing `EditorHistory` transaction:
 live changes participate in dirty protection, release commits, Escape or unsafe mutation cancels/restores, and
 semantic no-ops create no entry.
-Depth-tested gizmo hit testing remains screen-based, so a visually occluded handle can still be acquired.
+Gizmo hit testing remains screen-based and independent of the always-on-top GLES presentation.
 
 All currently transformable scene objects receive the translation gizmo. Consequently, translating a
 Directional Light changes its authoritative position but not current lighting, which derives direction from

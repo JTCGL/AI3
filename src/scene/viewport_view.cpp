@@ -111,6 +111,6 @@ void ViewportView::reset()
     source_ = ViewSource::orbit;
     scene_camera_id_ = no_object;
     orbit_.reset();
-    helper_rendering_mode_ = HelperRenderingMode::overlay;
+    helper_rendering_mode_ = HelperRenderingMode::depth_tested;
 }
 } // namespace ai3

@@ -12,7 +12,29 @@
 
 namespace ai3
 {
-struct DepthTestedHelperInputs
+enum class HelperRenderRole
+{
+    bounds,
+    gizmo
+};
+
+struct HelperDepthState
+{
+    bool depth_test_enabled;
+    bool depth_write_enabled;
+    bool depth_bias_enabled;
+};
+
+constexpr HelperDepthState viewport_scene_depth_state{true, true, false};
+constexpr HelperDepthState restored_helper_depth_state = viewport_scene_depth_state;
+
+constexpr HelperDepthState helper_depth_state(HelperRenderRole role)
+{
+    return role == HelperRenderRole::bounds ? HelperDepthState{true, false, true}
+                                            : HelperDepthState{false, false, false};
+}
+
+struct ViewportHelperInputs
 {
     const HelperGeometry* bounds = nullptr;
     const HelperGeometry* gizmo = nullptr;
@@ -28,7 +50,7 @@ class ViewportRenderer
     ViewportRenderer& operator=(const ViewportRenderer&) = delete;
 
     void render(const EditorState& scene, const ResolvedViewportView& view, RenderTargetSize size,
-                DepthTestedHelperInputs helpers = {});
+                ViewportHelperInputs helpers = {});
     void synchronize_geometry_cache(const EditorState& scene);
     void clear_geometry_cache();
     std::uint32_t texture() const { return color_texture_; }
@@ -39,7 +61,8 @@ class ViewportRenderer
     private:
     void resize(RenderTargetSize size);
     void destroy_render_target();
-    void render_helpers(const HelperGeometry& helpers, const glm::mat4& view_projection);
+    void render_helpers(const HelperGeometry& helpers, const glm::mat4& view_projection,
+                        HelperRenderRole role);
 
     struct SphereGeometry
     {

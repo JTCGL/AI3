@@ -60,7 +60,7 @@ class ViewportView
     ViewportInteractionMode interaction_mode_ = ViewportInteractionMode::selection;
     ViewportTransformTool transform_tool_ = ViewportTransformTool::translation;
     CoordinateSpace reference_space_ = CoordinateSpace::world;
-    HelperRenderingMode helper_rendering_mode_ = HelperRenderingMode::overlay;
+    HelperRenderingMode helper_rendering_mode_ = HelperRenderingMode::depth_tested;
     ObjectId scene_camera_id_ = no_object;
     OrbitCamera orbit_;
 };
