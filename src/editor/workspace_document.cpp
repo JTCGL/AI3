@@ -37,18 +37,25 @@ std::filesystem::path workspace_path_for_scene(const std::filesystem::path& scen
     return result;
 }
 
-bool serialize_workspace(const std::map<ObjectId, BoundsDisplayState>& workspace,
-                         std::string& document, std::string* error)
+bool serialize_workspace(const WorkspaceDocument& workspace, std::string& document,
+                         std::string* error)
 {
     try
     {
         Json objects = Json::object();
-        for (const auto& [id, state] : workspace)
+        for (const auto& [id, state] : workspace.objects)
             objects[std::to_string(id)] = {{"showBoundingBox", state.show_bounding_box},
                                            {"showBoundingSphere", state.show_bounding_sphere},
                                            {"hoverFeedback", state.hover_feedback}};
-        document =
-            Json{{"format", "ai3-workspace"}, {"version", 1}, {"objects", objects}}.dump(2) + "\n";
+        document = Json{{"format", "ai3-workspace"},
+                        {"version", 1},
+                        {"helperRenderingMode",
+                         workspace.helper_rendering_mode == WorkspaceHelperRenderingMode::overlay
+                             ? "overlay"
+                             : "depth-tested"},
+                        {"objects", objects}}
+                       .dump(2) +
+                   "\n";
         return true;
     }
     catch (const std::exception& exception)
@@ -59,8 +66,8 @@ bool serialize_workspace(const std::map<ObjectId, BoundsDisplayState>& workspace
     }
 }
 
-bool deserialize_workspace(std::string_view document,
-                           std::map<ObjectId, BoundsDisplayState>& workspace, std::string* error)
+bool deserialize_workspace(std::string_view document, WorkspaceDocument& workspace,
+                           std::string* error)
 {
     try
     {
@@ -71,9 +78,22 @@ bool deserialize_workspace(std::string_view document,
             !root["objects"].is_object())
             fail("unsupported or malformed AI3 workspace");
         for (const auto& [key, ignored] : root.items())
-            if (key != "format" && key != "version" && key != "objects")
+            if (key != "format" && key != "version" && key != "helperRenderingMode" &&
+                key != "objects")
                 fail("workspace contains an unsupported field");
-        std::map<ObjectId, BoundsDisplayState> candidate;
+        WorkspaceDocument candidate;
+        if (root.contains("helperRenderingMode"))
+        {
+            if (!root["helperRenderingMode"].is_string())
+                fail("workspace helper rendering mode must be a string");
+            const std::string mode = root["helperRenderingMode"].get<std::string>();
+            if (mode == "overlay")
+                candidate.helper_rendering_mode = WorkspaceHelperRenderingMode::overlay;
+            else if (mode == "depth-tested")
+                candidate.helper_rendering_mode = WorkspaceHelperRenderingMode::depth_tested;
+            else
+                fail("workspace helper rendering mode is unsupported");
+        }
         for (const auto& [key, value] : root["objects"].items())
         {
             if (!value.is_object())
@@ -94,7 +114,7 @@ bool deserialize_workspace(std::string_view document,
             state.show_bounding_box = field("showBoundingBox");
             state.show_bounding_sphere = field("showBoundingSphere");
             state.hover_feedback = field("hoverFeedback");
-            candidate.emplace(parse_id(key), state);
+            candidate.objects.emplace(parse_id(key), state);
         }
         workspace = std::move(candidate);
         return true;
@@ -107,8 +127,8 @@ bool deserialize_workspace(std::string_view document,
     }
 }
 
-bool load_workspace_file(const std::filesystem::path& path,
-                         std::map<ObjectId, BoundsDisplayState>& workspace, std::string* error)
+bool load_workspace_file(const std::filesystem::path& path, WorkspaceDocument& workspace,
+                         std::string* error)
 {
     std::error_code status_error;
     if (!std::filesystem::exists(path, status_error))
@@ -117,7 +137,7 @@ bool load_workspace_file(const std::filesystem::path& path,
             *error = status_error.message();
         if (status_error)
             return false;
-        workspace.clear();
+        workspace = {};
         return true;
     }
     std::ifstream input(path, std::ios::binary);
@@ -132,8 +152,8 @@ bool load_workspace_file(const std::filesystem::path& path,
     return deserialize_workspace(contents.str(), workspace, error);
 }
 
-bool save_workspace_file(const std::map<ObjectId, BoundsDisplayState>& workspace,
-                         const std::filesystem::path& path, std::string* error)
+bool save_workspace_file(const WorkspaceDocument& workspace, const std::filesystem::path& path,
+                         std::string* error)
 {
     std::string document;
     if (!serialize_workspace(workspace, document, error))

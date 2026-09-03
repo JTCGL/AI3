@@ -93,6 +93,18 @@ constexpr std::array<LengthUnitEntry, 4> length_unit_entries = {
      {LengthUnit::meter, "unit.meter"},
      {LengthUnit::kilometer, "unit.kilometer"}}};
 
+WorkspaceHelperRenderingMode workspace_helper_mode(HelperRenderingMode mode)
+{
+    return mode == HelperRenderingMode::depth_tested ? WorkspaceHelperRenderingMode::depth_tested
+                                                     : WorkspaceHelperRenderingMode::overlay;
+}
+
+HelperRenderingMode viewport_helper_mode(WorkspaceHelperRenderingMode mode)
+{
+    return mode == WorkspaceHelperRenderingMode::depth_tested ? HelperRenderingMode::depth_tested
+                                                              : HelperRenderingMode::overlay;
+}
+
 constexpr std::array<PanelMenuEntry, 4> panel_menu_entries = {
     {{"panel.scene_graph", "ai3_scene_graph", EditorPanel::scene_graph},
      {"panel.viewport", "ai3_viewport", EditorPanel::viewport},
@@ -227,17 +239,21 @@ void EditorUi::save_document()
         request_save_as_dialog();
         return;
     }
-    std::string error;
-    if (document_session_.save(&error))
+    std::string scene_error;
+    std::string workspace_error;
+    const DocumentSaveResult result = document_session_.save(&scene_error, &workspace_error);
+    if (result.scene_saved)
     {
         report_document_result("console.document_saved",
                                document_session_.document_path().string());
+        if (!result.workspace_saved)
+            report_document_result("console.workspace_error", workspace_error);
         if (document_session_.pending_transition() != DocumentTransition::none)
             ready_transition_ = document_session_.saved_and_take_pending_transition();
     }
     else
     {
-        report_document_result("console.document_save_failed", error);
+        report_document_result("console.document_save_failed", scene_error);
         document_session_.save_failed();
     }
 }
@@ -279,6 +295,8 @@ void EditorUi::process_dialog_result()
             return;
         }
         viewport_view_.reset();
+        viewport_view_.set_helper_rendering_mode(
+            viewport_helper_mode(document_session_.helper_rendering_mode()));
         viewport_renderer_.clear_geometry_cache();
         report_document_result("console.document_opened",
                                document_session_.document_path().string());
@@ -287,14 +305,19 @@ void EditorUi::process_dialog_result()
 
     if (path.extension().empty())
         path += scene_document_extension;
-    std::string error;
-    if (!document_session_.save_as(path, &error))
+    std::string scene_error;
+    std::string workspace_error;
+    const DocumentSaveResult save_result =
+        document_session_.save_as(path, &scene_error, &workspace_error);
+    if (!save_result.scene_saved)
     {
-        report_document_result("console.document_save_failed", error);
+        report_document_result("console.document_save_failed", scene_error);
         document_session_.save_failed();
         return;
     }
     report_document_result("console.document_saved", document_session_.document_path().string());
+    if (!save_result.workspace_saved)
+        report_document_result("console.workspace_error", workspace_error);
     if (document_session_.pending_transition() != DocumentTransition::none)
         ready_transition_ = document_session_.saved_and_take_pending_transition();
 }
@@ -305,6 +328,7 @@ void EditorUi::perform_transition(DocumentTransition transition, bool& running)
     {
     case DocumentTransition::new_document:
         document_session_.new_document();
+        viewport_view_.reset();
         viewport_renderer_.clear_geometry_cache();
         break;
     case DocumentTransition::open_document:
@@ -391,6 +415,7 @@ void EditorUi::draw_main_menu(bool& running)
                 document_session_.reset_scene();
                 viewport_renderer_.clear_geometry_cache();
                 viewport_view_.reset();
+                document_session_.set_helper_rendering_mode(WorkspaceHelperRenderingMode::overlay);
             }
             ImGui::Separator();
             if (ImGui::MenuItem(localization_.text("action.quit").c_str()))
@@ -618,7 +643,10 @@ void EditorUi::draw_editor_toolbar()
         for (const auto& [mode, key] : helper_modes)
             if (ImGui::Selectable(localization_.text(key).c_str(),
                                   mode == viewport_view_.helper_rendering_mode()))
+            {
                 viewport_view_.set_helper_rendering_mode(mode);
+                document_session_.set_helper_rendering_mode(workspace_helper_mode(mode));
+            }
         ImGui::EndCombo();
     }
     ImGui::End();
@@ -775,10 +803,7 @@ void EditorUi::draw_object_inspector()
                         .c_str(),
                     &bounds_display.hover_feedback);
                 if (workspace_changed)
-                {
-                    std::string error;
-                    document_session_.set_bounds_display(object->id, bounds_display, &error);
-                }
+                    document_session_.set_bounds_display(object->id, bounds_display);
                 float displayed_radius =
                     length_from_meters(object->sphere.radius_meters, display_length_unit_);
                 const std::string radius_text = localization_.format(
@@ -1105,8 +1130,11 @@ void EditorUi::draw_viewport()
             if (helper_object != nullptr)
             {
                 helper_pivot = state_.world_position(helper_object->id);
-                helper_basis = coordinate_space_basis(
-                    state_, helper_object->id, viewport_view_.reference_space(), resolved.view);
+                helper_basis =
+                    translation_gesture_.has_value()
+                        ? translation_gesture_->frozen_basis
+                        : coordinate_space_basis(state_, helper_object->id,
+                                                 viewport_view_.reference_space(), resolved.view);
             }
             const ImVec2 future_minimum = ImGui::GetCursorScreenPos();
             const ImVec2 mouse = ImGui::GetIO().MousePos;
@@ -1242,7 +1270,12 @@ void EditorUi::draw_viewport()
                 ImDrawList* draw_list = ImGui::GetWindowDrawList();
                 HelperGeometry overlay_helpers = resolve_helper_geometry(
                     state_, selected == nullptr ? no_object : selected->id, hovered_object_, pivot,
-                    basis, resolved, viewport_size, 72.0F * ui_scale_,
+                    basis,
+                    translation_gesture_.has_value() ? translation_gesture_->frozen_view : resolved,
+                    viewport_size,
+                    translation_gesture_.has_value()
+                        ? translation_gesture_->frozen_screen_axis_length
+                        : 72.0F * ui_scale_,
                     static_cast<int>(translation_gesture_.has_value()
                                          ? translation_gesture_->selected_axis
                                          : hovered_axis));
@@ -1254,8 +1287,12 @@ void EditorUi::draw_viewport()
                 };
                 for (const ColoredLine& line : overlay_helpers.lines)
                 {
-                    const auto a = project_world_to_viewport(line.start, resolved, viewport_size);
-                    const auto b = project_world_to_viewport(line.end, resolved, viewport_size);
+                    const ResolvedViewportView& helper_view =
+                        translation_gesture_.has_value() ? translation_gesture_->frozen_view
+                                                         : resolved;
+                    const auto a =
+                        project_world_to_viewport(line.start, helper_view, viewport_size);
+                    const auto b = project_world_to_viewport(line.end, helper_view, viewport_size);
                     if (a && b)
                         draw_list->AddLine({minimum.x + a->x, minimum.y + a->y},
                                            {minimum.x + b->x, minimum.y + b->y}, color(line.color),
@@ -1263,12 +1300,15 @@ void EditorUi::draw_viewport()
                 }
                 for (const ColoredTriangle& triangle : overlay_helpers.triangles)
                 {
+                    const ResolvedViewportView& helper_view =
+                        translation_gesture_.has_value() ? translation_gesture_->frozen_view
+                                                         : resolved;
                     const auto a =
-                        project_world_to_viewport(triangle.first, resolved, viewport_size);
+                        project_world_to_viewport(triangle.first, helper_view, viewport_size);
                     const auto b =
-                        project_world_to_viewport(triangle.second, resolved, viewport_size);
+                        project_world_to_viewport(triangle.second, helper_view, viewport_size);
                     const auto c =
-                        project_world_to_viewport(triangle.third, resolved, viewport_size);
+                        project_world_to_viewport(triangle.third, helper_view, viewport_size);
                     if (a && b && c)
                         draw_list->AddTriangleFilled({minimum.x + a->x, minimum.y + a->y},
                                                      {minimum.x + b->x, minimum.y + b->y},

@@ -97,11 +97,14 @@ hierarchy data; normal object creation still uses the lifecycle allocator. Load 
 before replacing scene-owned state, and failure leaves the destination unchanged. Successful load clears
 selection while preserving non-document editor state such as console, panel visibility, and layout intent.
 
-An associated `.ai3workspace` sidecar stores only each bounded object's default-off bounding-box,
-bounding-sphere, and hover-feedback switches by stable object ID. Missing data defaults off. Malformed data
+An associated `.ai3workspace` sidecar stores the helper-rendering mode and each bounded object's default-off
+bounding-box, bounding-sphere, and hover-feedback switches by stable object ID. Missing data defaults off.
+Malformed data
 cannot invalidate an already loaded scene and is reported through the Console. Save and Save As atomically
-replace the associated sidecar; untitled workspace state remains in memory. Workspace state is excluded from
-Scene Documents, revision, dirty state, and history.
+replace the associated sidecar only when Save or Save As is invoked; inspector changes remain in memory until
+then, and untitled workspace state remains in memory. A successful scene write marks the document clean and
+permits a pending transition even if the separately reported workspace write fails. Workspace state is
+excluded from Scene Documents, revision, dirty state, and history.
 
 `EditorHistory` uses internal authoritative before/after snapshots and exposes representation-independent
 begin/commit/cancel/undo/redo operations. Snapshots contain exact document state but exclude selection,
@@ -149,8 +152,8 @@ The application has one viewport with display-independent `ViewportView` state o
 is Orbit or Scene Camera. Orbit state remains independent of scene hierarchy. Scene-camera selection belongs
 to the viewport, not to a global active-camera concept, and currently accepts perspective-camera objects only.
 Its independent interaction mode is Selection or Navigation and is workspace state excluded from document
-revision, dirty state, history, and persistence. Its transient helper-rendering mode selects Overlay or Depth
-Tested, defaults to Overlay, and is not yet persisted.
+revision, dirty state, history, and persistence. Its helper-rendering mode selects Overlay or Depth Tested,
+defaults to Overlay, and persists with the per-document workspace sidecar without dirtying the scene.
 
 The X/Y/Z translation gizmo is visible for the selected object in both modes but interactive only in Selection.
 `ViewportView` retains the

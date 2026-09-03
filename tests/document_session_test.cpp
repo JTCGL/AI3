@@ -119,7 +119,7 @@ TEST_CASE("session file open is transactional and successful open is clean")
     ai3::EditorState source;
     source.create_sphere("Loaded");
     ai3::DocumentSession source_session(source);
-    REQUIRE(source_session.save_as(valid));
+    REQUIRE(source_session.save_as(valid).scene_saved);
 
     ai3::EditorState state;
     const ai3::ObjectId existing = state.create_object(ai3::CreateObject{"Existing"});

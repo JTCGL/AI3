@@ -9,18 +9,23 @@ unchanged by transforms or unrelated edits. Directional lights and perspective c
 Three default-off per-sphere controls select box display, sphere display, and hover feedback. They are stored
 by stable object ID in a version-1 `.ai3workspace` JSON sidecar. Missing files and fields are safe defaults;
 malformed or unsupported files leave the loaded scene usable and report a Console error. Save and Save As use
-atomic replacement and reassociate the sidecar. Workspace state is not authored, undoable, or dirtying.
+atomic replacement and reassociate the sidecar. Sidecars are written only by explicit Save or Save As;
+workspace-only changes remain in memory otherwise. Scene-save and workspace-save outcomes are distinct, so a
+workspace failure neither misreports nor blocks an otherwise successful scene save. Workspace state is not
+authored, undoable, or dirtying.
 
 A narrow headless helper resolver emits world-space colored lines and triangles for transformed wire bounds
 and the translation gizmo. Dear ImGui projects them as an always-visible overlay; the concrete GLES3 renderer
 can instead draw them after scene geometry against the viewport depth buffer with a centralized visual depth
-bias. The localized toolbar selects Overlay (default) or Depth Tested without persisting that choice. Gizmos
-render in Selection and Navigation, while hit acquisition remains Selection-only. Depth-tested hit testing is
-still screen-based, so an occluded handle may be acquired.
+bias. The localized toolbar selects Overlay (default) or Depth Tested and persists that choice in the
+workspace sidecar. World gizmo length is derived from raw axis projection and corrected against the supplied
+view/projection so its established DPI-scaled apparent size remains stable. Gizmos render in Selection and
+Navigation, while hit acquisition remains Selection-only. Depth-tested hit testing is still screen-based, so
+an occluded handle may be acquired.
 
 ## Deferred
 
-Camera/local-light bounds, Frame Selected, preferences, persistence of helper-rendering mode, depth-aware or GPU
+Camera/local-light bounds, Frame Selected, preferences, workspace-dirty close protection, depth-aware or GPU
 picking, additional gizmos/helpers, middle-mouse Navigation, wheel changes, generalized frameworks, renderer
 abstractions, and other backends remain deferred.
 

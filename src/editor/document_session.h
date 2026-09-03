@@ -1,6 +1,7 @@
 #pragma once
 
 #include "editor/editor_history.h"
+#include "editor/workspace_document.h"
 
 #include <filesystem>
 #include <string>
@@ -19,6 +20,12 @@ enum class TransitionRequestResult
 {
     proceed,
     needs_unsaved_resolution
+};
+
+struct DocumentSaveResult
+{
+    bool scene_saved = false;
+    bool workspace_saved = false;
 };
 
 class DocumentSession
@@ -42,12 +49,16 @@ class DocumentSession
     void mark_saved();
     void mark_saved_as(std::filesystem::path path);
     void mark_opened(std::filesystem::path path);
-    bool save(std::string* error = nullptr);
-    bool save_as(std::filesystem::path path, std::string* error = nullptr);
+    DocumentSaveResult save(std::string* scene_error = nullptr,
+                            std::string* workspace_error = nullptr);
+    DocumentSaveResult save_as(std::filesystem::path path, std::string* scene_error = nullptr,
+                               std::string* workspace_error = nullptr);
     bool open(std::filesystem::path path, std::string* error = nullptr);
     void new_document();
     bool reset_scene();
-    bool set_bounds_display(ObjectId id, BoundsDisplayState display, std::string* error = nullptr);
+    bool set_bounds_display(ObjectId id, BoundsDisplayState display);
+    WorkspaceHelperRenderingMode helper_rendering_mode() const;
+    void set_helper_rendering_mode(WorkspaceHelperRenderingMode mode);
 
     private:
     EditorState& state_;
@@ -56,6 +67,7 @@ class DocumentSession
     DocumentRevision clean_revision_ = 0;
     HistoryStateId clean_history_state_ = 0;
     DocumentTransition pending_transition_ = DocumentTransition::none;
+    WorkspaceHelperRenderingMode helper_rendering_mode_ = WorkspaceHelperRenderingMode::overlay;
     bool save_workspace(std::string* error);
 };
 } // namespace ai3

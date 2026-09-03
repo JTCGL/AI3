@@ -68,26 +68,27 @@ void DocumentSession::mark_opened(std::filesystem::path path)
     mark_saved();
 }
 
-bool DocumentSession::save(std::string* error)
+DocumentSaveResult DocumentSession::save(std::string* scene_error, std::string* workspace_error)
 {
     if (document_path_.empty())
     {
-        if (error != nullptr)
-            *error = "Scene Document has no associated path";
-        return false;
+        if (scene_error != nullptr)
+            *scene_error = "Scene Document has no associated path";
+        return {};
     }
-    if (!save_scene_document_file(state_, document_path_, error))
-        return false;
+    if (!save_scene_document_file(state_, document_path_, scene_error))
+        return {};
     mark_saved();
-    return save_workspace(error);
+    return {true, save_workspace(workspace_error)};
 }
 
-bool DocumentSession::save_as(std::filesystem::path path, std::string* error)
+DocumentSaveResult DocumentSession::save_as(std::filesystem::path path, std::string* scene_error,
+                                            std::string* workspace_error)
 {
-    if (!save_scene_document_file(state_, path, error))
-        return false;
+    if (!save_scene_document_file(state_, path, scene_error))
+        return {};
     mark_saved_as(std::move(path));
-    return save_workspace(error);
+    return {true, save_workspace(workspace_error)};
 }
 
 bool DocumentSession::open(std::filesystem::path path, std::string* error)
@@ -95,15 +96,19 @@ bool DocumentSession::open(std::filesystem::path path, std::string* error)
     if (!load_scene_document_file(path, state_, error))
         return false;
     mark_opened(std::move(path));
-    std::map<ObjectId, BoundsDisplayState> workspace;
+    WorkspaceDocument workspace;
     std::string workspace_error;
     if (!load_workspace_file(workspace_path_for_scene(document_path_), workspace, &workspace_error))
     {
         state_.replace_bounds_workspace({});
+        helper_rendering_mode_ = WorkspaceHelperRenderingMode::overlay;
         state_.add_console_message("console.workspace_error", workspace_error);
     }
     else
-        state_.replace_bounds_workspace(std::move(workspace));
+    {
+        state_.replace_bounds_workspace(std::move(workspace.objects));
+        helper_rendering_mode_ = workspace.helper_rendering_mode;
+    }
     return true;
 }
 
@@ -112,21 +117,27 @@ bool DocumentSession::save_workspace(std::string* error)
     if (document_path_.empty())
         return true;
     std::string workspace_error;
-    if (save_workspace_file(state_.bounds_workspace(), workspace_path_for_scene(document_path_),
-                            &workspace_error))
+    const WorkspaceDocument workspace{helper_rendering_mode_, state_.bounds_workspace()};
+    if (save_workspace_file(workspace, workspace_path_for_scene(document_path_), &workspace_error))
         return true;
-    state_.add_console_message("console.workspace_error", workspace_error);
     if (error != nullptr)
-        *error = "Workspace save failed: " + workspace_error;
+        *error = workspace_error;
     return false;
 }
 
-bool DocumentSession::set_bounds_display(ObjectId id, BoundsDisplayState display,
-                                         std::string* error)
+bool DocumentSession::set_bounds_display(ObjectId id, BoundsDisplayState display)
 {
-    if (!state_.set_bounds_display(id, display))
-        return false;
-    return document_path_.empty() || save_workspace(error);
+    return state_.set_bounds_display(id, display);
+}
+
+WorkspaceHelperRenderingMode DocumentSession::helper_rendering_mode() const
+{
+    return helper_rendering_mode_;
+}
+
+void DocumentSession::set_helper_rendering_mode(WorkspaceHelperRenderingMode mode)
+{
+    helper_rendering_mode_ = mode;
 }
 
 void DocumentSession::new_document()
@@ -134,6 +145,7 @@ void DocumentSession::new_document()
     state_.reset_scene();
     history_.rebaseline();
     document_path_.clear();
+    helper_rendering_mode_ = WorkspaceHelperRenderingMode::overlay;
     mark_saved();
 }
 

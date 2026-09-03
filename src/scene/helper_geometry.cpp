@@ -106,12 +106,38 @@ HelperGeometry resolve_helper_geometry(const EditorState& scene, ObjectId select
     {
         if (!projected->endpoints[i])
             continue;
-        const float pixels_per_unit =
-            glm::length(*projected->endpoints[i] - projected->pivot) / gizmo_pixel_length;
+        const glm::vec3 axis = glm::normalize(gizmo_basis[i]);
+        const auto projected_unit =
+            project_world_to_viewport(gizmo_pivot + axis, view, viewport_size);
+        if (!projected_unit)
+            continue;
+        const float pixels_per_unit = glm::length(*projected_unit - projected->pivot);
         if (!std::isfinite(pixels_per_unit) || pixels_per_unit <= 0.000001F)
             continue;
-        const glm::vec3 axis = glm::normalize(gizmo_basis[i]);
-        const glm::vec3 endpoint = gizmo_pivot + axis * (gizmo_pixel_length / pixels_per_unit);
+        float world_length = gizmo_pixel_length / pixels_per_unit;
+        bool valid_length = false;
+        for (int iteration = 0; iteration < 8; ++iteration)
+        {
+            const auto candidate =
+                project_world_to_viewport(gizmo_pivot + axis * world_length, view, viewport_size);
+            if (!candidate)
+                break;
+            const float current_length = glm::length(*candidate - projected->pivot);
+            if (!std::isfinite(current_length) || current_length <= 0.000001F)
+                break;
+            const float correction = gizmo_pixel_length / current_length;
+            world_length *= correction;
+            if (!std::isfinite(world_length) || world_length <= 0.0F)
+                break;
+            if (std::abs(1.0F - correction) <= 0.0001F)
+            {
+                valid_length = true;
+                break;
+            }
+        }
+        if (!valid_length)
+            continue;
+        const glm::vec3 endpoint = gizmo_pivot + axis * world_length;
         const glm::vec3 color = highlighted_axis == i ? active[i] : inactive[i];
         result.lines.push_back({gizmo_pivot, endpoint, color});
         glm::vec3 side_direction = glm::cross(axis, glm::cross(camera_right, axis));
@@ -122,8 +148,9 @@ HelperGeometry resolve_helper_geometry(const EditorState& scene, ObjectId select
         }
         if (glm::length(side_direction) <= 0.000001F)
             continue;
-        const glm::vec3 side = glm::normalize(side_direction) * (5.0F / pixels_per_unit);
-        const glm::vec3 base = endpoint - axis * (10.0F / pixels_per_unit);
+        const float world_units_per_pixel = world_length / gizmo_pixel_length;
+        const glm::vec3 side = glm::normalize(side_direction) * (5.0F * world_units_per_pixel);
+        const glm::vec3 base = endpoint - axis * (10.0F * world_units_per_pixel);
         result.triangles.push_back({endpoint, base + side, base - side, color});
     }
     return result;
