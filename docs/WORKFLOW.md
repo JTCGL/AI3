@@ -22,17 +22,25 @@ bash scripts/sync-current-and-check.sh
 ```
 
 Use the command that matches the intent. Platform-specific instructions should use the checkout paths above and
-be presented separately for Termux and T5600 when physical verification is appropriate.
+be presented separately for Termux and T5600 when physical verification is appropriate. Continue to provide
+post-merge update instructions for both machines so both checkouts remain synchronized, including when one is
+updated remotely or is unavailable for runtime testing.
+
+For milestones requiring physical/runtime review, a passing review on either Termux or T5600 is sufficient for
+milestone completion unless an approved milestone explicitly requires platform-specific behavior to be checked
+on both. The other machine's runtime review may be deferred without removing it from support or from normal
+synchronization. Repository verification and CI requirements remain unchanged.
 
 ## Roles
 
 ### User
 
 - Approves milestone scope and architectural choices before implementation.
-- Performs requested physical/runtime verification on Termux and/or T5600.
+- Performs requested physical/runtime verification on Termux or T5600; either supported machine normally
+  satisfies the milestone runtime-review requirement.
 - Decides when reviewed work is approved for merge.
-- May explicitly defer a physical-platform test when development needs to continue; a deferred test is not the
-  same as removing that platform from the supported verification workflow.
+- May defer the other physical-platform test when switching machines or when one is unavailable. A deferred
+  test is not the same as removing that platform from the supported verification or synchronization workflow.
 
 ### ChatGPT
 
