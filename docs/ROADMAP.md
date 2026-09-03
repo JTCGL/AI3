@@ -70,10 +70,12 @@ its existing mode controls require explicit design. No generalized tool or toolb
   cached bounds, exact shapes, or staged tests.
 - Keep directional lights unbounded and without fabricated bounds. Future local lights should derive finite
   bounds from concrete range/radius parameters and participate in the same optional bounds visualization.
-- Give perspective-camera objects a finite bounding volume derived from their frustum corners, projection
-  parameters, world transform, and aspect policy. The envelope extends along the viewing direction through the
-  far clip plane; whether it begins at the camera origin or near plane, and which aspect ratio is authoritative
-  outside an active viewport, remain milestone design decisions.
+- Give perspective-camera objects a world-space AABB enclosing their frustum corners, derived from projection
+  parameters, world transform, and an explicit aspect policy. The represented frustum extends along the viewing
+  direction through the far clip plane; whether its envelope begins at the camera origin or near plane, and
+  which aspect ratio is authoritative outside an active viewport, remain milestone design decisions. Coordinate
+  this bounds calculation with visible camera frustum lines/planes so clipping aids, hit detection, and helper
+  geometry do not develop conflicting camera-volume definitions.
 - Add Frame Selected, initially bound to F, after the required bounds semantics exist. In Orbit view it should
   target the selected bounds center and choose a perspective distance satisfying both horizontal and vertical
   FOV constraints. It must not mutate a Scene Camera. Behavior while a Scene Camera source is active must be
@@ -98,6 +100,13 @@ not yet independent of UI lifetime/ownership.
 
 ## Scene content
 
+- Add a Box as the next concrete primitive candidate, with authoritative dimensions and
+  topology-appropriate X/Y/Z segment counts. Integrate it through cached bounds, rendering, picking,
+  materials, serialization, inspector editing, hierarchy, and Undo/Redo. Use this second primitive as
+  concrete pressure to extract only genuinely shared primitive seams rather than generalizing from the
+  sphere speculatively.
+- Make sphere tessellation explicit authoritative parameters in a later compatible primitive pass; do not
+  silently treat the current procedural tessellation constants as authored sphere state.
 - Expand light types, primitive types, and their tooling as concrete requirements appear.
 - Add material deletion/duplication, library browsing, textures, multiple slots, or PBR only through later
   requirements that define their ownership and workflow.
