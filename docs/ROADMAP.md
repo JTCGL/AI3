@@ -29,18 +29,55 @@ console, diagnostics, renderer, or other workspace/session state.
 - Evaluate future editor preferences for overall gizmo size and view-aligned-axis depth behavior. Candidate
   depth policies include screen-vertical depth motion, disabling/fading strongly aligned axes, and stricter
   direct-axis-only interaction requiring a view change. The current view-derived fallback plane remains fixed.
+- Keep transform gizmos visible in both Selection and Navigation interaction modes. Rendering visibility is
+  separate from which interaction currently owns pointer input.
+- Add both the current always-visible ImGui overlay path and depth-tested GLES wire-geometry path for gizmos
+  and bounds so their behavior can be compared directly. Expose an explicit main-toolbar switch between the
+  two helper-rendering systems; do not silently choose one as the permanent policy.
 - Define persistent editor preferences separately before adding configurable key bindings or similar options.
+  Known candidates include gizmo size, view-aligned-axis constraint policy, selected/hovered bounds colors,
+  the Frame Selected key (initially F), and navigation/input preferences.
 
 AI3's first transform tool provides single-object X/Y/Z translation in Local, Parent, World, and View spaces.
 It establishes frozen gesture-start constraints, one history transaction per drag, and an ImGui overlay with
 approximately constant apparent size. It does not define planar/free translation, rotation, scale, snapping,
-multi-object pivots, a generalized gizmo framework, or persistent preferences. GLES helper rendering remains a
-future fallback only if runtime review finds the overlay inadequate.
+multi-object pivots, a generalized gizmo framework, or persistent preferences. The current ImGui overlay is
+established behavior; a later approved milestone will add a depth-tested GLES wire-geometry alternative and
+a main-toolbar comparison switch rather than treating GLES as fallback-only.
 
 The viewport now has explicit Selection and Navigation interaction modes plus a minimal contextual toolbar.
 Selection uses display-independent CPU picking for enabled, visible spheres and gives the selected object's
 translation handles first refusal on pointer-down. Non-sphere objects selected through the Scene Graph can be
-translated. No generalized tool or toolbar framework is established.
+translated. Future input behavior should make middle-mouse hold a momentary Navigation override: pressing the
+button enters Navigation and releasing it returns to Selection, while wheel scrolling alone does not change
+mode. Orbit wheel zoom should remain available regardless of the current Selection/Navigation mode; Scene
+Camera data must remain unaffected. The toolbar's retained/effective-mode presentation and interactions with
+its existing mode controls require explicit design. No generalized tool or toolbar framework is established.
+
+## Bounds and viewport feedback
+
+- Cache both a local/object-space axis-aligned bounding box and a bounding sphere with each bounded object.
+  These are derived runtime data, updated when authoritative dimensions or other shape-defining parameters
+  change, not recomputed every frame. Their relationship to Scene Document serialization must be decided
+  explicitly; they should not become a second independently editable source of geometric truth.
+- Use bounding spheres for coarse intersection rejection and bounding boxes for tighter tests, framing, and
+  wire visualization. Preserve exact primitive intersection where it is useful after coarse rejection.
+- Draw bounds as wire geometry only. The selected-object default is white and the hovered non-selected default
+  is yellow. Both colors are future editor preferences rather than fixed document data.
+- Support both an always-visible viewport overlay and a depth-tested GLES wire-geometry representation, sharing
+  the main-toolbar helper-rendering switch with gizmos so both systems can be compared in the running editor.
+- Keep directional lights unbounded and without fabricated bounds. Future local lights should derive finite
+  bounds from concrete range/radius parameters and participate in the same optional bounds visualization.
+- Give perspective-camera objects a finite bounding volume derived from their frustum corners, projection
+  parameters, world transform, and aspect policy. The envelope extends along the viewing direction through the
+  far clip plane; whether it begins at the camera origin or near plane, and which aspect ratio is authoritative
+  outside an active viewport, remain milestone design decisions.
+- Add Frame Selected, initially bound to F, after the required bounds semantics exist. In Orbit view it should
+  target the selected bounds center and choose a perspective distance satisfying both horizontal and vertical
+  FOV constraints. It must not mutate a Scene Camera. Behavior while a Scene Camera source is active must be
+  approved explicitly.
+- Keep screen-space bounds as a possible later feature rather than conflating them with object/world-space
+  bounds.
 
 ## Viewports and cameras
 
@@ -48,7 +85,8 @@ translated. No generalized tool or toolbar framework is established.
   modes when requirements justify them.
 - Add scene camera types beyond the current perspective camera through the existing explicit camera-kind
   dispatch.
-- Add camera/frustum visualization and related scene-camera tooling.
+- Add camera/frustum visualization and related scene-camera tooling; coordinate its geometry with the
+  perspective-camera bounds/frustum envelope rather than maintaining conflicting calculations.
 
 `ViewportView` selection and view/projection resolution are already display-independent and outside Dear
 ImGui. Orbit navigation dispatch and sphere picking are also display-independent, while Scene Camera navigation
