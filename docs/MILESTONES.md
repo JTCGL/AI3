@@ -117,16 +117,19 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 
 ## Milestone 16 — Single-object axis translation gizmo
 
-- Added a localized DPI-aware X/Y/Z translation overlay for the selected object in Local, Parent, World, and
-  View spaces, with handle-first Selection-mode ownership and unchanged Orbit-only Navigation behavior.
+- Added the initial localized DPI-aware X/Y/Z translation presentation for the selected object in Local,
+  Parent, World, and View spaces, with handle-first Selection-mode ownership and unchanged Orbit-only
+  Navigation behavior. Milestone 17 subsequently replaced its ImGui overlay presentation with the
+  authoritative GLES helper path.
 - Added a narrow authoritative world-position mutation, frozen gesture-start closest-point/fallback-plane
   constraints, approximately constant apparent sizing, and one existing history transaction per drag.
   Headless coverage includes hierarchy and invertibility cases, constraint degeneracies, projection/hit math,
-  history cancellation/Undo/Redo/checkpoints, and workspace-state exclusions. Physical overlay review remains
-  required on Termux ARM64 and T5600 Linux x86-64.
+  history cancellation/Undo/Redo/checkpoints, and workspace-state exclusions. Physical runtime review passed
+  on T5600 Linux x86-64; Termux runtime review was deferred under the normal single-platform acceptance policy.
 
 ## Milestone 17 — Cached object bounds, GLES helper rendering, and per-document workspace foundation
 
+- Merged: [PR #38](https://github.com/JTCGL/AI3/pull/38), `4147033a5644261a102eed3c7eaf71b34871f9c4`
 - Added cached object-local AABB/sphere data for spheres, atomic `.ai3workspace` sidecars for per-object bounds
   display state, and localized controls excluded from document revision and ordinary history edits. Legacy v1
   helper-rendering fields are accepted and ignored.
