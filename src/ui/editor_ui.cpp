@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "scene/color_space.h"
+#include "scene/helper_geometry.h"
 #include "scene/length_units.h"
 #include "scene/scene_math.h"
 #include "scene/translation_gizmo.h"
@@ -226,17 +227,21 @@ void EditorUi::save_document()
         request_save_as_dialog();
         return;
     }
-    std::string error;
-    if (document_session_.save(&error))
+    std::string scene_error;
+    std::string workspace_error;
+    const DocumentSaveResult result = document_session_.save(&scene_error, &workspace_error);
+    if (result.scene_saved)
     {
         report_document_result("console.document_saved",
                                document_session_.document_path().string());
+        if (!result.workspace_saved)
+            report_document_result("console.workspace_error", workspace_error);
         if (document_session_.pending_transition() != DocumentTransition::none)
             ready_transition_ = document_session_.saved_and_take_pending_transition();
     }
     else
     {
-        report_document_result("console.document_save_failed", error);
+        report_document_result("console.document_save_failed", scene_error);
         document_session_.save_failed();
     }
 }
@@ -286,14 +291,19 @@ void EditorUi::process_dialog_result()
 
     if (path.extension().empty())
         path += scene_document_extension;
-    std::string error;
-    if (!document_session_.save_as(path, &error))
+    std::string scene_error;
+    std::string workspace_error;
+    const DocumentSaveResult save_result =
+        document_session_.save_as(path, &scene_error, &workspace_error);
+    if (!save_result.scene_saved)
     {
-        report_document_result("console.document_save_failed", error);
+        report_document_result("console.document_save_failed", scene_error);
         document_session_.save_failed();
         return;
     }
     report_document_result("console.document_saved", document_session_.document_path().string());
+    if (!save_result.workspace_saved)
+        report_document_result("console.workspace_error", workspace_error);
     if (document_session_.pending_transition() != DocumentTransition::none)
         ready_transition_ = document_session_.saved_and_take_pending_transition();
 }
@@ -304,6 +314,7 @@ void EditorUi::perform_transition(DocumentTransition transition, bool& running)
     {
     case DocumentTransition::new_document:
         document_session_.new_document();
+        viewport_view_.reset();
         viewport_renderer_.clear_geometry_cache();
         break;
     case DocumentTransition::open_document:
@@ -736,6 +747,24 @@ void EditorUi::draw_object_inspector()
                                     [&] { state_.set_object_visible(object->id, object_visible); });
             if (object->primitive_kind == PrimitiveKind::sphere)
             {
+                BoundsDisplayState bounds_display = state_.bounds_display(object->id);
+                bool workspace_changed = ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.show_bounding_box"),
+                                       "show_bounding_box")
+                        .c_str(),
+                    &bounds_display.show_bounding_box);
+                workspace_changed |= ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.show_bounding_sphere"),
+                                       "show_bounding_sphere")
+                        .c_str(),
+                    &bounds_display.show_bounding_sphere);
+                workspace_changed |= ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.hover_feedback"),
+                                       "hover_feedback")
+                        .c_str(),
+                    &bounds_display.hover_feedback);
+                if (workspace_changed)
+                    document_session_.set_bounds_display(object->id, bounds_display);
                 float displayed_radius =
                     length_from_meters(object->sphere.radius_meters, display_length_unit_);
                 const std::string radius_text = localization_.format(
@@ -1056,7 +1085,63 @@ void EditorUi::draw_viewport()
             const float aspect_ratio =
                 static_cast<float>(requested.width) / static_cast<float>(requested.height);
             const ResolvedViewportView resolved = viewport_view_.resolve(state_, aspect_ratio);
-            viewport_renderer_.render(state_, resolved, requested);
+            const ObjectId helper_object_id = translation_gesture_.has_value()
+                                                  ? translation_gesture_->object_id
+                                                  : state_.selection();
+            const SceneObject* helper_object = state_.find_object(helper_object_id);
+            glm::vec3 helper_pivot{};
+            glm::mat3 helper_basis{1.0F};
+            if (helper_object != nullptr)
+            {
+                helper_pivot = state_.world_position(helper_object->id);
+                helper_basis =
+                    translation_gesture_.has_value()
+                        ? translation_gesture_->frozen_basis
+                        : coordinate_space_basis(state_, helper_object->id,
+                                                 viewport_view_.reference_space(), resolved.view);
+            }
+            const ImVec2 future_minimum = ImGui::GetCursorScreenPos();
+            const ImVec2 mouse = ImGui::GetIO().MousePos;
+            if (viewport_view_.interaction_mode() == ViewportInteractionMode::selection &&
+                mouse.x >= future_minimum.x && mouse.y >= future_minimum.y &&
+                mouse.x < future_minimum.x + region.x && mouse.y < future_minimum.y + region.y)
+            {
+                const glm::vec2 coordinates{(mouse.x - future_minimum.x) / region.x,
+                                            (mouse.y - future_minimum.y) / region.y};
+                hovered_object_ = viewport_view_.helper_hover_object(
+                    pick_sphere(state_, viewport_world_ray(coordinates, resolved)));
+            }
+            else
+                hovered_object_ = no_object;
+            int highlighted = translation_gesture_.has_value()
+                                  ? static_cast<int>(translation_gesture_->selected_axis)
+                                  : -1;
+            if (helper_object != nullptr && !translation_gesture_.has_value() &&
+                viewport_view_.interaction_mode() == ViewportInteractionMode::selection)
+            {
+                const auto projected = project_translation_gizmo(
+                    helper_pivot, helper_basis, resolved, {region.x, region.y}, 72.0F * ui_scale_);
+                if (projected)
+                    highlighted = static_cast<int>(pick_translation_axis(
+                        {mouse.x - future_minimum.x, mouse.y - future_minimum.y}, *projected,
+                        10.0F * ui_scale_));
+            }
+            const ResolvedViewportView& helper_gizmo_view =
+                translation_gesture_.has_value() ? translation_gesture_->frozen_view : resolved;
+            const glm::vec2 helper_gizmo_viewport = translation_gesture_.has_value()
+                                                        ? translation_gesture_->frozen_viewport_size
+                                                        : glm::vec2{region.x, region.y};
+            const float helper_gizmo_length = translation_gesture_.has_value()
+                                                  ? translation_gesture_->frozen_screen_axis_length
+                                                  : 72.0F * ui_scale_;
+            const ObjectId helper_id = helper_object == nullptr ? no_object : helper_object->id;
+            const HelperGeometry bounds_helpers =
+                resolve_bounds_helper_geometry(state_, helper_id, hovered_object_);
+            const HelperGeometry gizmo_helpers = resolve_translation_helper_geometry(
+                helper_id, helper_pivot, helper_basis, helper_gizmo_view, helper_gizmo_viewport,
+                helper_gizmo_length, highlighted);
+            const ViewportHelperInputs helpers{&bounds_helpers, &gizmo_helpers, &helper_gizmo_view};
+            viewport_renderer_.render(state_, resolved, requested, helpers);
             ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
                          {0.0F, 1.0F}, {1.0F, 0.0F});
             const ImVec2 minimum = ImGui::GetItemRectMin();
@@ -1097,8 +1182,7 @@ void EditorUi::draw_viewport()
             std::optional<ProjectedTranslationGizmo> projected_gizmo;
             glm::vec3 pivot{};
             glm::mat3 basis{1.0F};
-            if (selected != nullptr &&
-                viewport_view_.interaction_mode() == ViewportInteractionMode::selection)
+            if (selected != nullptr)
             {
                 pivot = state_.world_position(selected->id);
                 basis =
@@ -1125,6 +1209,7 @@ void EditorUi::draw_viewport()
                 hovered_axis = pick_translation_axis(pointer, *projected_gizmo, 10.0F * ui_scale_);
             }
             if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
+                viewport_view_.interaction_mode() == ViewportInteractionMode::selection &&
                 ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
                 const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
@@ -1149,45 +1234,6 @@ void EditorUi::draw_viewport()
                                                    constraint};
                         acquired_gizmo = true;
                     }
-                }
-            }
-
-            if (projected_gizmo.has_value())
-            {
-                ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                constexpr std::array<ImU32, 3> inactive_colors = {IM_COL32(150, 55, 55, 255),
-                                                                  IM_COL32(50, 140, 65, 255),
-                                                                  IM_COL32(55, 85, 155, 255)};
-                constexpr std::array<ImU32, 3> highlighted_colors = {IM_COL32(255, 90, 90, 255),
-                                                                     IM_COL32(90, 240, 105, 255),
-                                                                     IM_COL32(90, 150, 255, 255)};
-                const TranslationAxis highlighted_axis = translation_gesture_.has_value()
-                                                             ? translation_gesture_->selected_axis
-                                                             : hovered_axis;
-                const float arrow_length = 10.0F * ui_scale_;
-                const float arrow_half_width = 5.0F * ui_scale_;
-                for (std::size_t index = 0; index < 3; ++index)
-                {
-                    if (!projected_gizmo->endpoints[index].has_value())
-                        continue;
-                    const ImU32 color = static_cast<std::size_t>(highlighted_axis) == index
-                                            ? highlighted_colors[index]
-                                            : inactive_colors[index];
-                    const glm::vec2 endpoint = *projected_gizmo->endpoints[index];
-                    const glm::vec2 direction = glm::normalize(endpoint - projected_gizmo->pivot);
-                    const glm::vec2 perpendicular{-direction.y, direction.x};
-                    const glm::vec2 arrow_base = endpoint - direction * arrow_length;
-                    const ImVec2 screen_pivot{minimum.x + projected_gizmo->pivot.x,
-                                              minimum.y + projected_gizmo->pivot.y};
-                    const ImVec2 screen_endpoint{minimum.x + endpoint.x, minimum.y + endpoint.y};
-                    draw_list->AddLine(screen_pivot, screen_endpoint, color, 2.5F * ui_scale_);
-                    draw_list->AddTriangleFilled(
-                        screen_endpoint,
-                        {minimum.x + arrow_base.x + perpendicular.x * arrow_half_width,
-                         minimum.y + arrow_base.y + perpendicular.y * arrow_half_width},
-                        {minimum.x + arrow_base.x - perpendicular.x * arrow_half_width,
-                         minimum.y + arrow_base.y - perpendicular.y * arrow_half_width},
-                        color);
                 }
             }
 

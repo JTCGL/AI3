@@ -442,6 +442,7 @@ class SceneDocumentCodec
             decode_semantics(value.at("category").get<std::string>(),
                              value.at("subtype").get<std::string>(), value.at("payload"), object,
                              legacy);
+            EditorState::rebuild_bounds(object);
             candidate.objects_.push_back(std::move(object));
         }
         if (next_id <= maximum_id)

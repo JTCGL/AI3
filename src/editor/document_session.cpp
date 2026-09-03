@@ -1,5 +1,6 @@
 #include "editor/document_session.h"
 #include "editor/scene_document.h"
+#include "editor/workspace_document.h"
 
 #include <utility>
 
@@ -67,26 +68,27 @@ void DocumentSession::mark_opened(std::filesystem::path path)
     mark_saved();
 }
 
-bool DocumentSession::save(std::string* error)
+DocumentSaveResult DocumentSession::save(std::string* scene_error, std::string* workspace_error)
 {
     if (document_path_.empty())
     {
-        if (error != nullptr)
-            *error = "Scene Document has no associated path";
-        return false;
+        if (scene_error != nullptr)
+            *scene_error = "Scene Document has no associated path";
+        return {};
     }
-    if (!save_scene_document_file(state_, document_path_, error))
-        return false;
+    if (!save_scene_document_file(state_, document_path_, scene_error))
+        return {};
     mark_saved();
-    return true;
+    return {true, save_workspace(workspace_error)};
 }
 
-bool DocumentSession::save_as(std::filesystem::path path, std::string* error)
+DocumentSaveResult DocumentSession::save_as(std::filesystem::path path, std::string* scene_error,
+                                            std::string* workspace_error)
 {
-    if (!save_scene_document_file(state_, path, error))
-        return false;
+    if (!save_scene_document_file(state_, path, scene_error))
+        return {};
     mark_saved_as(std::move(path));
-    return true;
+    return {true, save_workspace(workspace_error)};
 }
 
 bool DocumentSession::open(std::filesystem::path path, std::string* error)
@@ -94,7 +96,36 @@ bool DocumentSession::open(std::filesystem::path path, std::string* error)
     if (!load_scene_document_file(path, state_, error))
         return false;
     mark_opened(std::move(path));
+    WorkspaceDocument workspace;
+    std::string workspace_error;
+    if (!load_workspace_file(workspace_path_for_scene(document_path_), workspace, &workspace_error))
+    {
+        state_.replace_bounds_workspace({});
+        state_.add_console_message("console.workspace_error", workspace_error);
+    }
+    else
+    {
+        state_.replace_bounds_workspace(std::move(workspace.objects));
+    }
     return true;
+}
+
+bool DocumentSession::save_workspace(std::string* error)
+{
+    if (document_path_.empty())
+        return true;
+    std::string workspace_error;
+    const WorkspaceDocument workspace{state_.bounds_workspace()};
+    if (save_workspace_file(workspace, workspace_path_for_scene(document_path_), &workspace_error))
+        return true;
+    if (error != nullptr)
+        *error = workspace_error;
+    return false;
+}
+
+bool DocumentSession::set_bounds_display(ObjectId id, BoundsDisplayState display)
+{
+    return state_.set_bounds_display(id, display);
 }
 
 void DocumentSession::new_document()

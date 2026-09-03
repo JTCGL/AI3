@@ -68,6 +68,11 @@ bool ViewportView::use_scene_camera(const EditorState& scene, ObjectId camera_id
 
 void ViewportView::set_interaction_mode(ViewportInteractionMode mode) { interaction_mode_ = mode; }
 
+ObjectId ViewportView::helper_hover_object(ObjectId picked_object) const
+{
+    return interaction_mode_ == ViewportInteractionMode::selection ? picked_object : no_object;
+}
+
 bool ViewportView::navigate(float yaw_delta_degrees, float pitch_delta_degrees)
 {
     if (interaction_mode_ != ViewportInteractionMode::navigation || source_ != ViewSource::orbit)

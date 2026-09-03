@@ -62,7 +62,8 @@ EditorHistory::Snapshot EditorHistory::capture() const
             state_.next_object_id_,
             state_.next_material_id_,
             state_.default_material_name_count_,
-            state_.default_name_counts_};
+            state_.default_name_counts_,
+            state_.bounds_workspace_};
 }
 
 bool EditorHistory::begin_transaction()
@@ -85,7 +86,24 @@ bool EditorHistory::commit_transaction()
     entries_.erase(entries_.begin() + static_cast<std::ptrdiff_t>(position_), entries_.end());
     const HistoryStateId before_id = current_state_id();
     const HistoryStateId after_id = allocate_state_id();
-    entries_.push_back({std::move(transaction_before_), std::move(after), before_id, after_id});
+    std::map<ObjectId, BoundsDisplayState> deleted_object_workspace;
+    const bool reset_scene = after.objects.empty() && after.next_object_id == 1 &&
+                             after.next_material_id == 1 && after.default_name_counts.empty() &&
+                             after.default_material_name_count == 0;
+    if (!reset_scene)
+        for (const SceneObject& object : transaction_before_.objects)
+            if (std::none_of(after.objects.begin(), after.objects.end(),
+                             [id = object.id](const SceneObject& candidate)
+                             { return candidate.id == id; }))
+            {
+                const auto display = transaction_before_.bounds_workspace.find(object.id);
+                deleted_object_workspace.emplace(
+                    object.id, display == transaction_before_.bounds_workspace.end()
+                                   ? BoundsDisplayState{}
+                                   : display->second);
+            }
+    entries_.push_back({std::move(transaction_before_), std::move(after), before_id, after_id,
+                        std::move(deleted_object_workspace)});
     position_ = entries_.size();
     return true;
 }
@@ -94,9 +112,16 @@ bool EditorHistory::cancel_transaction()
 {
     if (!transaction_active_)
         return false;
+    std::map<ObjectId, BoundsDisplayState> removed_object_workspace;
+    for (const auto& [id, display] : transaction_before_.bounds_workspace)
+        if (state_.find_object(id) == nullptr)
+            removed_object_workspace.emplace(id, display);
     Snapshot before = std::move(transaction_before_);
     transaction_active_ = false;
     restore(before);
+    for (const auto& [id, display] : removed_object_workspace)
+        if (state_.find_object(id) != nullptr)
+            state_.set_bounds_display(id, display);
     return true;
 }
 
@@ -112,7 +137,11 @@ bool EditorHistory::undo()
 {
     if (!can_undo())
         return false;
-    restore(entries_[position_ - 1].before);
+    const Entry& entry = entries_[position_ - 1];
+    restore(entry.before);
+    for (const auto& [id, display] : entry.deleted_object_workspace)
+        if (state_.find_object(id) != nullptr)
+            state_.set_bounds_display(id, display);
     --position_;
     return true;
 }
@@ -121,7 +150,12 @@ bool EditorHistory::redo()
 {
     if (!can_redo())
         return false;
-    restore(entries_[position_].after);
+    Entry& entry = entries_[position_];
+    for (auto& [id, display] : entry.deleted_object_workspace)
+        display = state_.bounds_display(id);
+    restore(entry.after);
+    for (const auto& [id, display] : entry.deleted_object_workspace)
+        state_.bounds_workspace_.erase(id);
     ++position_;
     return true;
 }

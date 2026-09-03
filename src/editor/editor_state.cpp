@@ -191,6 +191,7 @@ ObjectId EditorState::create_object(CreateObject object)
     created.sphere = object.sphere;
     created.perspective_camera = object.perspective_camera;
     created.directional_light = object.directional_light;
+    rebuild_bounds(created);
     objects_.push_back(std::move(created));
     advance_document_revision();
     return id;
@@ -255,9 +256,59 @@ bool EditorState::set_sphere(ObjectId id, SpherePrimitive sphere)
         object->sphere.material_id == sphere.material_id &&
         equal(object->sphere.fallback_color, sphere.fallback_color))
         return true;
+    const bool shape_changed = object->sphere.radius_meters != sphere.radius_meters;
     object->sphere = sphere;
+    if (shape_changed)
+        rebuild_bounds(*object);
     advance_document_revision();
     return true;
+}
+
+void EditorState::rebuild_bounds(SceneObject& object)
+{
+    object.bounds = {};
+    if (object.primitive_kind == PrimitiveKind::sphere)
+    {
+        const float radius = object.sphere.radius_meters;
+        if (std::isfinite(radius) && radius > 0.0F)
+        {
+            object.bounds.box = AxisAlignedBounds{glm::vec3{-radius}, glm::vec3{radius}};
+            object.bounds.sphere = BoundingSphere{{0.0F, 0.0F, 0.0F}, radius};
+        }
+    }
+}
+
+const BoundsDisplayState& EditorState::bounds_display(ObjectId id) const
+{
+    static const BoundsDisplayState defaults;
+    const auto found = bounds_workspace_.find(id);
+    return found == bounds_workspace_.end() ? defaults : found->second;
+}
+
+bool EditorState::set_bounds_display(ObjectId id, BoundsDisplayState display)
+{
+    const SceneObject* object = find_object(id);
+    if (object == nullptr || !object->bounds.box.has_value() || !object->bounds.sphere.has_value())
+        return false;
+    if (!display.show_bounding_box && !display.show_bounding_sphere && !display.hover_feedback)
+        bounds_workspace_.erase(id);
+    else
+        bounds_workspace_[id] = display;
+    return true;
+}
+
+void EditorState::replace_bounds_workspace(std::map<ObjectId, BoundsDisplayState> workspace)
+{
+    bounds_workspace_.clear();
+    for (const auto& [id, display] : workspace)
+        if (const SceneObject* object = find_object(id);
+            object != nullptr && object->bounds.box.has_value())
+            set_bounds_display(id, display);
+}
+
+const std::map<ObjectId, BoundsDisplayState>& EditorState::bounds_workspace() const
+{
+    return bounds_workspace_;
 }
 
 MaterialId EditorState::create_material(std::string localized_base_name, Material material)
@@ -487,6 +538,7 @@ bool EditorState::delete_object(ObjectId id)
                              candidate.objects_.end());
 
     objects_ = std::move(candidate.objects_);
+    bounds_workspace_.erase(id);
     if (selection_ == id)
         clear_selection();
     advance_document_revision();
@@ -497,7 +549,10 @@ bool EditorState::reset_scene()
 {
     if (objects_.empty() && materials_.empty() && next_object_id_ == 1 && next_material_id_ == 1 &&
         default_name_counts_.empty() && default_material_name_count_ == 0)
+    {
+        bounds_workspace_.clear();
         return false;
+    }
     objects_.clear();
     materials_.clear();
     selection_ = no_object;
@@ -505,6 +560,7 @@ bool EditorState::reset_scene()
     next_material_id_ = 1;
     default_material_name_count_ = 0;
     default_name_counts_.clear();
+    bounds_workspace_.clear();
     advance_document_revision();
     return true;
 }

@@ -3,6 +3,7 @@
 #include "editor/editor_state.h"
 #include "localization/localization.h"
 #include "render/viewport_renderer.h"
+#include "scene/helper_geometry.h"
 #include "scene/length_units.h"
 #include "scene/translation_gizmo.h"
 #include "scene/viewport_view.h"
@@ -73,5 +74,6 @@ class EditorUi
     MaterialId active_material_id_ = no_material;
     std::pair<ObjectId, ObjectId> pending_reparent_ = {no_object, no_object};
     std::optional<AxisTranslationGesture> translation_gesture_;
+    ObjectId hovered_object_ = no_object;
 };
 } // namespace ai3
