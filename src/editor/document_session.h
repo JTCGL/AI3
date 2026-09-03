@@ -57,8 +57,6 @@ class DocumentSession
     void new_document();
     bool reset_scene();
     bool set_bounds_display(ObjectId id, BoundsDisplayState display);
-    WorkspaceHelperRenderingMode helper_rendering_mode() const;
-    void set_helper_rendering_mode(WorkspaceHelperRenderingMode mode);
 
     private:
     EditorState& state_;
@@ -67,8 +65,6 @@ class DocumentSession
     DocumentRevision clean_revision_ = 0;
     HistoryStateId clean_history_state_ = 0;
     DocumentTransition pending_transition_ = DocumentTransition::none;
-    WorkspaceHelperRenderingMode helper_rendering_mode_ =
-        WorkspaceHelperRenderingMode::depth_tested;
     bool save_workspace(std::string* error);
 };
 } // namespace ai3

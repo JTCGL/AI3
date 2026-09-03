@@ -93,18 +93,6 @@ constexpr std::array<LengthUnitEntry, 4> length_unit_entries = {
      {LengthUnit::meter, "unit.meter"},
      {LengthUnit::kilometer, "unit.kilometer"}}};
 
-WorkspaceHelperRenderingMode workspace_helper_mode(HelperRenderingMode mode)
-{
-    return mode == HelperRenderingMode::depth_tested ? WorkspaceHelperRenderingMode::depth_tested
-                                                     : WorkspaceHelperRenderingMode::overlay;
-}
-
-HelperRenderingMode viewport_helper_mode(WorkspaceHelperRenderingMode mode)
-{
-    return mode == WorkspaceHelperRenderingMode::depth_tested ? HelperRenderingMode::depth_tested
-                                                              : HelperRenderingMode::overlay;
-}
-
 constexpr std::array<PanelMenuEntry, 4> panel_menu_entries = {
     {{"panel.scene_graph", "ai3_scene_graph", EditorPanel::scene_graph},
      {"panel.viewport", "ai3_viewport", EditorPanel::viewport},
@@ -295,8 +283,6 @@ void EditorUi::process_dialog_result()
             return;
         }
         viewport_view_.reset();
-        viewport_view_.set_helper_rendering_mode(
-            viewport_helper_mode(document_session_.helper_rendering_mode()));
         viewport_renderer_.clear_geometry_cache();
         report_document_result("console.document_opened",
                                document_session_.document_path().string());
@@ -624,30 +610,6 @@ void EditorUi::draw_editor_toolbar()
     }
     else
         ImGui::TextDisabled("%s", localization_.text("toolbar.navigation_context").c_str());
-    ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
-    ImGui::Text("%s:", localization_.text("toolbar.helper_rendering").c_str());
-    ImGui::SameLine();
-    const std::array<std::pair<HelperRenderingMode, const char*>, 2> helper_modes = {
-        {{HelperRenderingMode::overlay, "toolbar.overlay"},
-         {HelperRenderingMode::depth_tested, "toolbar.depth_tested"}}};
-    ImGui::SetNextItemWidth(8.0F * font_size_);
-    const auto helper_mode =
-        std::find_if(helper_modes.begin(), helper_modes.end(), [&](const auto& entry)
-                     { return entry.first == viewport_view_.helper_rendering_mode(); });
-    if (ImGui::BeginCombo("###helper_rendering_mode",
-                          localization_.text(helper_mode->second).c_str()))
-    {
-        for (const auto& [mode, key] : helper_modes)
-            if (ImGui::Selectable(localization_.text(key).c_str(),
-                                  mode == viewport_view_.helper_rendering_mode()))
-            {
-                viewport_view_.set_helper_rendering_mode(mode);
-                document_session_.set_helper_rendering_mode(workspace_helper_mode(mode));
-            }
-        ImGui::EndCombo();
-    }
     ImGui::End();
 }
 
@@ -1178,10 +1140,8 @@ void EditorUi::draw_viewport()
             const HelperGeometry gizmo_helpers = resolve_translation_helper_geometry(
                 helper_id, helper_pivot, helper_basis, helper_gizmo_view, helper_gizmo_viewport,
                 helper_gizmo_length, highlighted);
-            ViewportHelperInputs depth_helpers;
-            if (viewport_view_.helper_rendering_mode() == HelperRenderingMode::depth_tested)
-                depth_helpers = {&bounds_helpers, &gizmo_helpers, &helper_gizmo_view};
-            viewport_renderer_.render(state_, resolved, requested, depth_helpers);
+            const ViewportHelperInputs helpers{&bounds_helpers, &gizmo_helpers, &helper_gizmo_view};
+            viewport_renderer_.render(state_, resolved, requested, helpers);
             ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
                          {0.0F, 1.0F}, {1.0F, 0.0F});
             const ImVec2 minimum = ImGui::GetItemRectMin();
@@ -1275,48 +1235,6 @@ void EditorUi::draw_viewport()
                         acquired_gizmo = true;
                     }
                 }
-            }
-
-            if (viewport_view_.helper_rendering_mode() == HelperRenderingMode::overlay)
-            {
-                ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                const auto color = [](glm::vec3 value)
-                {
-                    return IM_COL32(static_cast<int>(value.r * 255.0F),
-                                    static_cast<int>(value.g * 255.0F),
-                                    static_cast<int>(value.b * 255.0F), 255);
-                };
-                const auto draw_helpers = [&](const HelperGeometry& geometry,
-                                              const ResolvedViewportView& presentation_view)
-                {
-                    for (const ColoredLine& line : geometry.lines)
-                    {
-                        const auto a =
-                            project_world_to_viewport(line.start, presentation_view, viewport_size);
-                        const auto b =
-                            project_world_to_viewport(line.end, presentation_view, viewport_size);
-                        if (a && b)
-                            draw_list->AddLine({minimum.x + a->x, minimum.y + a->y},
-                                               {minimum.x + b->x, minimum.y + b->y},
-                                               color(line.color), 2.0F * ui_scale_);
-                    }
-                    for (const ColoredTriangle& triangle : geometry.triangles)
-                    {
-                        const auto a = project_world_to_viewport(triangle.first, presentation_view,
-                                                                 viewport_size);
-                        const auto b = project_world_to_viewport(triangle.second, presentation_view,
-                                                                 viewport_size);
-                        const auto c = project_world_to_viewport(triangle.third, presentation_view,
-                                                                 viewport_size);
-                        if (a && b && c)
-                            draw_list->AddTriangleFilled({minimum.x + a->x, minimum.y + a->y},
-                                                         {minimum.x + b->x, minimum.y + b->y},
-                                                         {minimum.x + c->x, minimum.y + c->y},
-                                                         color(triangle.color));
-                    }
-                };
-                draw_helpers(bounds_helpers, resolved);
-                draw_helpers(gizmo_helpers, helper_gizmo_view);
             }
 
             if (ImGui::IsItemHovered())

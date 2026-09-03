@@ -9,15 +9,8 @@
 
 namespace ai3
 {
-enum class WorkspaceHelperRenderingMode
-{
-    overlay,
-    depth_tested
-};
-
 struct WorkspaceDocument
 {
-    WorkspaceHelperRenderingMode helper_rendering_mode = WorkspaceHelperRenderingMode::depth_tested;
     std::map<ObjectId, BoundsDisplayState> objects;
 };
 

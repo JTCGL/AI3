@@ -32,7 +32,6 @@ struct HelperGeometry
 
 void append_object_bounds(HelperGeometry& result, const EditorState& scene,
                           const SceneObject& object, glm::vec3 color);
-void append_helper_geometry(HelperGeometry& destination, const HelperGeometry& source);
 HelperGeometry resolve_bounds_helper_geometry(const EditorState& scene, ObjectId selected_id,
                                               ObjectId hovered_id);
 HelperGeometry resolve_translation_helper_geometry(ObjectId selected_id, glm::vec3 gizmo_pivot,
@@ -41,9 +40,4 @@ HelperGeometry resolve_translation_helper_geometry(ObjectId selected_id, glm::ve
                                                    glm::vec2 viewport_size,
                                                    float gizmo_pixel_length,
                                                    int highlighted_axis = -1);
-HelperGeometry resolve_helper_geometry(const EditorState& scene, ObjectId selected_id,
-                                       ObjectId hovered_id, glm::vec3 gizmo_pivot,
-                                       const glm::mat3& gizmo_basis,
-                                       const ResolvedViewportView& view, glm::vec2 viewport_size,
-                                       float gizmo_pixel_length, int highlighted_axis = -1);
 } // namespace ai3

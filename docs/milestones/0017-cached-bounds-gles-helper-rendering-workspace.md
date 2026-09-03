@@ -1,4 +1,4 @@
-# Milestone 17: Cached bounds, dual helper rendering, and workspace foundation
+# Milestone 17: Cached bounds, GLES helper rendering, and workspace foundation
 
 ## Delivered scope
 
@@ -15,27 +15,28 @@ workspace failure neither misreports nor blocks an otherwise successful scene sa
 not authored, undoable, or dirtying.
 
 A narrow headless helper resolver emits world-space colored lines and triangles for transformed wire bounds
-and the translation gizmo. Dear ImGui projects them as an always-visible overlay; the concrete GLES3 renderer
-can instead draw them after scene geometry against the viewport depth buffer with a centralized visual depth
-bias. Depth-tested bounds retain scene occlusion, while the GLES gizmo subpass disables depth testing and
-writes so gizmos remain on top. The localized toolbar selects Depth Tested (default) or provisional Overlay
-and persists that choice in the workspace sidecar; missing sidecars and missing mode fields use Depth Tested.
+and the translation gizmo. The concrete GLES3 renderer draws them after scene geometry. Depth-tested bounds
+use the viewport depth buffer with a centralized visual depth bias, while the separate gizmo subpass disables
+depth testing and writes so gizmos remain on top. Dear ImGui presents only the viewport texture. Version-1
+workspace files may contain any string-valued obsolete `helperRenderingMode`, which is ignored; new files omit
+the field.
 Deletion history retains only the removed object's display switches so Undo restores them
 without making ordinary workspace edits undoable. World gizmo length is derived from raw axis projection and
-corrected against the supplied view/projection so its established DPI-scaled apparent size remains stable. Gizmos render in Selection and
-Navigation, while object hover feedback and hit acquisition remain Selection-only. Active gizmo geometry uses
-the same frozen view, basis, viewport policy, and apparent length in both presenters while bounds continue to
+corrected against the supplied view/projection so its established DPI-scaled apparent size remains stable.
+Gizmos render in Selection and Navigation, while object hover feedback and hit acquisition remain
+Selection-only. Active gizmo geometry uses
+the frozen view, basis, viewport policy, and apparent length while bounds continue to
 follow current transforms. Gizmo hit testing remains screen-based.
 
 ## Deferred
 
 Camera/local-light bounds, Frame Selected, preferences, workspace-dirty close protection, GPU
 picking, additional gizmos/helpers, middle-mouse Navigation, wheel changes, generalized frameworks, renderer
-abstractions, and other backends remain deferred. Overlay remains temporarily available despite showing
-occluded bounds wires on top; later evaluation may remove its Dear ImGui presentation path.
+abstractions, and other backends remain deferred. An ImGui world-helper presenter must not be reintroduced
+without a new concrete requirement.
 
 ## Verification
 
 Repository checks and headless tests cover cache behavior, v1/v2 scene reconstruction, workspace
-format/lifecycle isolation, transformed helper geometry, and persisted viewport helper mode. Physical runtime
-comparison on Termux ARM64 or T5600 Linux x86-64 remains required.
+format/lifecycle isolation, transformed helper geometry, and explicit GLES depth policies. The GLES bounds and
+always-on-top gizmo presentation passed physical runtime review on T5600 Linux x86-64.

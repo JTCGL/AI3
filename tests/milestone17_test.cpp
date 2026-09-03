@@ -25,8 +25,8 @@ void check_gizmo_apparent_length(const ai3::ResolvedViewportView& view, glm::vec
                                  glm::vec3 pivot, const glm::mat3& basis, float requested_length)
 {
     ai3::EditorState scene;
-    const ai3::HelperGeometry geometry = ai3::resolve_helper_geometry(
-        scene, 99, ai3::no_object, pivot, basis, view, viewport_size, requested_length);
+    const ai3::HelperGeometry geometry = ai3::resolve_translation_helper_geometry(
+        99, pivot, basis, view, viewport_size, requested_length);
     REQUIRE_FALSE(geometry.lines.empty());
     for (const ai3::ColoredLine& line : geometry.lines)
     {
@@ -162,39 +162,34 @@ TEST_CASE("bounds reconstruct on document load and never serialize")
 TEST_CASE("workspace v1 is transactional defaulting and exact by object ID")
 {
     ai3::WorkspaceDocument source;
-    source.helper_rendering_mode = ai3::WorkspaceHelperRenderingMode::depth_tested;
     source.objects = {{12, {true, false, true}}, {44, {false, true, false}}};
     std::string encoded;
     REQUIRE(ai3::serialize_workspace(source, encoded));
     CHECK(encoded.find("radius") == std::string::npos);
-    CHECK(encoded.find(R"("helperRenderingMode": "depth-tested")") != std::string::npos);
+    CHECK(encoded.find("helperRenderingMode") == std::string::npos);
     ai3::WorkspaceDocument loaded;
     REQUIRE(ai3::deserialize_workspace(encoded, loaded));
     CHECK(loaded.objects.size() == 2);
     CHECK(loaded.objects.at(12).show_bounding_box);
     CHECK(loaded.objects.at(12).hover_feedback);
-    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::depth_tested);
     REQUIRE(ai3::deserialize_workspace(
         R"({"format":"ai3-workspace","version":1,"objects":{"12":{"showBoundingBox":true}}})",
         loaded));
     CHECK(loaded.objects.at(12).show_bounding_box);
     CHECK_FALSE(loaded.objects.at(12).show_bounding_sphere);
-    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::depth_tested);
-    source.helper_rendering_mode = ai3::WorkspaceHelperRenderingMode::overlay;
-    REQUIRE(ai3::serialize_workspace(source, encoded));
-    REQUIRE(ai3::deserialize_workspace(encoded, loaded));
-    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::overlay);
-    source.helper_rendering_mode = ai3::WorkspaceHelperRenderingMode::depth_tested;
-    REQUIRE(ai3::serialize_workspace(source, encoded));
-    REQUIRE(ai3::deserialize_workspace(encoded, loaded));
-    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::depth_tested);
+    for (const char* legacy_mode : {"overlay", "depth-tested", "obsolete-value"})
+    {
+        const std::string legacy =
+            std::string{R"({"format":"ai3-workspace","version":1,"helperRenderingMode":")"} +
+            legacy_mode + R"(","objects":{"12":{"hoverFeedback":true}}})";
+        REQUIRE(ai3::deserialize_workspace(legacy, loaded));
+        CHECK(loaded.objects.at(12).hover_feedback);
+    }
     const auto unchanged = loaded;
     CHECK_FALSE(ai3::deserialize_workspace("{bad", loaded));
     CHECK(loaded.objects.size() == unchanged.objects.size());
     CHECK_FALSE(ai3::deserialize_workspace(
-        R"({"format":"ai3-workspace","version":1,"helperRenderingMode":"unknown","objects":{}})",
-        loaded));
-    CHECK(loaded.helper_rendering_mode == ai3::WorkspaceHelperRenderingMode::depth_tested);
+        R"({"format":"ai3-workspace","version":1,"helperRenderingMode":4,"objects":{}})", loaded));
     CHECK_FALSE(
         ai3::deserialize_workspace(R"({"format":"wrong","version":1,"objects":{}})", loaded));
     CHECK_FALSE(ai3::deserialize_workspace(R"({"format":"ai3-workspace","version":2,"objects":{}})",
@@ -213,7 +208,6 @@ TEST_CASE("workspace sidecars follow document session lifecycle without dirtying
     CHECK(ai3::workspace_path_for_scene(first).filename() == "ai3-m17-first.ai3workspace");
     ai3::EditorState state;
     ai3::DocumentSession session(state);
-    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
     const auto id = state.create_sphere("Sphere");
     session.history().rebaseline();
     session.mark_saved();
@@ -221,7 +215,6 @@ TEST_CASE("workspace sidecars follow document session lifecycle without dirtying
     REQUIRE(session.set_bounds_display(id, {true, true, true}));
     CHECK(state.document_revision() == revision);
     CHECK_FALSE(session.dirty());
-    session.set_helper_rendering_mode(ai3::WorkspaceHelperRenderingMode::depth_tested);
     REQUIRE(session.save_as(first).scene_saved);
     REQUIRE(std::filesystem::exists(ai3::workspace_path_for_scene(first)));
     REQUIRE(session.save_as(second).scene_saved);
@@ -229,7 +222,6 @@ TEST_CASE("workspace sidecars follow document session lifecycle without dirtying
     state.replace_bounds_workspace({});
     REQUIRE(session.open(second));
     CHECK(state.bounds_display(id).show_bounding_sphere);
-    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
     session.new_document();
     CHECK(state.bounds_workspace().empty());
     std::filesystem::remove(first, ignored);
@@ -238,7 +230,7 @@ TEST_CASE("workspace sidecars follow document session lifecycle without dirtying
     std::filesystem::remove(ai3::workspace_path_for_scene(second), ignored);
 }
 
-TEST_CASE("workspace mutation waits for Save and helper mode round trips")
+TEST_CASE("workspace mutation waits for Save and missing sidecars use object defaults")
 {
     const auto scene_path = temporary_path("ai3-m17-explicit-save.ai3scene");
     const auto workspace_path = ai3::workspace_path_for_scene(scene_path);
@@ -247,12 +239,10 @@ TEST_CASE("workspace mutation waits for Save and helper mode round trips")
     std::filesystem::remove(workspace_path, ignored);
     ai3::EditorState state;
     ai3::DocumentSession session(state);
-    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
     const auto id = state.create_sphere("Sphere");
     REQUIRE(session.save_as(scene_path).scene_saved);
     std::filesystem::remove(workspace_path, ignored);
     REQUIRE(session.set_bounds_display(id, {true, false, true}));
-    session.set_helper_rendering_mode(ai3::WorkspaceHelperRenderingMode::depth_tested);
     CHECK_FALSE(std::filesystem::exists(workspace_path));
     CHECK_FALSE(session.dirty());
     const ai3::DocumentSaveResult saved = session.save();
@@ -260,17 +250,13 @@ TEST_CASE("workspace mutation waits for Save and helper mode round trips")
     CHECK(saved.workspace_saved);
     REQUIRE(session.open(scene_path));
     CHECK(state.bounds_display(id).show_bounding_box);
-    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
-    session.set_helper_rendering_mode(ai3::WorkspaceHelperRenderingMode::overlay);
     std::filesystem::remove(workspace_path, ignored);
     REQUIRE(session.open(scene_path));
-    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
-    session.set_helper_rendering_mode(ai3::WorkspaceHelperRenderingMode::overlay);
+    CHECK_FALSE(state.bounds_display(id).show_bounding_box);
+    CHECK_FALSE(state.bounds_display(id).show_bounding_sphere);
+    CHECK_FALSE(state.bounds_display(id).hover_feedback);
     REQUIRE(session.reset_scene());
-    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
-    session.set_helper_rendering_mode(ai3::WorkspaceHelperRenderingMode::overlay);
     session.new_document();
-    CHECK(session.helper_rendering_mode() == ai3::WorkspaceHelperRenderingMode::depth_tested);
     std::filesystem::remove(scene_path, ignored);
     std::filesystem::remove(workspace_path, ignored);
 }
@@ -342,9 +328,9 @@ TEST_CASE("world gizmo geometry projects to the requested apparent size")
 
     glm::mat3 collapsed{1.0F};
     collapsed[1] = glm::vec3{0.0F};
-    const auto collapsed_geometry =
-        ai3::resolve_helper_geometry(scene, 99, ai3::no_object, {0.0F, 0.0F, -5.0F}, collapsed,
-                                     scene_camera.resolve(scene, 1.0F), {800.0F, 800.0F}, 72.0F);
+    const auto collapsed_geometry = ai3::resolve_translation_helper_geometry(
+        99, {0.0F, 0.0F, -5.0F}, collapsed, scene_camera.resolve(scene, 1.0F), {800.0F, 800.0F},
+        72.0F);
     CHECK(collapsed_geometry.lines.size() == 1);
 }
 
@@ -365,25 +351,14 @@ TEST_CASE("helper bounds are deterministic and apply the complete world transfor
     ai3::append_object_bounds(geometry, scene, *scene.find_object(id), glm::vec3{1.0F});
     CHECK(geometry.lines.size() == 12 + 3 * 48);
     CHECK(geometry.lines[0].start == glm::vec3{4.0F, 1.5F, 3.5F});
-    ai3::ResolvedViewportView view;
-    view.view = glm::mat4{1.0F};
-    view.projection = glm::mat4{1.0F};
-    auto hovered = ai3::resolve_helper_geometry(scene, ai3::no_object, id, {}, glm::mat3{1.0F},
-                                                view, {800.0F, 600.0F}, 72.0F);
+    auto hovered = ai3::resolve_bounds_helper_geometry(scene, ai3::no_object, id);
     REQUIRE_FALSE(hovered.lines.empty());
     CHECK(hovered.lines[0].color == glm::vec3{1.0F, 1.0F, 0.0F});
-    auto selected = ai3::resolve_helper_geometry(scene, id, id, {}, glm::mat3{1.0F}, view,
-                                                 {800.0F, 600.0F}, 72.0F);
+    auto selected = ai3::resolve_bounds_helper_geometry(scene, id, id);
     REQUIRE_FALSE(selected.lines.empty());
     CHECK(selected.lines[0].color == glm::vec3{1.0F});
     ai3::ViewportView viewport;
-    CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::depth_tested);
-    viewport.set_helper_rendering_mode(ai3::HelperRenderingMode::overlay);
-    CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::overlay);
-    viewport.reset();
-    CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::depth_tested);
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
-    CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::depth_tested);
     CHECK(viewport.helper_hover_object(id) == ai3::no_object);
     const auto navigation_bounds = ai3::resolve_bounds_helper_geometry(
         scene, ai3::no_object, viewport.helper_hover_object(id));

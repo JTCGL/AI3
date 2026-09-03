@@ -101,13 +101,11 @@ bool DocumentSession::open(std::filesystem::path path, std::string* error)
     if (!load_workspace_file(workspace_path_for_scene(document_path_), workspace, &workspace_error))
     {
         state_.replace_bounds_workspace({});
-        helper_rendering_mode_ = WorkspaceHelperRenderingMode::depth_tested;
         state_.add_console_message("console.workspace_error", workspace_error);
     }
     else
     {
         state_.replace_bounds_workspace(std::move(workspace.objects));
-        helper_rendering_mode_ = workspace.helper_rendering_mode;
     }
     return true;
 }
@@ -117,7 +115,7 @@ bool DocumentSession::save_workspace(std::string* error)
     if (document_path_.empty())
         return true;
     std::string workspace_error;
-    const WorkspaceDocument workspace{helper_rendering_mode_, state_.bounds_workspace()};
+    const WorkspaceDocument workspace{state_.bounds_workspace()};
     if (save_workspace_file(workspace, workspace_path_for_scene(document_path_), &workspace_error))
         return true;
     if (error != nullptr)
@@ -130,22 +128,11 @@ bool DocumentSession::set_bounds_display(ObjectId id, BoundsDisplayState display
     return state_.set_bounds_display(id, display);
 }
 
-WorkspaceHelperRenderingMode DocumentSession::helper_rendering_mode() const
-{
-    return helper_rendering_mode_;
-}
-
-void DocumentSession::set_helper_rendering_mode(WorkspaceHelperRenderingMode mode)
-{
-    helper_rendering_mode_ = mode;
-}
-
 void DocumentSession::new_document()
 {
     state_.reset_scene();
     history_.rebaseline();
     document_path_.clear();
-    helper_rendering_mode_ = WorkspaceHelperRenderingMode::depth_tested;
     mark_saved();
 }
 
@@ -155,7 +142,6 @@ bool DocumentSession::reset_scene()
         return false;
     const bool changed = state_.reset_scene();
     history_.commit_transaction();
-    helper_rendering_mode_ = WorkspaceHelperRenderingMode::depth_tested;
     return changed;
 }
 } // namespace ai3

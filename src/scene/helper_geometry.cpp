@@ -73,13 +73,6 @@ void append_object_bounds(HelperGeometry& result, const EditorState& scene,
     }
 }
 
-void append_helper_geometry(HelperGeometry& destination, const HelperGeometry& source)
-{
-    destination.lines.insert(destination.lines.end(), source.lines.begin(), source.lines.end());
-    destination.triangles.insert(destination.triangles.end(), source.triangles.begin(),
-                                 source.triangles.end());
-}
-
 HelperGeometry resolve_bounds_helper_geometry(const EditorState& scene, ObjectId selected_id,
                                               ObjectId hovered_id)
 {
@@ -170,16 +163,4 @@ HelperGeometry resolve_translation_helper_geometry(ObjectId selected_id, glm::ve
     return result;
 }
 
-HelperGeometry resolve_helper_geometry(const EditorState& scene, ObjectId selected_id,
-                                       ObjectId hovered_id, glm::vec3 gizmo_pivot,
-                                       const glm::mat3& gizmo_basis,
-                                       const ResolvedViewportView& view, glm::vec2 viewport_size,
-                                       float gizmo_pixel_length, int highlighted_axis)
-{
-    HelperGeometry result = resolve_bounds_helper_geometry(scene, selected_id, hovered_id);
-    append_helper_geometry(result, resolve_translation_helper_geometry(
-                                       selected_id, gizmo_pivot, gizmo_basis, view, viewport_size,
-                                       gizmo_pixel_length, highlighted_axis));
-    return result;
-}
 } // namespace ai3

@@ -47,15 +47,8 @@ bool serialize_workspace(const WorkspaceDocument& workspace, std::string& docume
             objects[std::to_string(id)] = {{"showBoundingBox", state.show_bounding_box},
                                            {"showBoundingSphere", state.show_bounding_sphere},
                                            {"hoverFeedback", state.hover_feedback}};
-        document = Json{{"format", "ai3-workspace"},
-                        {"version", 1},
-                        {"helperRenderingMode",
-                         workspace.helper_rendering_mode == WorkspaceHelperRenderingMode::overlay
-                             ? "overlay"
-                             : "depth-tested"},
-                        {"objects", objects}}
-                       .dump(2) +
-                   "\n";
+        document =
+            Json{{"format", "ai3-workspace"}, {"version", 1}, {"objects", objects}}.dump(2) + "\n";
         return true;
     }
     catch (const std::exception& exception)
@@ -86,13 +79,6 @@ bool deserialize_workspace(std::string_view document, WorkspaceDocument& workspa
         {
             if (!root["helperRenderingMode"].is_string())
                 fail("workspace helper rendering mode must be a string");
-            const std::string mode = root["helperRenderingMode"].get<std::string>();
-            if (mode == "overlay")
-                candidate.helper_rendering_mode = WorkspaceHelperRenderingMode::overlay;
-            else if (mode == "depth-tested")
-                candidate.helper_rendering_mode = WorkspaceHelperRenderingMode::depth_tested;
-            else
-                fail("workspace helper rendering mode is unsupported");
         }
         for (const auto& [key, value] : root["objects"].items())
         {

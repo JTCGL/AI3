@@ -97,8 +97,9 @@ hierarchy data; normal object creation still uses the lifecycle allocator. Load 
 before replacing scene-owned state, and failure leaves the destination unchanged. Successful load clears
 selection while preserving non-document editor state such as console, panel visibility, and layout intent.
 
-An associated `.ai3workspace` sidecar stores the helper-rendering mode and each bounded object's default-off
-bounding-box, bounding-sphere, and hover-feedback switches by stable object ID. Missing data defaults off.
+An associated `.ai3workspace` sidecar stores each bounded object's default-off bounding-box, bounding-sphere,
+and hover-feedback switches by stable object ID. Missing data defaults off. Version-1 sidecars may contain the
+obsolete string-valued `helperRenderingMode` field, which is accepted and ignored; new writes omit it.
 Malformed data
 cannot invalidate an already loaded scene and is reported through the Console. Save and Save As atomically
 replace the associated sidecar only when Save or Save As is invoked; inspector changes remain in memory until
@@ -155,10 +156,7 @@ The application has one viewport with display-independent `ViewportView` state o
 is Orbit or Scene Camera. Orbit state remains independent of scene hierarchy. Scene-camera selection belongs
 to the viewport, not to a global active-camera concept, and currently accepts perspective-camera objects only.
 Its independent interaction mode is Selection or Navigation and is workspace state excluded from document
-revision, dirty state, history, and persistence. Its helper-rendering mode selects Overlay or Depth Tested,
-defaults to Depth Tested, and persists with the per-document workspace sidecar without dirtying the scene.
-Missing sidecars and version-1 sidecars lacking the field also select Depth Tested; explicit stored values for
-either mode remain authoritative.
+revision, dirty state, history, and persistence.
 
 The X/Y/Z translation gizmo is visible for the selected object in both modes but interactive only in Selection.
 `ViewportView` retains the
@@ -188,12 +186,11 @@ reflected scale, safely excludes non-invertible candidates, and keeps picking in
 
 Bounds and the translation gizmo resolve through shared world-space colored-line/triangle inputs. Bounds use
 current authoritative transforms, while an active translation's gizmo batch uses its frozen view, basis,
-viewport sizing policy, and DPI-derived apparent length in both presenters. Dear ImGui
-projects them as an always-visible overlay. In Depth Tested mode, the GLES presenter draws bounds after scene
-geometry with depth testing enabled, depth writes disabled, and a centralized visual-only depth bias; it then
-draws gizmos with depth testing and writes disabled and no bounds bias, so they remain on top. AABBs use
-transformed local edges and spheres
-use three transformed local great circles. Selected enabled bounds are white; hovered non-selected bounds are
+viewport sizing policy, and DPI-derived apparent length. The authoritative GLES helper renderer draws bounds
+after scene geometry with depth testing enabled, depth writes disabled, and a centralized visual-only depth
+bias; it then draws gizmos with depth testing and writes disabled and no bounds bias, so they remain on top.
+AABBs use transformed local edges and spheres use three transformed local great circles. Selected enabled
+bounds are white; hovered non-selected bounds are
 yellow only when hover feedback is enabled and the viewport is in Selection mode.
 
 Each gizmo axis retains a darker

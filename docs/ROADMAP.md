@@ -38,20 +38,21 @@ console, diagnostics, renderer, or other workspace/session state.
 
 AI3's first transform tool provides single-object X/Y/Z translation in Local, Parent, World, and View spaces.
 It establishes frozen gesture-start constraints, one history transaction per drag, shared helper inputs, and
-overlay/depth-tested presentations with approximately constant apparent size. It does not define planar/free
+the GLES helper presentation with approximately constant apparent size. It does not define planar/free
 translation, rotation, scale, snapping,
 multi-object pivots, a generalized gizmo framework, or persistent preferences.
 
 Future gizmos and non-rendered editor objects should share narrowly defined helper-geometry inputs such as
-pivot, axes, colors, and apparent scale across the overlay and depth-tested GLES presenters. This common path
+pivot, axes, colors, and apparent scale through the GLES helper renderer. This common path
 must be grown from concrete consumers rather than becoming a speculative generalized gizmo framework. Expected
 consumers include transform gizmos; local-light range, radius, and direction indicators; helper/dummy-object
 geometry; camera view lines and planes; planar spacing/layout grids; and normal, binormal, and tangent
 visualization for points and geometric data.
 
-Depth Tested is the primary helper presentation. Overlay remains temporarily available, but its ImGui-drawn
-bounds intentionally show rear/occluded wires over scene geometry and add a presentation dependency. Reassess
-and potentially remove Overlay in a later revision; M17 does not attempt depth-aware ImGui bounds.
+The GLES helper renderer is the authoritative path for current and future helper geometry. Bounds remain depth
+tested, while interactive transform gizmos render on top. Future lights, cameras, grids, dummy/helper objects,
+normals, binormals, tangents, and additional transform gizmos should extend the shared geometry/GLES path. Do
+not reintroduce an ImGui world-helper presenter without a new concrete requirement.
 
 The viewport now has explicit Selection and Navigation interaction modes plus a minimal contextual toolbar.
 Selection uses display-independent CPU picking for enabled, visible spheres and gives the selected object's
@@ -64,7 +65,7 @@ its existing mode controls require explicit design. No generalized tool or toolb
 
 ## Bounds and viewport feedback
 
-- Extend the established cached local AABB/sphere and dual wire presenters to future bounded object types only
+- Extend the established cached local AABB/sphere and GLES wire presentation to future bounded object types only
   when their authoritative finite-shape semantics are defined. Intersection consumers remain free to choose
   cached bounds, exact shapes, or staged tests.
 - Keep directional lights unbounded and without fabricated bounds. Future local lights should derive finite
