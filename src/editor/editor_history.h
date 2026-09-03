@@ -39,6 +39,7 @@ class EditorHistory
         MaterialId next_material_id = 1;
         std::uint64_t default_material_name_count = 0;
         std::map<EditorState::SubtypeKey, std::uint64_t> default_name_counts;
+        std::map<ObjectId, BoundsDisplayState> bounds_workspace;
     };
     struct Entry
     {
@@ -46,6 +47,7 @@ class EditorHistory
         Snapshot after;
         HistoryStateId before_id = 0;
         HistoryStateId after_id = 0;
+        std::map<ObjectId, BoundsDisplayState> deleted_object_workspace;
     };
 
     Snapshot capture() const;

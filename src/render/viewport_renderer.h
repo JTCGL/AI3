@@ -12,6 +12,13 @@
 
 namespace ai3
 {
+struct DepthTestedHelperInputs
+{
+    const HelperGeometry* bounds = nullptr;
+    const HelperGeometry* gizmo = nullptr;
+    const ResolvedViewportView* gizmo_view = nullptr;
+};
+
 class ViewportRenderer
 {
     public:
@@ -21,7 +28,7 @@ class ViewportRenderer
     ViewportRenderer& operator=(const ViewportRenderer&) = delete;
 
     void render(const EditorState& scene, const ResolvedViewportView& view, RenderTargetSize size,
-                const HelperGeometry* helpers = nullptr);
+                DepthTestedHelperInputs helpers = {});
     void synchronize_geometry_cache(const EditorState& scene);
     void clear_geometry_cache();
     std::uint32_t texture() const { return color_texture_; }
@@ -32,6 +39,7 @@ class ViewportRenderer
     private:
     void resize(RenderTargetSize size);
     void destroy_render_target();
+    void render_helpers(const HelperGeometry& helpers, const glm::mat4& view_projection);
 
     struct SphereGeometry
     {

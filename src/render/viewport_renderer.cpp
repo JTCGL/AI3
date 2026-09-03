@@ -374,7 +374,7 @@ void ViewportRenderer::resize(RenderTargetSize size)
 }
 
 void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportView& view,
-                              RenderTargetSize size, const HelperGeometry* helpers)
+                              RenderTargetSize size, DepthTestedHelperInputs helpers)
 {
     synchronize_geometry_cache(scene);
     if (requires_render_target_resize(size_, size))
@@ -445,45 +445,13 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(geometry.index_count), GL_UNSIGNED_INT,
                        nullptr);
     }
-    if (helpers != nullptr && (!helpers->lines.empty() || !helpers->triangles.empty()))
+    if (helpers.bounds != nullptr)
+        render_helpers(*helpers.bounds, view_projection);
+    if (helpers.gizmo != nullptr)
     {
-        struct Vertex
-        {
-            glm::vec3 position;
-            glm::vec3 color;
-        };
-        std::vector<Vertex> vertices;
-        vertices.reserve(helpers->lines.size() * 2 + helpers->triangles.size() * 3);
-        for (const ColoredLine& line : helpers->lines)
-        {
-            vertices.push_back({line.start, line.color});
-            vertices.push_back({line.end, line.color});
-        }
-        const std::size_t line_vertices = vertices.size();
-        for (const ColoredTriangle& triangle : helpers->triangles)
-        {
-            vertices.push_back({triangle.first, triangle.color});
-            vertices.push_back({triangle.second, triangle.color});
-            vertices.push_back({triangle.third, triangle.color});
-        }
-        const HelperProgram& program = *helper_program_;
-        glUseProgram(program.program.id());
-        glUniformMatrix4fv(program.view_projection, 1, GL_FALSE, glm::value_ptr(view_projection));
-        glUniform1f(program.depth_bias, helper_depth_bias);
-        glBindVertexArray(helper_vertex_array_);
-        glBindBuffer(GL_ARRAY_BUFFER, helper_vertex_buffer_);
-        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(Vertex)),
-                     vertices.data(), GL_STREAM_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), nullptr);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
-                              reinterpret_cast<const void*>(offsetof(Vertex, color)));
-        glDepthMask(GL_FALSE);
-        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(line_vertices));
-        glDrawArrays(GL_TRIANGLES, static_cast<GLint>(line_vertices),
-                     static_cast<GLsizei>(vertices.size() - line_vertices));
-        glDepthMask(GL_TRUE);
+        const ResolvedViewportView& gizmo_view =
+            helpers.gizmo_view == nullptr ? view : *helpers.gizmo_view;
+        render_helpers(*helpers.gizmo, gizmo_view.projection * gizmo_view.view);
     }
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -491,5 +459,49 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
     glDisable(GL_DEPTH_TEST);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     require_no_gl_error("Viewport scene render");
+}
+
+void ViewportRenderer::render_helpers(const HelperGeometry& helpers,
+                                      const glm::mat4& view_projection)
+{
+    if (helpers.lines.empty() && helpers.triangles.empty())
+        return;
+    struct Vertex
+    {
+        glm::vec3 position;
+        glm::vec3 color;
+    };
+    std::vector<Vertex> vertices;
+    vertices.reserve(helpers.lines.size() * 2 + helpers.triangles.size() * 3);
+    for (const ColoredLine& line : helpers.lines)
+    {
+        vertices.push_back({line.start, line.color});
+        vertices.push_back({line.end, line.color});
+    }
+    const std::size_t line_vertices = vertices.size();
+    for (const ColoredTriangle& triangle : helpers.triangles)
+    {
+        vertices.push_back({triangle.first, triangle.color});
+        vertices.push_back({triangle.second, triangle.color});
+        vertices.push_back({triangle.third, triangle.color});
+    }
+    const HelperProgram& program = *helper_program_;
+    glUseProgram(program.program.id());
+    glUniformMatrix4fv(program.view_projection, 1, GL_FALSE, glm::value_ptr(view_projection));
+    glUniform1f(program.depth_bias, helper_depth_bias);
+    glBindVertexArray(helper_vertex_array_);
+    glBindBuffer(GL_ARRAY_BUFFER, helper_vertex_buffer_);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(Vertex)),
+                 vertices.data(), GL_STREAM_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), nullptr);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          reinterpret_cast<const void*>(offsetof(Vertex, color)));
+    glDepthMask(GL_FALSE);
+    glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(line_vertices));
+    glDrawArrays(GL_TRIANGLES, static_cast<GLint>(line_vertices),
+                 static_cast<GLsizei>(vertices.size() - line_vertices));
+    glDepthMask(GL_TRUE);
 }
 } // namespace ai3

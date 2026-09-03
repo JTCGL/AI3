@@ -104,11 +104,14 @@ cannot invalidate an already loaded scene and is reported through the Console. S
 replace the associated sidecar only when Save or Save As is invoked; inspector changes remain in memory until
 then, and untitled workspace state remains in memory. A successful scene write marks the document clean and
 permits a pending transition even if the separately reported workspace write fails. Workspace state is
-excluded from Scene Documents, revision, dirty state, and history.
+excluded from Scene Documents, revision, dirty state, and ordinary history edits; deletion history retains
+only the removed object's switches for object-lifecycle restoration.
 
 `EditorHistory` uses internal authoritative before/after snapshots and exposes representation-independent
 begin/commit/cancel/undo/redo operations. Snapshots contain exact document state but exclude selection,
-viewport/session state, derived geometry, renderer caches, and GPU state. `DocumentSession` owns the active
+viewport/session state, derived geometry, renderer caches, and GPU state. A deletion entry retains only the
+removed object's bounds-display state so Undo can restore it and Redo can remove it; ordinary workspace edits
+remain outside history. `DocumentSession` owns the active
 document's associated path, saved history checkpoint, dirty determination, filesystem workflow, and pending
 New/Open/Quit transition. New and successful Open rebaseline history; failed Open preserves it. Reset Scene is
 one undoable edit that retains the path. New, Open, Quit, and window close share
@@ -181,11 +184,13 @@ coordinates and the resolved view/projection, then tests enabled, visible sphere
 through each authoritative inverse world matrix. This preserves exact ellipsoid behavior under non-uniform and
 reflected scale, safely excludes non-invertible candidates, and keeps picking independent of ImGui and GLES.
 
-Bounds and the translation gizmo resolve through shared world-space colored-line/triangle inputs. Dear ImGui
+Bounds and the translation gizmo resolve through shared world-space colored-line/triangle inputs. Bounds use
+current authoritative transforms, while an active translation's gizmo batch uses its frozen view, basis,
+viewport sizing policy, and DPI-derived apparent length in both presenters. Dear ImGui
 projects them as an always-visible overlay, or the GLES presenter draws them after scene geometry against the
 existing depth buffer with a centralized visual-only depth bias. AABBs use transformed local edges and spheres
 use three transformed local great circles. Selected enabled bounds are white; hovered non-selected bounds are
-yellow only when hover feedback is enabled.
+yellow only when hover feedback is enabled and the viewport is in Selection mode.
 
 Each gizmo axis retains a darker
 red, green, or blue identity while idle; hover and the acquired axis use brighter variants. Projection, axis hit

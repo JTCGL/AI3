@@ -73,11 +73,15 @@ void append_object_bounds(HelperGeometry& result, const EditorState& scene,
     }
 }
 
-HelperGeometry resolve_helper_geometry(const EditorState& scene, ObjectId selected_id,
-                                       ObjectId hovered_id, glm::vec3 gizmo_pivot,
-                                       const glm::mat3& gizmo_basis,
-                                       const ResolvedViewportView& view, glm::vec2 viewport_size,
-                                       float gizmo_pixel_length, int highlighted_axis)
+void append_helper_geometry(HelperGeometry& destination, const HelperGeometry& source)
+{
+    destination.lines.insert(destination.lines.end(), source.lines.begin(), source.lines.end());
+    destination.triangles.insert(destination.triangles.end(), source.triangles.begin(),
+                                 source.triangles.end());
+}
+
+HelperGeometry resolve_bounds_helper_geometry(const EditorState& scene, ObjectId selected_id,
+                                              ObjectId hovered_id)
 {
     HelperGeometry result;
     for (const SceneObject& object : scene.objects())
@@ -89,6 +93,16 @@ HelperGeometry resolve_helper_geometry(const EditorState& scene, ObjectId select
             append_object_bounds(result, scene, object,
                                  selected ? glm::vec3{1.0F} : glm::vec3{1.0F, 1.0F, 0.0F});
     }
+    return result;
+}
+
+HelperGeometry resolve_translation_helper_geometry(ObjectId selected_id, glm::vec3 gizmo_pivot,
+                                                   const glm::mat3& gizmo_basis,
+                                                   const ResolvedViewportView& view,
+                                                   glm::vec2 viewport_size,
+                                                   float gizmo_pixel_length, int highlighted_axis)
+{
+    HelperGeometry result;
     if (selected_id == no_object)
         return result;
     const auto projected = project_translation_gizmo(gizmo_pivot, gizmo_basis, view, viewport_size,
@@ -153,6 +167,19 @@ HelperGeometry resolve_helper_geometry(const EditorState& scene, ObjectId select
         const glm::vec3 base = endpoint - axis * (10.0F * world_units_per_pixel);
         result.triangles.push_back({endpoint, base + side, base - side, color});
     }
+    return result;
+}
+
+HelperGeometry resolve_helper_geometry(const EditorState& scene, ObjectId selected_id,
+                                       ObjectId hovered_id, glm::vec3 gizmo_pivot,
+                                       const glm::mat3& gizmo_basis,
+                                       const ResolvedViewportView& view, glm::vec2 viewport_size,
+                                       float gizmo_pixel_length, int highlighted_axis)
+{
+    HelperGeometry result = resolve_bounds_helper_geometry(scene, selected_id, hovered_id);
+    append_helper_geometry(result, resolve_translation_helper_geometry(
+                                       selected_id, gizmo_pivot, gizmo_basis, view, viewport_size,
+                                       gizmo_pixel_length, highlighted_axis));
     return result;
 }
 } // namespace ai3

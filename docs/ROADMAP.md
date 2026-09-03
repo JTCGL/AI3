@@ -31,7 +31,7 @@ console, diagnostics, renderer, or other workspace/session state.
   direct-axis-only interaction requiring a view change. The current view-derived fallback plane remains fixed.
 - Define persistent editor preferences separately before adding configurable key bindings or similar options.
   Known candidates include gizmo size, view-aligned-axis constraint policy, selected/hovered bounds colors,
-  the Frame Selected key (initially F), and navigation/input preferences.
+  the Frame Selected key (initially F), Navigation-mode hover feedback, and navigation/input preferences.
 
 AI3's first transform tool provides single-object X/Y/Z translation in Local, Parent, World, and View spaces.
 It establishes frozen gesture-start constraints, one history transaction per drag, shared helper inputs, and

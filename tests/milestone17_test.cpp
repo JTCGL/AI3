@@ -94,12 +94,41 @@ TEST_CASE("bounds and workspace follow undo deletion and reset lifecycles")
     REQUIRE(session.history().redo());
     CHECK(scene.find_object(id)->bounds.sphere->radius == doctest::Approx(6.0F));
     REQUIRE(scene.set_bounds_display(id, {true, true, true}));
+    REQUIRE(session.history().begin_transaction());
     REQUIRE(scene.delete_object(id));
+    REQUIRE(session.history().commit_transaction());
     CHECK(scene.bounds_workspace().empty());
-    const auto another = scene.create_sphere("Sphere");
-    REQUIRE(scene.set_bounds_display(another, {true, false, false}));
+    REQUIRE(session.history().undo());
+    const ai3::SceneObject* restored = scene.find_object(id);
+    REQUIRE(restored != nullptr);
+    CHECK(restored->sphere.radius_meters == doctest::Approx(6.0F));
+    REQUIRE(restored->bounds.box);
+    REQUIRE(restored->bounds.sphere);
+    CHECK(restored->bounds.box->minimum == glm::vec3{-6.0F});
+    CHECK(restored->bounds.sphere->radius == doctest::Approx(6.0F));
+    CHECK(scene.bounds_display(id).show_bounding_box);
+    CHECK(scene.bounds_display(id).show_bounding_sphere);
+    CHECK(scene.bounds_display(id).hover_feedback);
+    REQUIRE(session.history().redo());
+    CHECK(scene.find_object(id) == nullptr);
+    CHECK(scene.bounds_workspace().empty());
+    REQUIRE(session.history().undo());
+    CHECK(scene.bounds_display(id).hover_feedback);
+    REQUIRE(session.history().begin_transaction());
+    REQUIRE(scene.rename_object(id, "Branched sphere"));
+    REQUIRE(session.history().commit_transaction());
+    CHECK_FALSE(session.history().can_redo());
+    CHECK(scene.bounds_display(id).show_bounding_box);
+    REQUIRE(session.history().begin_transaction());
     REQUIRE(scene.reset_scene());
+    REQUIRE(session.history().commit_transaction());
     CHECK(scene.bounds_workspace().empty());
+    REQUIRE(session.history().undo());
+    REQUIRE(scene.find_object(id) != nullptr);
+    CHECK(scene.bounds_workspace().empty());
+    session.history().rebaseline();
+    CHECK_FALSE(session.history().can_undo());
+    CHECK_FALSE(session.history().can_redo());
 }
 
 TEST_CASE("bounds reconstruct on document load and never serialize")
@@ -332,4 +361,52 @@ TEST_CASE("helper bounds are deterministic and apply the complete world transfor
     CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::depth_tested);
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
     CHECK(viewport.helper_rendering_mode() == ai3::HelperRenderingMode::depth_tested);
+    CHECK(viewport.helper_hover_object(id) == ai3::no_object);
+    const auto navigation_bounds = ai3::resolve_bounds_helper_geometry(
+        scene, ai3::no_object, viewport.helper_hover_object(id));
+    CHECK(navigation_bounds.lines.empty());
+    viewport.set_interaction_mode(ai3::ViewportInteractionMode::selection);
+    CHECK(viewport.helper_hover_object(id) == id);
+    const auto selection_bounds = ai3::resolve_bounds_helper_geometry(
+        scene, ai3::no_object, viewport.helper_hover_object(id));
+    CHECK_FALSE(selection_bounds.lines.empty());
+}
+
+TEST_CASE("frozen gizmo inputs remain separate from current bounds and camera view")
+{
+    ai3::EditorState scene;
+    const auto camera = scene.create_perspective_camera("Camera", {55.0F, 0.1F, 200.0F});
+    ai3::ViewportView viewport;
+    REQUIRE(viewport.use_scene_camera(scene, camera));
+    const glm::vec2 frozen_size{960.0F, 540.0F};
+    const ai3::ResolvedViewportView frozen_view = viewport.resolve(scene, 16.0F / 9.0F);
+    const glm::mat3 frozen_basis = glm::mat3{glm::rotate(
+        glm::mat4{1.0F}, glm::radians(27.0F), glm::normalize(glm::vec3{1.0F, 2.0F, 1.0F}))};
+
+    ai3::Transform moved_camera = scene.find_object(camera)->transform;
+    moved_camera.position = {1.0F, 0.0F, -5.0F};
+    REQUIRE(scene.set_local_transform(camera, moved_camera));
+    const ai3::ResolvedViewportView current_view = viewport.resolve(scene, 16.0F / 9.0F);
+    CHECK(current_view.view != frozen_view.view);
+
+    const auto gizmo = ai3::resolve_translation_helper_geometry(
+        camera, scene.world_position(camera), frozen_basis, frozen_view, frozen_size, 108.0F, 1);
+    REQUIRE_FALSE(gizmo.lines.empty());
+    for (const ai3::ColoredLine& line : gizmo.lines)
+    {
+        const auto start = ai3::project_world_to_viewport(line.start, frozen_view, frozen_size);
+        const auto end = ai3::project_world_to_viewport(line.end, frozen_view, frozen_size);
+        REQUIRE(start);
+        REQUIRE(end);
+        CHECK(glm::length(*end - *start) == doctest::Approx(108.0F).epsilon(0.002));
+    }
+
+    const auto sphere = scene.create_sphere("Sphere");
+    REQUIRE(scene.set_bounds_display(sphere, {true, false, false}));
+    ai3::Transform moved_sphere = scene.find_object(sphere)->transform;
+    moved_sphere.position = {7.0F, 8.0F, 9.0F};
+    REQUIRE(scene.set_local_transform(sphere, moved_sphere));
+    const auto bounds = ai3::resolve_bounds_helper_geometry(scene, sphere, ai3::no_object);
+    REQUIRE_FALSE(bounds.lines.empty());
+    CHECK(bounds.lines.front().start == glm::vec3{6.0F, 7.0F, 8.0F});
 }

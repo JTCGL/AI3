@@ -128,7 +128,10 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 ## Milestone 17 — Cached object bounds, dual helper rendering, and per-document workspace foundation
 
 - Added cached object-local AABB/sphere data for spheres, atomic `.ai3workspace` sidecars for per-object bounds
-  display state and helper-rendering mode, and localized controls excluded from document revision/history.
+  display state and helper-rendering mode, and localized controls excluded from document revision and ordinary
+  history edits.
 - Added shared display-independent helper geometry consumed by an always-visible ImGui overlay and a
   depth-tested GLES3 pass with visual depth bias. Gizmos render in Selection and Navigation but remain
-  interactive only in Selection. Physical runtime review remains required.
+  interactive only in Selection; object hover feedback is Selection-only. Deletion Undo/Redo restores/removes
+  the affected object's workspace switches without making workspace edits generally undoable. Physical runtime
+  review remains required.

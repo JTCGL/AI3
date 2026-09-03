@@ -49,6 +49,7 @@ class ViewportView
     void set_transform_tool(ViewportTransformTool tool) { transform_tool_ = tool; }
     void set_reference_space(CoordinateSpace space) { reference_space_ = space; }
     void set_helper_rendering_mode(HelperRenderingMode mode) { helper_rendering_mode_ = mode; }
+    ObjectId helper_hover_object(ObjectId picked_object) const;
     bool navigate(float yaw_delta_degrees, float pitch_delta_degrees);
     bool zoom(float wheel_delta);
     ResolvedViewportView resolve(const EditorState& scene, float aspect_ratio);

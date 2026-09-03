@@ -11,16 +11,19 @@ by stable object ID in a version-1 `.ai3workspace` JSON sidecar. Missing files a
 malformed or unsupported files leave the loaded scene usable and report a Console error. Save and Save As use
 atomic replacement and reassociate the sidecar. Sidecars are written only by explicit Save or Save As;
 workspace-only changes remain in memory otherwise. Scene-save and workspace-save outcomes are distinct, so a
-workspace failure neither misreports nor blocks an otherwise successful scene save. Workspace state is not
-authored, undoable, or dirtying.
+workspace failure neither misreports nor blocks an otherwise successful scene save. Workspace-only edits are
+not authored, undoable, or dirtying.
 
 A narrow headless helper resolver emits world-space colored lines and triangles for transformed wire bounds
 and the translation gizmo. Dear ImGui projects them as an always-visible overlay; the concrete GLES3 renderer
 can instead draw them after scene geometry against the viewport depth buffer with a centralized visual depth
 bias. The localized toolbar selects Overlay (default) or Depth Tested and persists that choice in the
-workspace sidecar. World gizmo length is derived from raw axis projection and corrected against the supplied
+workspace sidecar. Deletion history retains only the removed object's display switches so Undo restores them
+without making ordinary workspace edits undoable. World gizmo length is derived from raw axis projection and corrected against the supplied
 view/projection so its established DPI-scaled apparent size remains stable. Gizmos render in Selection and
-Navigation, while hit acquisition remains Selection-only. Depth-tested hit testing is still screen-based, so
+Navigation, while object hover feedback and hit acquisition remain Selection-only. Active gizmo geometry uses
+the same frozen view, basis, viewport policy, and apparent length in both presenters while bounds continue to
+follow current transforms. Depth-tested hit testing is still screen-based, so
 an occluded handle may be acquired.
 
 ## Deferred
@@ -32,5 +35,5 @@ abstractions, and other backends remain deferred.
 ## Verification
 
 Repository checks and headless tests cover cache behavior, v1/v2 scene reconstruction, workspace
-format/lifecycle isolation, transformed helper geometry, and transient viewport helper mode. Physical runtime
+format/lifecycle isolation, transformed helper geometry, and persisted viewport helper mode. Physical runtime
 comparison on Termux ARM64 or T5600 Linux x86-64 remains required.

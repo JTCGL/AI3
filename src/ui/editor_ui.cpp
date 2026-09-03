@@ -1124,7 +1124,10 @@ void EditorUi::draw_viewport()
             const float aspect_ratio =
                 static_cast<float>(requested.width) / static_cast<float>(requested.height);
             const ResolvedViewportView resolved = viewport_view_.resolve(state_, aspect_ratio);
-            const SceneObject* helper_object = state_.find_object(state_.selection());
+            const ObjectId helper_object_id = translation_gesture_.has_value()
+                                                  ? translation_gesture_->object_id
+                                                  : state_.selection();
+            const SceneObject* helper_object = state_.find_object(helper_object_id);
             glm::vec3 helper_pivot{};
             glm::mat3 helper_basis{1.0F};
             if (helper_object != nullptr)
@@ -1138,12 +1141,14 @@ void EditorUi::draw_viewport()
             }
             const ImVec2 future_minimum = ImGui::GetCursorScreenPos();
             const ImVec2 mouse = ImGui::GetIO().MousePos;
-            if (mouse.x >= future_minimum.x && mouse.y >= future_minimum.y &&
+            if (viewport_view_.interaction_mode() == ViewportInteractionMode::selection &&
+                mouse.x >= future_minimum.x && mouse.y >= future_minimum.y &&
                 mouse.x < future_minimum.x + region.x && mouse.y < future_minimum.y + region.y)
             {
                 const glm::vec2 coordinates{(mouse.x - future_minimum.x) / region.x,
                                             (mouse.y - future_minimum.y) / region.y};
-                hovered_object_ = pick_sphere(state_, viewport_world_ray(coordinates, resolved));
+                hovered_object_ = viewport_view_.helper_hover_object(
+                    pick_sphere(state_, viewport_world_ray(coordinates, resolved)));
             }
             else
                 hovered_object_ = no_object;
@@ -1160,16 +1165,24 @@ void EditorUi::draw_viewport()
                         {mouse.x - future_minimum.x, mouse.y - future_minimum.y}, *projected,
                         10.0F * ui_scale_));
             }
-            const HelperGeometry helpers = resolve_helper_geometry(
-                state_, helper_object == nullptr ? no_object : helper_object->id, hovered_object_,
-                helper_pivot, helper_basis, resolved,
-                {static_cast<float>(requested.width), static_cast<float>(requested.height)},
-                72.0F * ui_scale_ * framebuffer_scale.x, highlighted);
-            viewport_renderer_.render(state_, resolved, requested,
-                                      viewport_view_.helper_rendering_mode() ==
-                                              HelperRenderingMode::depth_tested
-                                          ? &helpers
-                                          : nullptr);
+            const ResolvedViewportView& helper_gizmo_view =
+                translation_gesture_.has_value() ? translation_gesture_->frozen_view : resolved;
+            const glm::vec2 helper_gizmo_viewport = translation_gesture_.has_value()
+                                                        ? translation_gesture_->frozen_viewport_size
+                                                        : glm::vec2{region.x, region.y};
+            const float helper_gizmo_length = translation_gesture_.has_value()
+                                                  ? translation_gesture_->frozen_screen_axis_length
+                                                  : 72.0F * ui_scale_;
+            const ObjectId helper_id = helper_object == nullptr ? no_object : helper_object->id;
+            const HelperGeometry bounds_helpers =
+                resolve_bounds_helper_geometry(state_, helper_id, hovered_object_);
+            const HelperGeometry gizmo_helpers = resolve_translation_helper_geometry(
+                helper_id, helper_pivot, helper_basis, helper_gizmo_view, helper_gizmo_viewport,
+                helper_gizmo_length, highlighted);
+            DepthTestedHelperInputs depth_helpers;
+            if (viewport_view_.helper_rendering_mode() == HelperRenderingMode::depth_tested)
+                depth_helpers = {&bounds_helpers, &gizmo_helpers, &helper_gizmo_view};
+            viewport_renderer_.render(state_, resolved, requested, depth_helpers);
             ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
                          {0.0F, 1.0F}, {1.0F, 0.0F});
             const ImVec2 minimum = ImGui::GetItemRectMin();
@@ -1268,53 +1281,43 @@ void EditorUi::draw_viewport()
             if (viewport_view_.helper_rendering_mode() == HelperRenderingMode::overlay)
             {
                 ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                HelperGeometry overlay_helpers = resolve_helper_geometry(
-                    state_, selected == nullptr ? no_object : selected->id, hovered_object_, pivot,
-                    basis,
-                    translation_gesture_.has_value() ? translation_gesture_->frozen_view : resolved,
-                    viewport_size,
-                    translation_gesture_.has_value()
-                        ? translation_gesture_->frozen_screen_axis_length
-                        : 72.0F * ui_scale_,
-                    static_cast<int>(translation_gesture_.has_value()
-                                         ? translation_gesture_->selected_axis
-                                         : hovered_axis));
                 const auto color = [](glm::vec3 value)
                 {
                     return IM_COL32(static_cast<int>(value.r * 255.0F),
                                     static_cast<int>(value.g * 255.0F),
                                     static_cast<int>(value.b * 255.0F), 255);
                 };
-                for (const ColoredLine& line : overlay_helpers.lines)
+                const auto draw_helpers = [&](const HelperGeometry& geometry,
+                                              const ResolvedViewportView& presentation_view)
                 {
-                    const ResolvedViewportView& helper_view =
-                        translation_gesture_.has_value() ? translation_gesture_->frozen_view
-                                                         : resolved;
-                    const auto a =
-                        project_world_to_viewport(line.start, helper_view, viewport_size);
-                    const auto b = project_world_to_viewport(line.end, helper_view, viewport_size);
-                    if (a && b)
-                        draw_list->AddLine({minimum.x + a->x, minimum.y + a->y},
-                                           {minimum.x + b->x, minimum.y + b->y}, color(line.color),
-                                           2.0F * ui_scale_);
-                }
-                for (const ColoredTriangle& triangle : overlay_helpers.triangles)
-                {
-                    const ResolvedViewportView& helper_view =
-                        translation_gesture_.has_value() ? translation_gesture_->frozen_view
-                                                         : resolved;
-                    const auto a =
-                        project_world_to_viewport(triangle.first, helper_view, viewport_size);
-                    const auto b =
-                        project_world_to_viewport(triangle.second, helper_view, viewport_size);
-                    const auto c =
-                        project_world_to_viewport(triangle.third, helper_view, viewport_size);
-                    if (a && b && c)
-                        draw_list->AddTriangleFilled({minimum.x + a->x, minimum.y + a->y},
-                                                     {minimum.x + b->x, minimum.y + b->y},
-                                                     {minimum.x + c->x, minimum.y + c->y},
-                                                     color(triangle.color));
-                }
+                    for (const ColoredLine& line : geometry.lines)
+                    {
+                        const auto a =
+                            project_world_to_viewport(line.start, presentation_view, viewport_size);
+                        const auto b =
+                            project_world_to_viewport(line.end, presentation_view, viewport_size);
+                        if (a && b)
+                            draw_list->AddLine({minimum.x + a->x, minimum.y + a->y},
+                                               {minimum.x + b->x, minimum.y + b->y},
+                                               color(line.color), 2.0F * ui_scale_);
+                    }
+                    for (const ColoredTriangle& triangle : geometry.triangles)
+                    {
+                        const auto a = project_world_to_viewport(triangle.first, presentation_view,
+                                                                 viewport_size);
+                        const auto b = project_world_to_viewport(triangle.second, presentation_view,
+                                                                 viewport_size);
+                        const auto c = project_world_to_viewport(triangle.third, presentation_view,
+                                                                 viewport_size);
+                        if (a && b && c)
+                            draw_list->AddTriangleFilled({minimum.x + a->x, minimum.y + a->y},
+                                                         {minimum.x + b->x, minimum.y + b->y},
+                                                         {minimum.x + c->x, minimum.y + c->y},
+                                                         color(triangle.color));
+                    }
+                };
+                draw_helpers(bounds_helpers, resolved);
+                draw_helpers(gizmo_helpers, helper_gizmo_view);
             }
 
             if (ImGui::IsItemHovered())
