@@ -197,8 +197,9 @@ Each gizmo axis retains a darker
 red, green, or blue identity while idle; hover and the acquired axis use brighter variants. Projection, axis hit
 testing, apparent-size construction, viewport-geometry validation, and drag constraints are display-independent
 scene logic. Projected
-axis directions are normalized to a DPI-derived screen-space length, which is frozen for a gesture even while
-its pivot changes depth. A material change to the frozen viewport rectangle safely cancels the gesture rather
+axis directions currently target 72 logical pixels before SDL/ImGui DPI scaling. That DPI-derived apparent
+length is frozen for a gesture even while its pivot changes depth; a future editor preference may replace the
+fixed logical size. A material change to the frozen viewport rectangle safely cancels the gesture rather
 than mixing coordinate frames. Dragging normally uses a closest-point ray/axis solve; a near-parallel axis chooses
 once at acquisition a view-derived plane containing that axis, intersects subsequent pointer rays with that
 plane, and projects displacement back onto the axis. One gesture owns one existing `EditorHistory` transaction:
