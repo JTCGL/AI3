@@ -104,3 +104,14 @@ only implemented camera subtype. Scene-camera matrices are derived from current 
 transforms and projection parameters, while the GLES3 renderer
 consumes only resolved view/projection matrices. Deleting a viewed camera falls back to Orbit, and Reset Scene
 restores the default Orbit state. See [ADR 0005](docs/decisions/0005-viewport-view-ownership.md).
+
+Scene Documents use strict versioned `.ai3scene` JSON with transactional loading, native Open/Save/Save As,
+dirty-state protection, and linear Undo/Redo transactions. Version 2 stores reusable Lambert and Phong
+materials and linear authored colors while retaining strict v1 migration. Per-document `.ai3workspace`
+sidecars currently persist optional sphere-bound display controls separately from authored scene data.
+
+The viewport provides explicit Selection and Navigation modes, exact CPU picking for transformed spheres, and
+single-object X/Y/Z translation in Local, Parent, World, and View reference spaces. Cached sphere AABB and
+bounding-sphere helpers are rendered through GLES: bounds remain depth tested while translation gizmos render
+on top. These interactions remain display-independent outside their concrete ImGui input and GLES presentation
+boundaries.
