@@ -122,11 +122,12 @@ void ViewportView::reset()
     orbit_.reset();
 }
 
-bool TransientNavigationGesture::acquire(bool alt_held)
+bool TransientNavigationGesture::acquire(bool shift_held)
 {
     if (active_)
         return false;
-    operation_ = alt_held ? TransientNavigationOperation::orbit : TransientNavigationOperation::pan;
+    operation_ =
+        shift_held ? TransientNavigationOperation::orbit : TransientNavigationOperation::pan;
     active_ = true;
     return true;
 }

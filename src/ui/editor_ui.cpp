@@ -1185,7 +1185,7 @@ void EditorUi::draw_viewport()
                 if (!transient_navigation_gesture_.active() && ImGui::IsItemHovered() &&
                     ImGui::IsMouseClicked(ImGuiMouseButton_Middle) &&
                     viewport_view_.source() == ViewSource::editor_view)
-                    transient_navigation_gesture_.acquire(io.KeyAlt);
+                    transient_navigation_gesture_.acquire(io.KeyShift);
                 if (transient_navigation_gesture_.active())
                 {
                     if (viewport_view_.source() != ViewSource::editor_view ||

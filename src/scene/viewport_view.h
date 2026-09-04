@@ -68,7 +68,7 @@ class ViewportView
 class TransientNavigationGesture
 {
     public:
-    bool acquire(bool alt_held);
+    bool acquire(bool shift_held);
     bool active() const { return active_; }
     TransientNavigationOperation operation() const { return operation_; }
     bool dispatch(ViewportView& view, glm::vec2 pointer_delta, float logical_viewport_height) const;

@@ -104,7 +104,7 @@ or Scene Camera; the localized selector currently lists Perspective Camera scene
 only implemented camera subtype. Scene-camera matrices are derived from current authoritative world
 transforms and projection parameters, while the GLES3 renderer
 consumes only resolved view/projection matrices. Deleting a viewed camera falls back to Editor View, and Reset
-Scene restores its default state. Middle-mouse drag pans, Alt+middle-mouse drag orbits, and the wheel zooms
+Scene restores its default state. Middle-mouse drag pans, Shift+middle-mouse drag orbits, and the wheel zooms
 Editor View in either retained interaction mode. See
 [ADR 0005](docs/decisions/0005-viewport-view-ownership.md).
 

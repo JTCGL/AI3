@@ -63,10 +63,14 @@ not reintroduce an ImGui world-helper presenter without a new concrete requireme
 The viewport now has explicit Selection and Navigation interaction modes plus a minimal contextual toolbar.
 Selection uses display-independent CPU picking for enabled, visible spheres and gives the selected object's
 translation handles first refusal on left pointer-down. Non-sphere objects selected through the Scene Graph can be
-translated. Editor View supports transient MMB pan, Alt+MMB orbit, and wheel zoom in either retained mode;
+translated. Editor View supports transient MMB pan, Shift+MMB orbit, and wheel zoom in either retained mode;
 these gestures do not change Selection/Navigation. Retained Navigation-mode left-drag orbit remains supported,
 and every navigation path is inert for Scene Camera. No generalized input, tool, or toolbar framework is
 established.
+
+Viewport navigation mouse/modifier bindings remain fixed for now. A later preferences milestone should make
+them user-configurable, including alternatives such as Alt+MMB where the operating system/window manager allows
+that binding.
 
 ## Bounds and viewport feedback
 

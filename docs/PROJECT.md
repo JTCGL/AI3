@@ -178,7 +178,7 @@ content region after framebuffer scaling. Dear ImGui presents that texture in th
 view semantics are already separated from UI ownership, but construction and lifetime of `ViewportRenderer`
 and its GLES resources remain inside `EditorUi`.
 
-Navigation intent is dispatched through `ViewportView`. MMB pan, Alt+MMB orbit, and wheel zoom affect Editor
+Navigation intent is dispatched through `ViewportView`. MMB pan, Shift+MMB orbit, and wheel zoom affect Editor
 View in either retained mode without changing that mode; retained left-drag orbit remains Navigation-only.
 MMB chooses pan or orbit at acquisition and keeps that operation through release, including outside the
 viewport. Pan translates the pivot in the resolved view plane using distance, vertical FOV, and logical

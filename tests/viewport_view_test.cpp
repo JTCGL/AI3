@@ -189,23 +189,24 @@ TEST_CASE("invalid Editor View navigation inputs preserve state")
     CHECK(viewport.orbit().distance() == doctest::Approx(distance));
 }
 
-TEST_CASE("transient gesture freezes its acquisition-time operation")
+TEST_CASE("transient Shift gesture freezes its acquisition-time operation")
 {
     ai3::ViewportView viewport;
     ai3::TransientNavigationGesture pan;
-    REQUIRE(pan.acquire(false));
+    REQUIRE(pan.acquire(false)); // MMB without Shift acquires pan.
     CHECK(pan.operation() == ai3::TransientNavigationOperation::pan);
-    CHECK_FALSE(pan.acquire(true));
+    CHECK_FALSE(pan.acquire(true)); // Pressing Shift later cannot reinterpret it.
     REQUIRE(pan.dispatch(viewport, {8.0F, 3.0F}, 600.0F));
     CHECK(viewport.orbit().target() != glm::vec3{});
     pan.release();
 
     ai3::TransientNavigationGesture orbit;
-    REQUIRE(orbit.acquire(true));
+    REQUIRE(orbit.acquire(true)); // Shift+MMB acquires orbit.
     CHECK(orbit.operation() == ai3::TransientNavigationOperation::orbit);
     const float yaw = viewport.orbit().yaw_degrees();
     REQUIRE(orbit.dispatch(viewport, {8.0F, 3.0F}, 600.0F));
     CHECK(viewport.orbit().yaw_degrees() != doctest::Approx(yaw));
+    orbit.release(); // Releasing Shift does not change the acquired orbit operation.
 }
 
 TEST_CASE("Editor View navigation preserves document and retained workspace state")

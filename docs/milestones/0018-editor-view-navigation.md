@@ -10,7 +10,7 @@ mutating authored Scene Camera objects or adding broader viewport-control framew
 - Rename the Orbit view source to Editor View while retaining the internal `OrbitCamera` implementation.
 - Preserve the independent Editor View pose and pivot across Scene Camera switching, fall back to it when an
   active camera is deleted, and restore its default state on Reset Scene.
-- Support MMB pan, Alt+MMB orbit, and wheel zoom in Selection and Navigation modes without changing the retained
+- Support MMB pan, Shift+MMB orbit, and wheel zoom in Selection and Navigation modes without changing the retained
   mode. Preserve Navigation-mode left-drag orbit.
 - Freeze the MMB operation at acquisition, continue it outside the viewport through release, and cancel it when
   the viewport is unavailable or Scene Camera becomes active.
@@ -31,7 +31,7 @@ or tool frameworks, renderer abstractions, and unrelated editor work are exclude
 ## Verification
 
 Run `bash scripts/check.sh`. Headless coverage includes Editor View source/fallback state, pan direction and
-scaling, invalid input, transient dispatch and acquisition freezing, both-mode wheel zoom, Navigation-only
+scaling, invalid input, transient dispatch and Shift acquisition freezing, both-mode wheel zoom, Navigation-only
 retained orbit, Scene Camera inertness, source-switch preservation, and document/workspace invariants. The
 later physical pass must exercise all concrete input paths, priority behavior, out-of-viewport continuation,
 source switching, Scene Camera immutability, and materially different viewport sizes and UI scales.

@@ -41,7 +41,7 @@ modes without changing renderer fundamentals; no plugin, renderer abstraction, o
 introduced by this decision.
 
 Navigation intent enters through `ViewportView`. Retained left-drag orbit mutates Editor View only in Navigation
-mode. Transient MMB pan, Alt+MMB orbit, and wheel zoom operate in either retained mode without changing it.
+mode. Transient MMB pan, Shift+MMB orbit, and wheel zoom operate in either retained mode without changing it.
 The MMB operation is frozen at acquisition and continues outside the viewport until release. Pan translates
 the retained pivot parallel to the resolved view plane with world-units-per-pixel derived from distance,
 vertical FOV, and logical viewport height. Dear ImGui owns the concrete gesture handoff; policy and math remain
