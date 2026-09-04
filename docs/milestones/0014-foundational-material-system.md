@@ -30,5 +30,9 @@ abstractions, and unrelated editor interactions remain out of scope.
 ## Verification
 
 Run `bash scripts/check.sh`. Headless tests cover material authority, assignment, validation/no-ops, history,
-color transfers, resolved eye positions, v2 persistence, dangling references, and v1 migration. Physical runtime
-review remains required on supported targets.
+color transfers, resolved eye positions, v2 persistence, dangling references, and v1 migration.
+
+## Completion evidence
+
+- Physical runtime verification passed on Termux ARM64 and T5600 Linux x86-64.
+- GitHub Actions passed for the final reviewed implementation.

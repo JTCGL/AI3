@@ -109,24 +109,30 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 
 ## Milestone 15 — Viewport interaction modes, object picking, and minimal editor toolbar
 
+- Merged: [PR #34](https://github.com/JTCGL/AI3/pull/34), `466a83fd722533027497db2fad90dddf888437d5`
 - Added independent Selection and Navigation viewport interaction modes, source-aware Orbit navigation,
   display-independent inverse-local CPU sphere picking, and a localized DPI-aware editor toolbar above the
   dockspace. Selection, mode changes, and navigation remain workspace actions outside Scene Document revision,
   history, dirty state, and persistence. Headless tests cover mode ownership, navigation dispatch, ray
   construction, transformed-sphere picking, eligibility, nearest hits, clipping, and invalid transforms.
+  Physical runtime review and GitHub Actions passed for the final reviewed implementation.
 
 ## Milestone 16 — Single-object axis translation gizmo
 
-- Added a localized DPI-aware X/Y/Z translation overlay for the selected object in Local, Parent, World, and
-  View spaces, with handle-first Selection-mode ownership and unchanged Orbit-only Navigation behavior.
+- Merged: [PR #35](https://github.com/JTCGL/AI3/pull/35), `cf2f70a368a0a9e74c0339a31168d68624836103`
+- Added the initial localized DPI-aware X/Y/Z translation presentation for the selected object in Local,
+  Parent, World, and View spaces, with handle-first Selection-mode ownership and unchanged Orbit-only
+  Navigation behavior. Milestone 17 subsequently replaced its Dear ImGui overlay presentation with the
+  authoritative GLES helper path.
 - Added a narrow authoritative world-position mutation, frozen gesture-start closest-point/fallback-plane
   constraints, approximately constant apparent sizing, and one existing history transaction per drag.
   Headless coverage includes hierarchy and invertibility cases, constraint degeneracies, projection/hit math,
-  history cancellation/Undo/Redo/checkpoints, and workspace-state exclusions. Physical overlay review remains
-  required on Termux ARM64 and T5600 Linux x86-64.
+  history cancellation/Undo/Redo/checkpoints, and workspace-state exclusions. Physical runtime review passed
+  on T5600 Linux x86-64; Termux runtime review was deferred under the normal single-platform acceptance policy.
 
 ## Milestone 17 — Cached object bounds, GLES helper rendering, and per-document workspace foundation
 
+- Merged: [PR #38](https://github.com/JTCGL/AI3/pull/38), `4147033a5644261a102eed3c7eaf71b34871f9c4`
 - Added cached object-local AABB/sphere data for spheres, atomic `.ai3workspace` sidecars for per-object bounds
   display state, and localized controls excluded from document revision and ordinary history edits. Legacy v1
   helper-rendering fields are accepted and ignored.
@@ -134,4 +140,5 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   depth tested while gizmos render on top. Gizmos render in Selection and Navigation but remain
   interactive only in Selection; object hover feedback is Selection-only. Deletion Undo/Redo restores/removes
   the affected object's workspace switches without making workspace edits generally undoable. The GLES helper
-  presentation passed physical runtime review on T5600 Linux x86-64.
+  presentation passed physical runtime review on T5600 Linux x86-64, and GitHub Actions passed for the final
+  reviewed implementation.

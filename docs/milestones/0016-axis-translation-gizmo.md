@@ -1,5 +1,8 @@
 # Milestone 16 — Single-object axis translation gizmo
 
+> Historical note: Milestone 17 replaced the Dear ImGui overlay described here with the authoritative GLES
+> helper renderer while preserving the interaction, sizing, constraint, and history contracts.
+
 ## Goal
 
 Establish AI3's first direct viewport transform tool: constrained X/Y/Z translation of the currently selected
@@ -48,10 +51,13 @@ normal/fallback/degenerate constraints, gesture-start determinism, near/far and 
 collapsed projection, hit testing, viewport-geometry invalidation,
 single-transaction live edits, cancellation, Undo/Redo/checkpoint dirty behavior, and workspace exclusions.
 
-Physical review remains required on Termux ARM64 and T5600 Linux x86-64 for overlay appearance, DPI behavior,
-constant and gesture-frozen apparent size, handle-first pointer ownership, near-view-aligned stability, all
-reference spaces and hierarchy cases, Scene Camera basis behavior, history/dirty behavior, and unchanged
-Selection/Navigation behavior.
+## Completion evidence
+
+- Physical runtime review passed on T5600 Linux x86-64 for appearance, DPI behavior, constant and
+  gesture-frozen apparent size, handle-first pointer ownership, near-view-aligned stability, reference spaces,
+  Scene Camera basis behavior, history/dirty behavior, and unchanged Selection/Navigation behavior.
+- Termux runtime review was deferred under the normal single-platform acceptance policy.
+- GitHub Actions passed for the final reviewed implementation.
 
 ## Deferred
 
