@@ -8,8 +8,9 @@ Accepted.
 
 AI3 Scene Documents use UTF-8 JSON, the `.ai3scene` extension, the format identifier `ai3-scene`, and an
 integer format version. Version 3 is the current strict schema: required fields must be present, unsupported
-fields and unknown semantic types are rejected. A direct v1-to-v2 load migration preserves legacy documents;
-no pre-v1 or general-purpose migration mechanism exists. Categories and subtypes use durable string names
+fields and unknown semantic types are rejected. Valid v1 and v2 documents load and normalize to current
+semantics; legacy schemas do not permit authored Box payloads. Future versions remain rejected. No pre-v1 or
+general-purpose migration mechanism exists. Categories and subtypes use durable string names
 rather than C++ enum ordinals. Quaternions are stored
 as normalized `[w, x, y, z]` arrays; transforms are authoritative local-to-parent TRS in meters. World
 transforms, Euler presentation, derived geometry, renderer state, and editor workspace/session state are not
@@ -33,7 +34,8 @@ run on the application thread.
 ## Consequences
 
 Scene persistence remains headless-testable and does not add SDL, Dear ImGui, EGL/GLES, or renderer
-dependencies to the editor model. Version 3 files preserve exact object and material identity/order, hierarchy,
-local state, semantic payloads, allocators, and naming metadata. V1 files remain loadable through documented
+dependencies to the editor model. Version 3 adds Box dimensions, tessellation, and material fallback semantics.
+Version 3 files preserve exact object and material identity/order, hierarchy, local state, semantic payloads,
+allocators, and naming metadata. V1 and v2 files remain loadable through documented
 material/color defaults. Future schema evolution remains an explicit decision. Workspace persistence, dirty tracking,
 autosave, recovery, recent files, and multi-document behavior remain separate future concerns.
