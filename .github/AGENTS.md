@@ -8,3 +8,5 @@ These instructions extend the repository root AGENTS.md.
 - CI passing on Ubuntu does not prove Termux runtime compatibility.
 - Keep workflows small and readable; move project logic into scripts or CMake rather than embedding it in YAML.
 - Run CI for pull requests and pushes to main.
+- Keep the pull-request template aligned with the documentation layers and merge criteria defined in
+  `docs/WORKFLOW.md`; a checklist supports review but does not replace it.

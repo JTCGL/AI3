@@ -88,6 +88,28 @@ synchronization. Repository verification and CI requirements remain unchanged.
 Green CI alone is not sufficient for merge. Appropriate code review, runtime verification, and documentation
 reconciliation remain explicit merge criteria.
 
+## Continuous documentation maintenance
+
+Every pull request must classify its impact on the established documentation layers through the repository
+pull-request template. Update current-truth documentation alongside implementation where practical so a feature
+branch remains internally coherent. “Not affected” is an acceptable disposition when the PR explains why; do
+not create meaningless prose changes for mechanically unaffected layers.
+
+Documentation is reviewed at three milestone checkpoints:
+
+1. Scope lock creates or updates the milestone brief and records newly approved future boundaries.
+2. Implementation updates affected current architecture, decisions, workflow, and entry-level documentation as
+   behavior changes.
+3. The merge gate repeats semantic reconciliation after code review and physical/runtime corrections, then
+   records final milestone and verification evidence.
+
+`scripts/check-docs.sh`, invoked by the canonical `scripts/check.sh`, validates deterministic properties such as
+relative links, document structure, completed-milestone consistency, and current Scene Document version claims.
+It cannot determine whether prose accurately describes implementation; implementation/tests remain authoritative
+and semantic documentation review remains mandatory. Perform a full documentation audit before a release tag,
+after every three substantial milestones, after an architectural redirection, or whenever a handoff requires
+important information that is absent from the repository.
+
 ## New-conversation handoff policy
 
 Do not paste a reconstruction of the complete project history into each new conversation. The repository is the

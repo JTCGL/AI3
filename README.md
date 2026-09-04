@@ -73,7 +73,8 @@ persisted because the project does not otherwise have a settings system. See [AD
 
 Run `ai3 --smoke-test` with a reachable X server to initialize the real SDL/GLES/ImGui stack, render three
 hidden frames, and exit. `scripts/check.sh` runs this integration test when `DISPLAY` is set and always runs
-display-independent unit tests. Source formatting is checked by the same script; use
+display-independent unit tests. Documentation consistency and source formatting are checked by the same script;
+use `bash scripts/check-docs.sh` to run only the deterministic documentation checks, and use
 `bash scripts/format.sh --write` to apply the repository style. Formatting is defined by clang-format 21.x;
 the script prefers `clang-format-21`, accepts an unversioned `clang-format` only when its reported major is
 21, and fails instead of falling back to another major.

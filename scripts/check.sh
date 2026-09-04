@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+bash scripts/check-docs.sh
+
 cmake_version="$(cmake --version 2>/dev/null | sed -n '1s/^cmake version //p')"
 if [[ ! "${cmake_version}" =~ ^[0-9]+\.[0-9]+([.][0-9]+)?$ ]] ||
     ! printf '3.25\n%s\n' "${cmake_version}" | sort -V -C; then
