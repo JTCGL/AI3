@@ -34,4 +34,9 @@ remain outside this milestone.
 Run `bash scripts/check.sh`. Headless tests cover mode defaults and workspace exclusions, Orbit-only navigation,
 unchanged Scene Cameras, center/off-center rays, Orbit and Scene Camera picking, translated and hierarchical
 spheres, rotated/non-uniform/reflected transforms, nearest-hit ordering, visibility/enabled eligibility, misses,
-projection clipping, and singular transforms. Physical runtime review on supported targets remains required.
+projection clipping, and singular transforms.
+
+## Completion evidence
+
+- Physical runtime review passed before merge under the project's supported-platform acceptance policy.
+- GitHub Actions passed for the final reviewed implementation.
