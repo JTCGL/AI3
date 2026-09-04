@@ -32,11 +32,13 @@ or tool frameworks, renderer abstractions, and unrelated editor work are exclude
 
 Run `bash scripts/check.sh`. Headless coverage includes Editor View source/fallback state, pan direction and
 scaling, invalid input, transient dispatch and Shift acquisition freezing, both-mode wheel zoom, Navigation-only
-retained orbit, Scene Camera inertness, source-switch preservation, and document/workspace invariants. The
-later physical pass must exercise all concrete input paths, priority behavior, out-of-viewport continuation,
-source switching, Scene Camera immutability, and materially different viewport sizes and UI scales.
+retained orbit, Scene Camera inertness, source-switch preservation, and document/workspace invariants. Build,
+format, documentation, and GitHub Actions verification passed. Mouse-dependent physical verification was
+unavailable and explicitly deferred by the user; it was accepted as the M18 runtime disposition without claiming
+that those interactions passed. The behavior may be checked later without reopening M18 unless a defect is found.
 
-## Merge gate
+## Completion disposition
 
-Physical runtime verification, code review, final documentation reconciliation, and the completed milestone
-ledger entry remain required before merge.
+Code review, automated verification, final documentation reconciliation, and the completed ledger entry establish
+M18 acceptance. Physical mouse verification remains deferred/unavailable by explicit user acceptance and is not
+represented as a passing result.
