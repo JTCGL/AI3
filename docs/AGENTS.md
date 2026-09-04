@@ -13,3 +13,8 @@ Document decisions that future implementers or agents should not have to redisco
 
 When documentation conflicts, verify against repository implementation, tests, and Git history and correct the
 documentation. Avoid copying ADR rationale or milestone history into `PROJECT.md`.
+
+For every pull request, classify the effect on each documentation layer in the repository PR template. Update
+affected current-truth documentation alongside implementation where practical, and reconcile all affected
+layers again after review and runtime corrections. Automated documentation checks enforce mechanical
+consistency only; semantic accuracy remains a merge criterion.
