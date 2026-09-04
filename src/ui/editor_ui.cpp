@@ -451,6 +451,16 @@ void EditorUi::draw_main_menu(bool& running)
                                         state_.select(sphere);
                                     });
             }
+            if (ImGui::MenuItem(localization_.text("action.create_box").c_str()))
+            {
+                apply_discrete_edit(history,
+                                    [&]
+                                    {
+                                        const ObjectId box =
+                                            state_.create_box(localization_.text("object.box"));
+                                        state_.select(box);
+                                    });
+            }
             if (ImGui::MenuItem(localization_.text("action.create_perspective_camera").c_str()))
             {
                 apply_discrete_edit(history,
@@ -725,6 +735,8 @@ void EditorUi::draw_object_inspector()
             const char* type_key = "type.object";
             if (object->primitive_kind == PrimitiveKind::sphere)
                 type_key = "type.sphere";
+            else if (object->primitive_kind == PrimitiveKind::box)
+                type_key = "type.box";
             else if (object->camera_kind == CameraKind::perspective)
                 type_key = "type.perspective_camera";
             else if (object->light_kind == LightKind::directional)

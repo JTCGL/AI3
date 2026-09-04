@@ -22,4 +22,5 @@ WorldRay viewport_world_ray(glm::vec2 viewport_coordinates, const ResolvedViewpo
 
 // Returns the closest enabled, visible sphere hit in front of the ray origin.
 ObjectId pick_sphere(const EditorState& scene, const WorldRay& ray);
+ObjectId pick_box(const EditorState& scene, const WorldRay& ray);
 } // namespace ai3

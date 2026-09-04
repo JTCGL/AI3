@@ -18,7 +18,7 @@ namespace
 {
 using Json = nlohmann::json;
 constexpr std::string_view format_name = "ai3-scene";
-constexpr std::uint64_t format_version = 2;
+constexpr std::uint64_t format_version = 3;
 
 [[noreturn]] void invalid(const std::string& message) { throw std::invalid_argument(message); }
 
@@ -121,6 +121,9 @@ std::string subtype_string(const SceneObject& object)
     if (object.category == ObjectCategory::primitive &&
         object.primitive_kind == PrimitiveKind::sphere && no_camera && no_light)
         return "sphere";
+    if (object.category == ObjectCategory::primitive &&
+        object.primitive_kind == PrimitiveKind::box && no_camera && no_light)
+        return "box";
     if (object.category == ObjectCategory::camera && no_primitive &&
         object.camera_kind == CameraKind::perspective && no_light)
         return "perspective";
@@ -140,6 +143,18 @@ Json encode_payload(const SceneObject& object)
         return {{"radius_meters", object.sphere.radius_meters},
                 {"material_id", object.sphere.material_id},
                 {"fallback_color_linear", encode_vec3(object.sphere.fallback_color)}};
+    }
+    if (object.primitive_kind == PrimitiveKind::box)
+    {
+        const auto& b = object.box;
+        return {{"width_meters", b.width_meters},
+                {"length_meters", b.length_meters},
+                {"height_meters", b.height_meters},
+                {"width_segments", b.width_segments},
+                {"length_segments", b.length_segments},
+                {"height_segments", b.height_segments},
+                {"material_id", b.material_id},
+                {"fallback_color_linear", encode_vec3(b.fallback_color)}};
     }
     if (object.camera_kind == CameraKind::perspective)
     {
@@ -192,6 +207,39 @@ void decode_semantics(const std::string& category, const std::string& subtype, c
         }
         if (object.sphere.radius_meters <= 0.0F)
             invalid("sphere radius must be positive");
+        return;
+    }
+    if (category == "primitive" && subtype == "box")
+    {
+        require_fields(payload,
+                       {"width_meters", "length_meters", "height_meters", "width_segments",
+                        "length_segments", "height_segments", "material_id",
+                        "fallback_color_linear"},
+                       "box payload");
+        object.category = ObjectCategory::primitive;
+        object.primitive_kind = PrimitiveKind::box;
+        object.box.width_meters = number(payload.at("width_meters"), "box width");
+        object.box.length_meters = number(payload.at("length_meters"), "box length");
+        object.box.height_meters = number(payload.at("height_meters"), "box height");
+        const auto segments = [](const Json& value, std::string_view context)
+        {
+            const float parsed = number(value, context);
+            if (parsed != std::floor(parsed))
+                invalid(std::string(context) + " must be an integer");
+            return static_cast<int>(parsed);
+        };
+        object.box.width_segments = segments(payload.at("width_segments"), "box width segments");
+        object.box.length_segments = segments(payload.at("length_segments"), "box length segments");
+        object.box.height_segments = segments(payload.at("height_segments"), "box height segments");
+        object.box.material_id = unsigned_value(payload.at("material_id"), "material ID");
+        object.box.fallback_color = vec3(payload.at("fallback_color_linear"), "fallback color");
+        const auto valid = [](float v) { return std::isfinite(v) && v >= 0.001F && v <= 9999.0F; };
+        if (!valid(object.box.width_meters) || !valid(object.box.length_meters) ||
+            !valid(object.box.height_meters) || object.box.width_segments < 1 ||
+            object.box.width_segments > 999 || object.box.length_segments < 1 ||
+            object.box.length_segments > 999 || object.box.height_segments < 1 ||
+            object.box.height_segments > 999 || !valid_linear_color(object.box.fallback_color))
+            invalid("box parameters are invalid");
         return;
     }
     if (category == "camera" && subtype == "perspective")
@@ -305,6 +353,7 @@ class SceneDocumentCodec
         };
         Json counters = {
             {"sphere", counter(ObjectCategory::primitive, static_cast<int>(PrimitiveKind::sphere))},
+            {"box", counter(ObjectCategory::primitive, static_cast<int>(PrimitiveKind::box))},
             {"perspective_camera",
              counter(ObjectCategory::camera, static_cast<int>(CameraKind::perspective))},
             {"directional_light",
@@ -329,7 +378,7 @@ class SceneDocumentCodec
             invalid("document is missing version");
         const std::uint64_t version = unsigned_value(root.at("version"), "document version");
         const bool legacy = version == 1;
-        if (!legacy && version != format_version)
+        if (!legacy && version != 2 && version != format_version)
             invalid("document version is unsupported");
         require_fields(root,
                        legacy ? std::initializer_list<std::string_view>{"format", "version",
@@ -352,14 +401,28 @@ class SceneDocumentCodec
         if (next_id == no_object || next_id == std::numeric_limits<ObjectId>::max())
             invalid("next object ID cannot be allocated safely");
         const Json& counters = metadata.at("default_name_counters");
-        require_fields(counters, {"sphere", "perspective_camera", "directional_light"},
-                       "default-name counters");
+        if (version == format_version)
+            require_fields(counters, {"sphere", "box", "perspective_camera", "directional_light"},
+                           "default-name counters");
+        else
+        {
+            if (!counters.is_object() || !counters.contains("sphere") ||
+                !counters.contains("perspective_camera") || !counters.contains("directional_light"))
+                invalid("default-name counters is missing a required field");
+            for (const auto& entry : counters.items())
+                if (entry.key() != "sphere" && entry.key() != "box" &&
+                    entry.key() != "perspective_camera" && entry.key() != "directional_light")
+                    invalid("default-name counters contains unsupported field " + entry.key());
+        }
         const std::uint64_t sphere_count = unsigned_value(counters.at("sphere"), "sphere counter");
+        const std::uint64_t box_count =
+            counters.contains("box") ? unsigned_value(counters.at("box"), "box counter") : 0;
         const std::uint64_t camera_count =
             unsigned_value(counters.at("perspective_camera"), "camera counter");
         const std::uint64_t light_count =
             unsigned_value(counters.at("directional_light"), "light counter");
-        if (sphere_count >= next_id || camera_count >= next_id || light_count >= next_id)
+        if (sphere_count >= next_id || box_count >= next_id || camera_count >= next_id ||
+            light_count >= next_id)
             invalid("default-name counter is inconsistent with allocator state");
 
         const Json& values = root.at("objects");
@@ -456,6 +519,9 @@ class SceneDocumentCodec
             if (object.sphere.material_id != no_material &&
                 candidate.find_material(object.sphere.material_id) == nullptr)
                 invalid("sphere material does not exist");
+            if (object.box.material_id != no_material &&
+                candidate.find_material(object.box.material_id) == nullptr)
+                invalid("box material does not exist");
             std::set<ObjectId> ancestors;
             for (ObjectId parent = object.parent_id_; parent != no_object;)
             {
@@ -466,6 +532,8 @@ class SceneDocumentCodec
         }
         candidate.default_name_counts_[{ObjectCategory::primitive,
                                         static_cast<int>(PrimitiveKind::sphere)}] = sphere_count;
+        candidate.default_name_counts_[{ObjectCategory::primitive,
+                                        static_cast<int>(PrimitiveKind::box)}] = box_count;
         candidate.default_name_counts_[{ObjectCategory::camera,
                                         static_cast<int>(CameraKind::perspective)}] = camera_count;
         candidate.default_name_counts_[{ObjectCategory::light,

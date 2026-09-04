@@ -49,7 +49,8 @@ enum class ObjectCategory
 enum class PrimitiveKind
 {
     none,
-    sphere
+    sphere,
+    box
 };
 enum class CameraKind
 {
@@ -67,6 +68,17 @@ struct SpherePrimitive
     float radius_meters = 1.0F;
     MaterialId material_id = no_material;
     // Linear RGB equivalent of the established artist-facing sRGB blue (0.22, 0.58, 0.92).
+    glm::vec3 fallback_color{0.0396819F, 0.2957F, 0.827571F};
+};
+struct BoxPrimitive
+{
+    float width_meters = 1.0F;
+    float length_meters = 1.0F;
+    float height_meters = 1.0F;
+    int width_segments = 1;
+    int length_segments = 1;
+    int height_segments = 1;
+    MaterialId material_id = no_material;
     glm::vec3 fallback_color{0.0396819F, 0.2957F, 0.827571F};
 };
 struct PerspectiveCamera
@@ -136,6 +148,7 @@ struct SceneObject
     CameraKind camera_kind = CameraKind::none;
     LightKind light_kind = LightKind::none;
     SpherePrimitive sphere;
+    BoxPrimitive box;
     PerspectiveCamera perspective_camera;
     DirectionalLight directional_light;
     // Derived object-local runtime cache. Authoritative semantic parameters remain the source.
@@ -169,6 +182,7 @@ struct CreateObject
     CameraKind camera_kind = CameraKind::none;
     LightKind light_kind = LightKind::none;
     SpherePrimitive sphere;
+    BoxPrimitive box;
     PerspectiveCamera perspective_camera;
     DirectionalLight directional_light;
 };
@@ -200,10 +214,12 @@ class EditorState
     EditorState();
     ObjectId create_object(CreateObject object);
     ObjectId create_sphere(std::string localized_base_name, SpherePrimitive sphere = {});
+    ObjectId create_box(std::string localized_base_name, BoxPrimitive box = {});
     ObjectId create_perspective_camera(std::string localized_base_name,
                                        PerspectiveCamera camera = {});
     ObjectId create_directional_light(std::string localized_base_name, DirectionalLight light = {});
     bool set_sphere(ObjectId id, SpherePrimitive sphere);
+    bool set_box(ObjectId id, BoxPrimitive box);
     bool set_perspective_camera(ObjectId id, PerspectiveCamera camera);
     bool set_directional_light(ObjectId id, DirectionalLight light);
     MaterialId create_material(std::string localized_base_name, Material material = {});

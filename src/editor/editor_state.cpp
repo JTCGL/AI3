@@ -123,6 +123,17 @@ void validate(const CreateObject& object)
     if (object.primitive_kind == PrimitiveKind::sphere &&
         !valid_linear_color(object.sphere.fallback_color))
         throw std::invalid_argument("Sphere fallback color is invalid");
+    if (object.primitive_kind == PrimitiveKind::box)
+    {
+        const auto dimension = [](float v)
+        { return std::isfinite(v) && v >= 0.001F && v <= 9999.0F; };
+        const BoxPrimitive& b = object.box;
+        if (!dimension(b.width_meters) || !dimension(b.length_meters) ||
+            !dimension(b.height_meters) || b.width_segments < 1 || b.width_segments > 999 ||
+            b.length_segments < 1 || b.length_segments > 999 || b.height_segments < 1 ||
+            b.height_segments > 999 || !valid_linear_color(b.fallback_color))
+            throw std::invalid_argument("Box parameters are invalid");
+    }
     if (object.camera_kind == CameraKind::perspective)
     {
         const PerspectiveCamera& camera = object.perspective_camera;
@@ -176,6 +187,8 @@ ObjectId EditorState::create_object(CreateObject object)
     if (object.sphere.material_id != no_material &&
         find_material(object.sphere.material_id) == nullptr)
         throw std::invalid_argument("Sphere material does not exist");
+    if (object.box.material_id != no_material && find_material(object.box.material_id) == nullptr)
+        throw std::invalid_argument("Box material does not exist");
     const ObjectId id = next_object_id_++;
     SceneObject created;
     created.id = id;
@@ -189,6 +202,7 @@ ObjectId EditorState::create_object(CreateObject object)
     created.camera_kind = object.camera_kind;
     created.light_kind = object.light_kind;
     created.sphere = object.sphere;
+    created.box = object.box;
     created.perspective_camera = object.perspective_camera;
     created.directional_light = object.directional_light;
     rebuild_bounds(created);
@@ -216,6 +230,16 @@ ObjectId EditorState::create_sphere(std::string localized_base_name, SpherePrimi
     return create_named_object(
         std::move(localized_base_name), std::move(object),
         {ObjectCategory::primitive, static_cast<int>(PrimitiveKind::sphere)});
+}
+
+ObjectId EditorState::create_box(std::string localized_base_name, BoxPrimitive box)
+{
+    CreateObject object{""};
+    object.category = ObjectCategory::primitive;
+    object.primitive_kind = PrimitiveKind::box;
+    object.box = box;
+    return create_named_object(std::move(localized_base_name), std::move(object),
+                               {ObjectCategory::primitive, static_cast<int>(PrimitiveKind::box)});
 }
 
 ObjectId EditorState::create_perspective_camera(std::string localized_base_name,
@@ -264,6 +288,34 @@ bool EditorState::set_sphere(ObjectId id, SpherePrimitive sphere)
     return true;
 }
 
+bool EditorState::set_box(ObjectId id, BoxPrimitive box)
+{
+    SceneObject* object = find_object_mutable(id);
+    if (object == nullptr || object->primitive_kind != PrimitiveKind::box)
+        return false;
+    CreateObject candidate{object->name};
+    candidate.category = ObjectCategory::primitive;
+    candidate.primitive_kind = PrimitiveKind::box;
+    candidate.box = box;
+    validate(candidate);
+    if (box.material_id != no_material && find_material(box.material_id) == nullptr)
+        return false;
+    const BoxPrimitive old = object->box;
+    if (old.width_meters == box.width_meters && old.length_meters == box.length_meters &&
+        old.height_meters == box.height_meters && old.width_segments == box.width_segments &&
+        old.length_segments == box.length_segments && old.height_segments == box.height_segments &&
+        old.material_id == box.material_id && equal(old.fallback_color, box.fallback_color))
+        return true;
+    const bool shape = old.width_meters != box.width_meters ||
+                       old.length_meters != box.length_meters ||
+                       old.height_meters != box.height_meters;
+    object->box = box;
+    if (shape)
+        rebuild_bounds(*object);
+    advance_document_revision();
+    return true;
+}
+
 void EditorState::rebuild_bounds(SceneObject& object)
 {
     object.bounds = {};
@@ -275,6 +327,16 @@ void EditorState::rebuild_bounds(SceneObject& object)
             object.bounds.box = AxisAlignedBounds{glm::vec3{-radius}, glm::vec3{radius}};
             object.bounds.sphere = BoundingSphere{{0.0F, 0.0F, 0.0F}, radius};
         }
+    }
+    if (object.primitive_kind == PrimitiveKind::box)
+    {
+        const glm::vec3 half{object.box.width_meters * 0.5F, object.box.length_meters * 0.5F,
+                             object.box.height_meters * 0.5F};
+        object.bounds.box = AxisAlignedBounds{-half, half};
+        object.bounds.sphere = BoundingSphere{
+            glm::vec3{0.0F},
+            0.5F * glm::length(glm::vec3{object.box.width_meters, object.box.length_meters,
+                                         object.box.height_meters})};
     }
 }
 
@@ -352,12 +414,17 @@ bool EditorState::set_material(MaterialId id, Material material)
 bool EditorState::assign_material(ObjectId id, MaterialId material_id)
 {
     SceneObject* object = find_object_mutable(id);
-    if (object == nullptr || object->primitive_kind != PrimitiveKind::sphere ||
+    if (object == nullptr ||
+        (object->primitive_kind != PrimitiveKind::sphere &&
+         object->primitive_kind != PrimitiveKind::box) ||
         (material_id != no_material && find_material(material_id) == nullptr))
         return false;
-    if (object->sphere.material_id == material_id)
+    MaterialId& current = object->primitive_kind == PrimitiveKind::sphere
+                              ? object->sphere.material_id
+                              : object->box.material_id;
+    if (current == material_id)
         return true;
-    object->sphere.material_id = material_id;
+    current = material_id;
     advance_document_revision();
     return true;
 }

@@ -63,6 +63,7 @@ add_library(ai3_scene STATIC
     src/scene/render_target_size.cpp
     src/scene/scene_math.cpp
     src/scene/sphere_mesh.cpp
+    src/scene/box_mesh.cpp
     src/scene/translation_gizmo.cpp
     src/scene/viewport_picking.cpp
     src/scene/viewport_view.cpp

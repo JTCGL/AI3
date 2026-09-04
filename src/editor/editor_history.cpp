@@ -35,6 +35,14 @@ bool equal(const SceneObject& left, const SceneObject& right)
            left.sphere.radius_meters == right.sphere.radius_meters &&
            left.sphere.material_id == right.sphere.material_id &&
            equal(left.sphere.fallback_color, right.sphere.fallback_color) &&
+           left.box.width_meters == right.box.width_meters &&
+           left.box.length_meters == right.box.length_meters &&
+           left.box.height_meters == right.box.height_meters &&
+           left.box.width_segments == right.box.width_segments &&
+           left.box.length_segments == right.box.length_segments &&
+           left.box.height_segments == right.box.height_segments &&
+           left.box.material_id == right.box.material_id &&
+           equal(left.box.fallback_color, right.box.fallback_color) &&
            left.perspective_camera.vertical_fov_degrees ==
                right.perspective_camera.vertical_fov_degrees &&
            left.perspective_camera.near_plane_meters ==

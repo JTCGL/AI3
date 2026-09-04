@@ -150,7 +150,7 @@ TEST_CASE("Scene Document v2 round trips materials and rejects dangling assignme
     REQUIRE(source.assign_material(sphere, material));
     std::string document;
     REQUIRE(ai3::serialize_scene_document(source, document));
-    CHECK(document.find("\"version\": 2") != std::string::npos);
+    CHECK(document.find("\"version\": 3") != std::string::npos);
     ai3::EditorState loaded;
     REQUIRE(ai3::deserialize_scene_document(document, loaded));
     CHECK(loaded.materials().size() == 1);

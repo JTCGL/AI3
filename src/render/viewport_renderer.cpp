@@ -1,6 +1,7 @@
 #include "render/viewport_renderer.h"
 
 #include "render/gles_program.h"
+#include "scene/box_mesh.h"
 #include "scene/scene_math.h"
 #include "scene/sphere_mesh.h"
 
@@ -258,7 +259,7 @@ ViewportRenderer::~ViewportRenderer()
         glDeleteVertexArrays(1, &helper_vertex_array_);
 }
 
-void ViewportRenderer::destroy_geometry(SphereGeometry& geometry)
+void ViewportRenderer::destroy_geometry(PrimitiveGeometry& geometry)
 {
     if (geometry.index_buffer != 0)
         glDeleteBuffers(1, &geometry.index_buffer);
@@ -271,9 +272,9 @@ void ViewportRenderer::destroy_geometry(SphereGeometry& geometry)
 
 void ViewportRenderer::clear_geometry_cache()
 {
-    for (auto& entry : sphere_geometry_cache_)
+    for (auto& entry : geometry_cache_)
         destroy_geometry(entry.second);
-    sphere_geometry_cache_.clear();
+    geometry_cache_.clear();
 }
 
 void ViewportRenderer::synchronize_geometry_cache(const EditorState& scene)
@@ -281,7 +282,7 @@ void ViewportRenderer::synchronize_geometry_cache(const EditorState& scene)
     std::unordered_set<ObjectId> live_ids;
     for (const SceneObject& object : scene.objects())
         live_ids.insert(object.id);
-    for (auto it = sphere_geometry_cache_.begin(); it != sphere_geometry_cache_.end();)
+    for (auto it = geometry_cache_.begin(); it != geometry_cache_.end();)
     {
         if (live_ids.count(it->first) != 0)
         {
@@ -289,20 +290,31 @@ void ViewportRenderer::synchronize_geometry_cache(const EditorState& scene)
             continue;
         }
         destroy_geometry(it->second);
-        it = sphere_geometry_cache_.erase(it);
+        it = geometry_cache_.erase(it);
     }
 }
 
-ViewportRenderer::SphereGeometry& ViewportRenderer::sphere_geometry(const SceneObject& object)
+ViewportRenderer::PrimitiveGeometry& ViewportRenderer::primitive_geometry(const SceneObject& object)
 {
-    auto [it, inserted] = sphere_geometry_cache_.try_emplace(object.id);
-    SphereGeometry& geometry = it->second;
-    if (!inserted && geometry.radius_meters == object.sphere.radius_meters)
+    auto [it, inserted] = geometry_cache_.try_emplace(object.id);
+    PrimitiveGeometry& geometry = it->second;
+    if (!inserted && ((object.primitive_kind == PrimitiveKind::sphere &&
+                       geometry.radius_meters == object.sphere.radius_meters) ||
+                      (object.primitive_kind == PrimitiveKind::box &&
+                       geometry.box.width_meters == object.box.width_meters &&
+                       geometry.box.length_meters == object.box.length_meters &&
+                       geometry.box.height_meters == object.box.height_meters &&
+                       geometry.box.width_segments == object.box.width_segments &&
+                       geometry.box.length_segments == object.box.length_segments &&
+                       geometry.box.height_segments == object.box.height_segments)))
         return geometry;
 
     destroy_geometry(geometry);
-    const SphereMesh mesh = make_sphere_mesh(object.sphere.radius_meters);
+    const TriangleMesh mesh = object.primitive_kind == PrimitiveKind::sphere
+                                  ? make_sphere_mesh(object.sphere.radius_meters)
+                                  : make_box_mesh(object.box);
     geometry.radius_meters = object.sphere.radius_meters;
+    geometry.box = object.box;
     geometry.index_count = static_cast<std::uint32_t>(mesh.indices.size());
     glGenVertexArrays(1, &geometry.vertex_array);
     glGenBuffers(1, &geometry.vertex_buffer);
@@ -310,7 +322,7 @@ ViewportRenderer::SphereGeometry& ViewportRenderer::sphere_geometry(const SceneO
     if (geometry.vertex_array == 0 || geometry.vertex_buffer == 0 || geometry.index_buffer == 0)
     {
         destroy_geometry(geometry);
-        throw std::runtime_error("Viewport sphere resource creation failed");
+        throw std::runtime_error("Viewport primitive resource creation failed");
     }
     glBindVertexArray(geometry.vertex_array);
     glBindBuffer(GL_ARRAY_BUFFER, geometry.vertex_buffer);
@@ -408,19 +420,29 @@ void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportVi
         light_color = lights.front()->directional_light.color;
         light_intensity = lights.front()->directional_light.intensity;
     }
-    for (const SceneObject* object : scene.primitives(PrimitiveKind::sphere, {true, true}))
+    std::vector<const SceneObject*> renderables =
+        scene.primitives(PrimitiveKind::sphere, {true, true});
+    const auto boxes = scene.primitives(PrimitiveKind::box, {true, true});
+    renderables.insert(renderables.end(), boxes.begin(), boxes.end());
+    for (const SceneObject* object : renderables)
     {
-        const SphereGeometry& geometry = sphere_geometry(*object);
+        const PrimitiveGeometry& geometry = primitive_geometry(*object);
         glBindVertexArray(geometry.vertex_array);
         const glm::mat4 model = scene.world_transform_matrix(object->id);
         const glm::mat4 mvp = view_projection * model;
-        const Material* material = scene.find_material(object->sphere.material_id);
+        const MaterialId material_id = object->primitive_kind == PrimitiveKind::sphere
+                                           ? object->sphere.material_id
+                                           : object->box.material_id;
+        const glm::vec3 fallback = object->primitive_kind == PrimitiveKind::sphere
+                                       ? object->sphere.fallback_color
+                                       : object->box.fallback_color;
+        const Material* material = scene.find_material(material_id);
         if (material == nullptr)
         {
             const UnlitProgram& program = *unlit_program_;
             glUseProgram(program.program.id());
             glUniformMatrix4fv(program.mvp, 1, GL_FALSE, glm::value_ptr(mvp));
-            glUniform3fv(program.fallback_color, 1, glm::value_ptr(object->sphere.fallback_color));
+            glUniform3fv(program.fallback_color, 1, glm::value_ptr(fallback));
         }
         else if (material->shading == MaterialShading::lambert)
         {
