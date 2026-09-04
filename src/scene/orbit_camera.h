@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 namespace ai3
@@ -11,8 +12,9 @@ class OrbitCamera
     glm::mat4 view_matrix() const;
     glm::mat4 projection_matrix(float aspect_ratio) const;
     glm::vec3 position() const;
-    void orbit(float yaw_delta_degrees, float pitch_delta_degrees);
-    void zoom(float wheel_delta);
+    bool orbit(float yaw_delta_degrees, float pitch_delta_degrees);
+    bool pan(glm::vec2 pointer_delta, float logical_viewport_height);
+    bool zoom(float wheel_delta);
     void reset();
 
     float yaw_degrees() const { return yaw_degrees_; }
@@ -21,6 +23,7 @@ class OrbitCamera
     const glm::vec3& target() const { return target_; }
 
     private:
+    static constexpr float vertical_fov_degrees_ = 50.0F;
     glm::vec3 target_{};
     float yaw_degrees_ = 35.0F;
     float pitch_degrees_ = 20.0F;

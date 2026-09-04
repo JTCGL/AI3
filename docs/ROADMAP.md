@@ -62,12 +62,11 @@ not reintroduce an ImGui world-helper presenter without a new concrete requireme
 
 The viewport now has explicit Selection and Navigation interaction modes plus a minimal contextual toolbar.
 Selection uses display-independent CPU picking for enabled, visible spheres and gives the selected object's
-translation handles first refusal on pointer-down. Non-sphere objects selected through the Scene Graph can be
-translated. Future input behavior should make middle-mouse hold a momentary Navigation override: pressing the
-button enters Navigation and releasing it returns to Selection, while wheel scrolling alone does not change
-mode. Orbit wheel zoom should remain available regardless of the current Selection/Navigation mode; Scene
-Camera data must remain unaffected. The toolbar's retained/effective-mode presentation and interactions with
-its existing mode controls require explicit design. No generalized tool or toolbar framework is established.
+translation handles first refusal on left pointer-down. Non-sphere objects selected through the Scene Graph can be
+translated. Editor View supports transient MMB pan, Alt+MMB orbit, and wheel zoom in either retained mode;
+these gestures do not change Selection/Navigation. Retained Navigation-mode left-drag orbit remains supported,
+and every navigation path is inert for Scene Camera. No generalized input, tool, or toolbar framework is
+established.
 
 ## Bounds and viewport feedback
 
@@ -82,7 +81,7 @@ its existing mode controls require explicit design. No generalized tool or toolb
   which aspect ratio is authoritative outside an active viewport, remain milestone design decisions. Coordinate
   this bounds calculation with visible camera frustum lines/planes so clipping aids, hit detection, and helper
   geometry do not develop conflicting camera-volume definitions.
-- Add Frame Selected, initially bound to F, after the required bounds semantics exist. In Orbit view it should
+- Add Frame Selected, initially bound to F, after the required bounds semantics exist. In Editor View it should
   target the selected bounds center and choose a perspective distance satisfying both horizontal and vertical
   FOV constraints. It must not mutate a Scene Camera. Behavior while a Scene Camera source is active must be
   approved explicitly.
@@ -99,8 +98,8 @@ its existing mode controls require explicit design. No generalized tool or toolb
   perspective-camera bounds/frustum envelope rather than maintaining conflicting calculations.
 
 `ViewportView` selection and view/projection resolution are already display-independent and outside Dear
-ImGui. Orbit navigation dispatch and sphere picking are also display-independent, while Scene Camera navigation
-is intentionally inert. The renderer consumes resolved view values. However, the concrete `ViewportRenderer`,
+ImGui. Editor View navigation policy and sphere picking are also display-independent, while Scene Camera
+navigation is intentionally inert. The renderer consumes resolved view values. However, the concrete `ViewportRenderer`,
 its GLES render resources, and its offscreen target are still constructed and owned by `EditorUi`; rendering is
 not yet independent of UI lifetime/ownership.
 

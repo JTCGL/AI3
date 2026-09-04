@@ -50,9 +50,9 @@ ResolvedViewportView resolve_scene_camera(const EditorState& scene, const SceneO
 }
 } // namespace
 
-void ViewportView::use_orbit()
+void ViewportView::use_editor_view()
 {
-    source_ = ViewSource::orbit;
+    source_ = ViewSource::editor_view;
     scene_camera_id_ = no_object;
 }
 
@@ -75,18 +75,27 @@ ObjectId ViewportView::helper_hover_object(ObjectId picked_object) const
 
 bool ViewportView::navigate(float yaw_delta_degrees, float pitch_delta_degrees)
 {
-    if (interaction_mode_ != ViewportInteractionMode::navigation || source_ != ViewSource::orbit)
+    if (interaction_mode_ != ViewportInteractionMode::navigation ||
+        source_ != ViewSource::editor_view)
         return false;
-    orbit_.orbit(yaw_delta_degrees, pitch_delta_degrees);
-    return true;
+    return orbit_.orbit(yaw_delta_degrees, pitch_delta_degrees);
+}
+
+bool ViewportView::transient_navigate(TransientNavigationOperation operation,
+                                      glm::vec2 pointer_delta, float logical_viewport_height)
+{
+    if (source_ != ViewSource::editor_view)
+        return false;
+    if (operation == TransientNavigationOperation::pan)
+        return orbit_.pan(pointer_delta, logical_viewport_height);
+    return orbit_.orbit(pointer_delta.x * 0.25F, -pointer_delta.y * 0.25F);
 }
 
 bool ViewportView::zoom(float wheel_delta)
 {
-    if (interaction_mode_ != ViewportInteractionMode::navigation || source_ != ViewSource::orbit)
+    if (source_ != ViewSource::editor_view)
         return false;
-    orbit_.zoom(wheel_delta);
-    return true;
+    return orbit_.zoom(wheel_delta);
 }
 
 ResolvedViewportView ViewportView::resolve(const EditorState& scene, float aspect_ratio)
@@ -98,7 +107,7 @@ ResolvedViewportView ViewportView::resolve(const EditorState& scene, float aspec
     {
         const SceneObject* camera = scene.find_object(scene_camera_id_);
         if (camera == nullptr || !is_supported_scene_camera(*camera))
-            use_orbit();
+            use_editor_view();
         else
             return resolve_scene_camera(scene, *camera, aspect_ratio);
     }
@@ -108,8 +117,23 @@ ResolvedViewportView ViewportView::resolve(const EditorState& scene, float aspec
 
 void ViewportView::reset()
 {
-    source_ = ViewSource::orbit;
+    source_ = ViewSource::editor_view;
     scene_camera_id_ = no_object;
     orbit_.reset();
+}
+
+bool TransientNavigationGesture::acquire(bool alt_held)
+{
+    if (active_)
+        return false;
+    operation_ = alt_held ? TransientNavigationOperation::orbit : TransientNavigationOperation::pan;
+    active_ = true;
+    return true;
+}
+
+bool TransientNavigationGesture::dispatch(ViewportView& view, glm::vec2 pointer_delta,
+                                          float logical_viewport_height) const
+{
+    return active_ && view.transient_navigate(operation_, pointer_delta, logical_viewport_height);
 }
 } // namespace ai3

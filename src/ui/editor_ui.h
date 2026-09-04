@@ -74,6 +74,7 @@ class EditorUi
     MaterialId active_material_id_ = no_material;
     std::pair<ObjectId, ObjectId> pending_reparent_ = {no_object, no_object};
     std::optional<AxisTranslationGesture> translation_gesture_;
+    TransientNavigationGesture transient_navigation_gesture_;
     ObjectId hovered_object_ = no_object;
 };
 } // namespace ai3
