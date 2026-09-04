@@ -70,6 +70,10 @@ Before declaring work complete, run:
 bash scripts/check.sh
 ```
 
+This canonical check begins with deterministic documentation validation through `scripts/check-docs.sh`,
+including relative links, document structure, completed-milestone consistency, and the Scene Document version
+reported by current documentation. These checks supplement rather than replace semantic documentation review.
+
 The same verification path should be used locally and by GitHub Actions wherever practical.
 
 Use `bash scripts/sync-and-check.sh` only to return a checkout to known-good `main` and verify it. Use
@@ -111,6 +115,11 @@ verification. Before declaring a milestone merge-ready:
 Update only affected documentation and do not duplicate information across documentation layers.
 Documentation must describe the final reviewed implementation, not merely the original milestone plan.
 Implementation and tests remain authoritative if a discrepancy is discovered.
+
+Complete the pull-request documentation-impact checklist for every PR. “Not affected” is valid when explained
+by the PR scope; do not make meaningless documentation edits merely to satisfy the checklist. Update affected
+documentation alongside implementation where practical, then repeat semantic reconciliation after code review
+and runtime corrections. Passing automated documentation checks does not establish that the prose is true.
 
 ## Agent behavior
 Spend model effort on design, implementation, debugging, tests, and review. Prefer deterministic repository tooling for environment setup, formatting, building, and routine shell work.
