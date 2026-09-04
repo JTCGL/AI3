@@ -3,9 +3,13 @@
 #include "editor/document_session.h"
 #include "scene/scene_math.h"
 #include "scene/viewport_view.h"
+#include "scene/world_coordinates.h"
 
 #include <glm/geometric.hpp>
 #include <glm/vec4.hpp>
+
+#include <cmath>
+#include <limits>
 
 namespace
 {
@@ -35,10 +39,11 @@ ai3::ObjectId create_camera(ai3::EditorState& scene, const ai3::Transform& trans
 }
 } // namespace
 
-TEST_CASE("orbit viewport resolves its view and aspect-dependent projection")
+TEST_CASE("Editor View resolves its view and aspect-dependent projection")
 {
     ai3::EditorState scene;
     ai3::ViewportView viewport;
+    CHECK(viewport.source() == ai3::ViewSource::editor_view);
     const ai3::ResolvedViewportView wide = viewport.resolve(scene, 16.0F / 9.0F);
     const ai3::ResolvedViewportView square = viewport.resolve(scene, 1.0F);
 
@@ -75,7 +80,7 @@ TEST_CASE("viewport interaction mode is workspace state")
     CHECK(viewport.interaction_mode() == ai3::ViewportInteractionMode::navigation);
 }
 
-TEST_CASE("navigation dispatch requires navigation mode and an active orbit source")
+TEST_CASE("retained orbit requires Navigation mode while wheel zoom works in both modes")
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene);
@@ -85,35 +90,46 @@ TEST_CASE("navigation dispatch requires navigation mode and an active orbit sour
     const float initial_distance = viewport.orbit().distance();
 
     CHECK_FALSE(viewport.navigate(4.0F, -2.0F));
-    CHECK_FALSE(viewport.zoom(1.0F));
+    REQUIRE(viewport.zoom(1.0F));
     CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(initial_yaw));
     CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(initial_pitch));
-    CHECK(viewport.orbit().distance() == doctest::Approx(initial_distance));
+    CHECK(viewport.orbit().distance() != doctest::Approx(initial_distance));
 
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
     REQUIRE(viewport.navigate(4.0F, -2.0F));
+    const float selection_zoom_distance = viewport.orbit().distance();
     REQUIRE(viewport.zoom(1.0F));
     CHECK(viewport.orbit().yaw_degrees() != doctest::Approx(initial_yaw));
-    CHECK(viewport.orbit().distance() != doctest::Approx(initial_distance));
+    CHECK(viewport.orbit().distance() != doctest::Approx(selection_zoom_distance));
     const float orbit_yaw = viewport.orbit().yaw_degrees();
     const float orbit_pitch = viewport.orbit().pitch_degrees();
     const float orbit_distance = viewport.orbit().distance();
+    const glm::vec3 editor_target = viewport.orbit().target();
     const ai3::Transform camera_before = scene.find_object(camera)->transform;
     const ai3::DocumentRevision revision = scene.document_revision();
 
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::selection);
     REQUIRE(viewport.use_scene_camera(scene, camera));
     CHECK_FALSE(viewport.navigate(10.0F, 10.0F));
+    CHECK_FALSE(viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {10.0F, 10.0F},
+                                            600.0F));
+    CHECK_FALSE(viewport.transient_navigate(ai3::TransientNavigationOperation::orbit,
+                                            {10.0F, 10.0F}, 600.0F));
     CHECK_FALSE(viewport.zoom(3.0F));
     CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(orbit_yaw));
     CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(orbit_pitch));
     CHECK(viewport.orbit().distance() == doctest::Approx(orbit_distance));
+    check_vec3(viewport.orbit().target(), editor_target);
     CHECK(scene.find_object(camera)->transform.position == camera_before.position);
     CHECK(scene.find_object(camera)->transform.orientation == camera_before.orientation);
     CHECK(scene.document_revision() == revision);
 
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
     CHECK_FALSE(viewport.navigate(10.0F, 10.0F));
+    CHECK_FALSE(viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {10.0F, 10.0F},
+                                            600.0F));
+    CHECK_FALSE(viewport.transient_navigate(ai3::TransientNavigationOperation::orbit,
+                                            {10.0F, 10.0F}, 600.0F));
     CHECK_FALSE(viewport.zoom(3.0F));
     CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(orbit_yaw));
     CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(orbit_pitch));
@@ -123,24 +139,126 @@ TEST_CASE("navigation dispatch requires navigation mode and an active orbit sour
     CHECK(scene.document_revision() == revision);
 }
 
-TEST_CASE("orbit state survives scene-camera selection")
+TEST_CASE("Editor View pan follows the resolved view plane and scales predictably")
+{
+    ai3::ViewportView viewport;
+    const glm::vec3 initial = viewport.orbit().target();
+    const glm::vec3 initial_position = viewport.orbit().position();
+    REQUIRE(viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {100.0F, 0.0F},
+                                        1000.0F));
+    const glm::vec3 horizontal = viewport.orbit().target() - initial;
+    const glm::vec3 forward = glm::normalize(initial - initial_position);
+    const glm::vec3 right = glm::normalize(glm::cross(forward, ai3::world_up));
+    CHECK(glm::dot(horizontal, forward) == doctest::Approx(0.0F).epsilon(0.0001));
+    CHECK(glm::dot(glm::normalize(horizontal), -right) == doctest::Approx(1.0F).epsilon(0.0001));
+
+    ai3::ViewportView half_height;
+    ai3::ViewportView double_distance;
+    double_distance.orbit().zoom(-std::log(2.0F) / 0.12F);
+    REQUIRE(half_height.transient_navigate(ai3::TransientNavigationOperation::pan, {0.0F, 20.0F},
+                                           500.0F));
+    REQUIRE(double_distance.transient_navigate(ai3::TransientNavigationOperation::pan,
+                                               {0.0F, 20.0F}, 1000.0F));
+    const glm::vec3 up = glm::normalize(glm::cross(right, forward));
+    CHECK(glm::dot(glm::normalize(half_height.orbit().target()), up) ==
+          doctest::Approx(1.0F).epsilon(0.0001));
+    const float base_length = glm::length(viewport.orbit().target() - initial);
+    CHECK(glm::length(half_height.orbit().target()) ==
+          doctest::Approx(base_length * 0.4F).epsilon(0.0001));
+    CHECK(glm::length(double_distance.orbit().target()) ==
+          doctest::Approx(glm::length(half_height.orbit().target())).epsilon(0.0001));
+}
+
+TEST_CASE("invalid Editor View navigation inputs preserve state")
+{
+    ai3::ViewportView viewport;
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const glm::vec3 target = viewport.orbit().target();
+    const float yaw = viewport.orbit().yaw_degrees();
+    const float distance = viewport.orbit().distance();
+    CHECK_FALSE(viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {}, 100.0F));
+    CHECK_FALSE(
+        viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {1.0F, 1.0F}, 0.0F));
+    CHECK_FALSE(
+        viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {nan, 1.0F}, 100.0F));
+    CHECK_FALSE(
+        viewport.transient_navigate(ai3::TransientNavigationOperation::orbit, {nan, 1.0F}, 100.0F));
+    CHECK_FALSE(viewport.zoom(nan));
+    check_vec3(viewport.orbit().target(), target);
+    CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(yaw));
+    CHECK(viewport.orbit().distance() == doctest::Approx(distance));
+}
+
+TEST_CASE("transient Shift gesture freezes its acquisition-time operation")
+{
+    ai3::ViewportView viewport;
+    ai3::TransientNavigationGesture pan;
+    REQUIRE(pan.acquire(false)); // MMB without Shift acquires pan.
+    CHECK(pan.operation() == ai3::TransientNavigationOperation::pan);
+    CHECK_FALSE(pan.acquire(true)); // Pressing Shift later cannot reinterpret it.
+    REQUIRE(pan.dispatch(viewport, {8.0F, 3.0F}, 600.0F));
+    CHECK(viewport.orbit().target() != glm::vec3{});
+    pan.release();
+
+    ai3::TransientNavigationGesture orbit;
+    REQUIRE(orbit.acquire(true)); // Shift+MMB acquires orbit.
+    CHECK(orbit.operation() == ai3::TransientNavigationOperation::orbit);
+    const float yaw = viewport.orbit().yaw_degrees();
+    REQUIRE(orbit.dispatch(viewport, {8.0F, 3.0F}, 600.0F));
+    CHECK(viewport.orbit().yaw_degrees() != doctest::Approx(yaw));
+    orbit.release(); // Releasing Shift does not change the acquired orbit operation.
+}
+
+TEST_CASE("Editor View navigation preserves document and retained workspace state")
+{
+    ai3::EditorState scene;
+    const ai3::ObjectId selected = scene.create_sphere("Selected");
+    REQUIRE(scene.select(selected));
+    ai3::DocumentSession session(scene);
+    ai3::ViewportView viewport;
+    viewport.set_interaction_mode(ai3::ViewportInteractionMode::selection);
+    viewport.set_reference_space(ai3::CoordinateSpace::view);
+    const ai3::DocumentRevision revision = scene.document_revision();
+    const ai3::HistoryStateId history = session.history().current_state_id();
+
+    REQUIRE(viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {12.0F, -4.0F},
+                                        500.0F));
+    REQUIRE(viewport.transient_navigate(ai3::TransientNavigationOperation::orbit, {4.0F, 2.0F},
+                                        500.0F));
+    REQUIRE(viewport.zoom(1.0F));
+
+    CHECK(scene.selection() == selected);
+    CHECK(scene.document_revision() == revision);
+    CHECK(session.history().current_state_id() == history);
+    CHECK_FALSE(session.history().can_undo());
+    CHECK_FALSE(session.dirty());
+    CHECK(viewport.interaction_mode() == ai3::ViewportInteractionMode::selection);
+    CHECK(viewport.transform_tool() == ai3::ViewportTransformTool::translation);
+    CHECK(viewport.reference_space() == ai3::CoordinateSpace::view);
+}
+
+TEST_CASE("Editor View pose and pivot survive scene-camera selection")
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene);
     ai3::ViewportView viewport;
     viewport.orbit().orbit(17.0F, -9.0F);
     viewport.orbit().zoom(2.0F);
+    REQUIRE(viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {24.0F, -12.0F},
+                                        720.0F));
     const float yaw = viewport.orbit().yaw_degrees();
     const float pitch = viewport.orbit().pitch_degrees();
     const float distance = viewport.orbit().distance();
+    const glm::vec3 target = viewport.orbit().target();
 
     REQUIRE(viewport.use_scene_camera(scene, camera));
     CHECK(viewport.source() == ai3::ViewSource::scene_camera);
     viewport.resolve(scene, 1.0F);
-    viewport.use_orbit();
+    viewport.use_editor_view();
     CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(yaw));
     CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(pitch));
     CHECK(viewport.orbit().distance() == doctest::Approx(distance));
+    check_vec3(viewport.orbit().target(), target);
 }
 
 TEST_CASE("scene-camera view uses current authoritative world transform")
@@ -217,7 +335,7 @@ TEST_CASE("generic scene-camera source dispatches the current perspective subtyp
     CHECK(changed[3][2] != doctest::Approx(square[3][2]));
 }
 
-TEST_CASE("invalid view sources are rejected and deleted camera falls back to orbit")
+TEST_CASE("invalid view sources are rejected and deleted camera falls back to Editor View")
 {
     ai3::EditorState scene;
     const ai3::ObjectId object = scene.create_object(ai3::CreateObject{"Object"});
@@ -227,18 +345,18 @@ TEST_CASE("invalid view sources are rejected and deleted camera falls back to or
     CHECK_FALSE(viewport.use_scene_camera(scene, ai3::no_object));
     CHECK_FALSE(viewport.use_scene_camera(scene, object));
     CHECK_FALSE(viewport.use_scene_camera(scene, sphere));
-    CHECK(viewport.source() == ai3::ViewSource::orbit);
+    CHECK(viewport.source() == ai3::ViewSource::editor_view);
 
     REQUIRE(viewport.use_scene_camera(scene, camera));
     CHECK(viewport.source() == ai3::ViewSource::scene_camera);
     REQUIRE(scene.delete_object(camera));
     const ai3::ResolvedViewportView resolved = viewport.resolve(scene, 1.0F);
-    CHECK(viewport.source() == ai3::ViewSource::orbit);
+    CHECK(viewport.source() == ai3::ViewSource::editor_view);
     CHECK(viewport.scene_camera_id() == ai3::no_object);
     check_matrix(resolved.view, viewport.orbit().view_matrix());
 }
 
-TEST_CASE("scene and viewport reset produce deterministic default orbit state")
+TEST_CASE("scene and viewport reset produce deterministic default Editor View state")
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene);
@@ -250,9 +368,10 @@ TEST_CASE("scene and viewport reset produce deterministic default orbit state")
     scene.reset_scene();
     viewport.reset();
     CHECK(scene.objects().empty());
-    CHECK(viewport.source() == ai3::ViewSource::orbit);
+    CHECK(viewport.source() == ai3::ViewSource::editor_view);
     CHECK(viewport.scene_camera_id() == ai3::no_object);
     CHECK(viewport.orbit().yaw_degrees() == doctest::Approx(35.0F));
     CHECK(viewport.orbit().pitch_degrees() == doctest::Approx(20.0F));
     CHECK(viewport.orbit().distance() == doctest::Approx(6.0F));
+    check_vec3(viewport.orbit().target(), {});
 }

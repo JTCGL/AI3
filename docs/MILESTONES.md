@@ -142,3 +142,15 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   the affected object's workspace switches without making workspace edits generally undoable. The GLES helper
   presentation passed physical runtime review on T5600 Linux x86-64, and GitHub Actions passed for the final
   reviewed implementation.
+
+## Milestone 18 — Editor View navigation foundation
+
+- Final reviewed implementation head for [PR #43](https://github.com/JTCGL/AI3/pull/43):
+  `754880babffe7f1a010c688699a608ca0936f80c`
+- Renamed the non-authored Orbit source to localized Editor View while retaining its independent pose and pivot
+  across Scene Camera switching. Added display-independent MMB pan, Shift+MMB orbit, and wheel zoom in both
+  retained modes, with acquisition-time operation freezing, outside-viewport continuation, input priority,
+  invalid-input rejection, and complete Scene Camera/document/workspace invariants.
+- Automated build, test, format, documentation, code review, and GitHub Actions evidence passed. Mouse-dependent
+  physical verification was unavailable and explicitly deferred and accepted by the user; it was not reported as
+  passed and may be performed later without reopening M18 unless a defect is found.

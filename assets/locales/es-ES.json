@@ -97,7 +97,7 @@
     "viewport.selection": "Selección: {selection}",
     "viewport.none": "Ninguna",
     "viewport.view_source": "Vista",
-    "viewport.view_orbit": "Órbita",
+    "viewport.view_editor": "Vista del editor",
     "toolbar.selection": "Selección",
     "toolbar.navigation": "Navegación",
     "toolbar.selection_context": "Selección",

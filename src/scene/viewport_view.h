@@ -9,8 +9,14 @@ namespace ai3
 {
 enum class ViewSource
 {
-    orbit,
+    editor_view,
     scene_camera
+};
+
+enum class TransientNavigationOperation
+{
+    pan,
+    orbit
 };
 
 enum class ViewportInteractionMode
@@ -37,23 +43,39 @@ class ViewportView
     OrbitCamera& orbit() { return orbit_; }
     const OrbitCamera& orbit() const { return orbit_; }
 
-    void use_orbit();
+    void use_editor_view();
     bool use_scene_camera(const EditorState& scene, ObjectId camera_id);
     void set_interaction_mode(ViewportInteractionMode mode);
     void set_transform_tool(ViewportTransformTool tool) { transform_tool_ = tool; }
     void set_reference_space(CoordinateSpace space) { reference_space_ = space; }
     ObjectId helper_hover_object(ObjectId picked_object) const;
     bool navigate(float yaw_delta_degrees, float pitch_delta_degrees);
+    bool transient_navigate(TransientNavigationOperation operation, glm::vec2 pointer_delta,
+                            float logical_viewport_height);
     bool zoom(float wheel_delta);
     ResolvedViewportView resolve(const EditorState& scene, float aspect_ratio);
     void reset();
 
     private:
-    ViewSource source_ = ViewSource::orbit;
+    ViewSource source_ = ViewSource::editor_view;
     ViewportInteractionMode interaction_mode_ = ViewportInteractionMode::selection;
     ViewportTransformTool transform_tool_ = ViewportTransformTool::translation;
     CoordinateSpace reference_space_ = CoordinateSpace::world;
     ObjectId scene_camera_id_ = no_object;
     OrbitCamera orbit_;
+};
+
+class TransientNavigationGesture
+{
+    public:
+    bool acquire(bool shift_held);
+    bool active() const { return active_; }
+    TransientNavigationOperation operation() const { return operation_; }
+    bool dispatch(ViewportView& view, glm::vec2 pointer_delta, float logical_viewport_height) const;
+    void release() { active_ = false; }
+
+    private:
+    bool active_ = false;
+    TransientNavigationOperation operation_ = TransientNavigationOperation::pan;
 };
 } // namespace ai3
