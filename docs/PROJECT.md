@@ -44,7 +44,8 @@ split is:
   semantic object/material data, derived local bounds, per-object bounds-display workspace state, undo/redo
   transactions, and transactional Scene Document/workspace filesystem I/O.
 - `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
-  sizing, orbit view construction, viewport-view selection/resolution and interaction mode, sphere picking,
+  sizing, orbit-style Editor View construction, viewport-view selection/resolution and interaction mode,
+  sphere picking,
   axis-translation projection, hit testing and drag constraints, and shared API-independent helper geometry.
 - `localization`: external resource discovery and UTF-8 string lookup.
 - `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
@@ -117,7 +118,8 @@ document's associated path, saved history checkpoint, dirty determination, files
 New/Open/Quit transition. New and successful Open rebaseline history; failed Open preserves it. Reset Scene is
 one undoable edit that retains the path. New, Open, Quit, and window close share
 Save/Discard/Cancel protection. The graphical UI presents that policy and uses SDL3 asynchronous native file
-dialogs for Open and Save As. After successful Open, the UI resets the viewport to default Orbit and clears
+dialogs for Open and Save As. After successful Open, the UI resets the viewport to the default Editor View and
+clears
 renderer geometry caches before subsequent rendering. See
 [ADR 0006](decisions/0006-scene-document-format.md) and
 [ADR 0007](decisions/0007-document-revision-and-session.md).
@@ -153,7 +155,8 @@ transform storage semantics. See [ADR 0004](decisions/0004-hierarchy-world-trans
 ## Viewport and rendering
 
 The application has one viewport with display-independent `ViewportView` state outside Dear ImGui. Its source
-is Orbit or Scene Camera. Orbit state remains independent of scene hierarchy. Scene-camera selection belongs
+is Editor View or Scene Camera. The Editor View's retained orbit-style pose and pivot remain independent of
+scene hierarchy. Scene-camera selection belongs
 to the viewport, not to a global active-camera concept, and currently accepts perspective-camera objects only.
 Its independent interaction mode is Selection or Navigation and is workspace state excluded from document
 revision, dirty state, history, and persistence.
@@ -163,23 +166,25 @@ The X/Y/Z translation gizmo is visible for the selected object in both modes but
 translation-tool and Local/Parent/World/View reference-space choices as workspace state. A handle receives
 pointer-down before sphere picking; an acquired gesture freezes its object, axis basis, resolved view,
 constraint policy, viewport dimensions, and DPI-derived size. Navigation behavior remains restricted to
-Navigation mode with Orbit source.
+the Editor View: retained Navigation-mode left drag orbits, MMB temporarily pans, Alt+MMB temporarily orbits,
+and wheel input zooms in either retained mode. Transient gestures preserve their acquisition-time operation.
 
 Views are resolved on demand from current state. Scene-camera resolution uses the authoritative resolved world
 position/orientation, current projection parameters, and current viewport aspect ratio. Deleting the selected
-camera falls back deterministically to the unchanged Orbit state; Reset Scene resets the viewport to default
-Orbit state. `ViewportRenderer` consumes only resolved view/projection values and does not know which mode
+camera falls back deterministically to the unchanged Editor View; Reset Scene resets the viewport to its
+default Editor View. `ViewportRenderer` consumes only resolved view/projection values and does not know which mode
 constructed them. See [ADR 0005](decisions/0005-viewport-view-ownership.md).
 
-Resolved views include derived world-space eye position for view-dependent shading in both Orbit and scene-camera
-paths. The renderer draws the scene into its GLES color/depth target, sized from the ImGui viewport content region
-after framebuffer scaling. Dear ImGui presents that texture in the visible editor window. Display-independent
-view semantics are already separated from UI ownership, but construction and lifetime of `ViewportRenderer`
-and its GLES resources remain inside `EditorUi`.
+Resolved views include derived world-space eye position for view-dependent shading in both Editor View and
+scene-camera paths. The renderer draws the scene into its GLES color/depth target, sized from the ImGui viewport
+content region after framebuffer scaling. Dear ImGui presents that texture in the visible editor window.
+Display-independent view semantics are already separated from UI ownership, but construction and lifetime of
+`ViewportRenderer` and its GLES resources remain inside `EditorUi`.
 
-Navigation intent is dispatched through `ViewportView`. It changes retained Orbit parameters only while
-Navigation mode and the Orbit source are both active; a Scene Camera remains authoritative scene data and is
-never changed by viewport navigation. Selection mode constructs a bounded world ray from normalized viewport
+Navigation intent is dispatched through `ViewportView`. Retained left-drag orbit requires Navigation mode,
+while MMB pan, Alt+MMB orbit, and wheel zoom temporarily operate in either retained mode. All operate only on
+the Editor View; a Scene Camera remains authoritative scene data and is never changed by viewport navigation.
+Selection mode constructs a bounded world ray from normalized viewport
 coordinates and the resolved view/projection, then tests enabled, visible spheres by transforming the ray
 through each authoritative inverse world matrix. This preserves exact ellipsoid behavior under non-uniform and
 reflected scale, safely excludes non-invertible candidates, and keeps picking independent of ImGui and GLES.

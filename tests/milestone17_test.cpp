@@ -311,8 +311,8 @@ TEST_CASE("world gizmo geometry projects to the requested apparent size")
                                                     glm::normalize(glm::vec3{1.0F, 2.0F, 3.0F}))};
     for (float zoom : {0.0F, 4.0F, -4.0F})
     {
-        orbit.orbit().reset();
-        orbit.orbit().zoom(zoom);
+        orbit.editor_view().reset();
+        orbit.editor_view().zoom(zoom);
         for (const glm::vec2 viewport : {glm::vec2{800.0F, 600.0F}, glm::vec2{1440.0F, 600.0F}})
             for (float length : {72.0F, 108.0F, 144.0F})
                 check_gizmo_apparent_length(orbit.resolve(scene, viewport.x / viewport.y), viewport,

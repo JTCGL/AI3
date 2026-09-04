@@ -12,6 +12,7 @@
 #include <glm/vec4.hpp>
 
 #include <cmath>
+#include <limits>
 
 namespace
 {
@@ -126,6 +127,41 @@ TEST_CASE("orbit camera uses Z as its stable up axis")
     for (int column = 0; column < 4; ++column)
         for (int row = 0; row < 4; ++row)
             CHECK(std::isfinite(view[column][row]));
+}
+
+TEST_CASE("editor view pan follows the view plane and visible world scale")
+{
+    ai3::OrbitCamera horizontal;
+    const glm::vec3 horizontal_start = horizontal.target();
+    REQUIRE(horizontal.pan({100.0F, 0.0F}, {800.0F, 600.0F}));
+    CHECK(horizontal.target().x < horizontal_start.x);
+    CHECK(glm::length(horizontal.target() - horizontal_start) > 0.0F);
+    CHECK(horizontal.target().z == doctest::Approx(horizontal_start.z));
+
+    ai3::OrbitCamera small_viewport;
+    ai3::OrbitCamera large_viewport;
+    REQUIRE(small_viewport.pan({60.0F, 40.0F}, {800.0F, 600.0F}));
+    REQUIRE(large_viewport.pan({120.0F, 80.0F}, {1600.0F, 1200.0F}));
+    check_vec3(small_viewport.target(), large_viewport.target());
+
+    ai3::OrbitCamera nearer;
+    ai3::OrbitCamera farther;
+    farther.zoom(-std::log(2.0F) / 0.12F);
+    REQUIRE(nearer.pan({60.0F, 0.0F}, {800.0F, 600.0F}));
+    REQUIRE(farther.pan({60.0F, 0.0F}, {800.0F, 600.0F}));
+    CHECK(glm::length(farther.target()) ==
+          doctest::Approx(glm::length(nearer.target()) * 2.0F).epsilon(0.0001));
+}
+
+TEST_CASE("editor view pan rejects invalid and empty input without mutation")
+{
+    ai3::OrbitCamera camera;
+    const glm::vec3 target = camera.target();
+    CHECK_FALSE(camera.pan({}, {800.0F, 600.0F}));
+    CHECK_FALSE(camera.pan({1.0F, 1.0F}, {}));
+    CHECK_FALSE(camera.pan({std::numeric_limits<float>::quiet_NaN(), 1.0F},
+                           {800.0F, 600.0F}));
+    check_vec3(camera.target(), target);
 }
 
 TEST_CASE("orbit camera reset restores its default view")

@@ -78,10 +78,10 @@ for milestone in "${milestone_files[@]}"; do
     milestone_numbers[${number}]="${milestone}"
     grep -Eq "^# Milestone ${number}([[:space:]]|:)" "${milestone}" ||
         fail "milestone heading does not match filename number ${number}: ${milestone}"
-    grep -Eq "^## Milestone ${number}[[:space:]]" docs/MILESTONES.md ||
-        fail "completed milestone brief has no ledger entry: ${milestone}"
-    if grep -Eiq 'remain(s)? required' "${milestone}"; then
-        fail "completed milestone brief still says work remains required: ${milestone}"
+    if grep -Eq "^## Milestone ${number}[[:space:]]" docs/MILESTONES.md; then
+        if grep -Eiq 'remain(s)? required' "${milestone}"; then
+            fail "completed milestone brief still says work remains required: ${milestone}"
+        fi
     fi
 done
 

@@ -99,12 +99,13 @@ Scene objects use stable monotonic IDs and public create/delete APIs. Deleting a
 object; its direct children survive as scene roots and preserve their world-space poses.
 Sphere parameters are semantic editor state; procedural meshes are derived in the headless scene layer.
 
-The application's single viewport has display-independent view state outside Dear ImGui. Its source is Orbit
-or Scene Camera; the localized selector currently lists Perspective Camera scene objects because that is the
-only implemented camera subtype. Scene-camera matrices are derived from current authoritative world
-transforms and projection parameters, while the GLES3 renderer
-consumes only resolved view/projection matrices. Deleting a viewed camera falls back to Orbit, and Reset Scene
-restores the default Orbit state. See [ADR 0005](docs/decisions/0005-viewport-view-ownership.md).
+The application's single viewport has display-independent view state outside Dear ImGui. Its source is Editor
+View or Scene Camera; the localized selector currently lists Perspective Camera scene objects because that is
+the only implemented camera subtype. The Editor View retains an independent orbit-style pose and pivot.
+Scene-camera matrices are derived from current authoritative world transforms and projection parameters, while
+the GLES3 renderer consumes only resolved view/projection matrices. Deleting a viewed camera falls back to the
+Editor View, and Reset Scene restores its default state. See
+[ADR 0005](docs/decisions/0005-viewport-view-ownership.md).
 
 Scene Documents use strict versioned `.ai3scene` JSON with transactional loading, native Open/Save/Save As,
 dirty-state protection, and linear Undo/Redo transactions. Version 2 stores reusable Lambert and Phong
@@ -114,5 +115,7 @@ sidecars currently persist optional sphere-bound display controls separately fro
 The viewport provides explicit Selection and Navigation modes, exact CPU picking for transformed spheres, and
 single-object X/Y/Z translation in Local, Parent, World, and View reference spaces. Cached sphere AABB and
 bounding-sphere helpers are rendered through GLES: bounds remain depth tested while translation gizmos render
-on top. These interactions remain display-independent outside their concrete ImGui input and GLES presentation
-boundaries.
+on top. Middle-button drag temporarily pans the Editor View, Alt+middle-button drag temporarily orbits it, and
+the mouse wheel zooms it without changing the retained interaction mode. These interactions remain
+display-independent outside their concrete ImGui input and GLES presentation boundaries; Scene Camera
+navigation remains inert.

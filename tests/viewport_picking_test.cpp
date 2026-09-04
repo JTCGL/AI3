@@ -43,7 +43,7 @@ TEST_CASE("viewport coordinates construct center and off-center world rays")
     const ai3::ResolvedViewportView view = viewport.resolve(scene, 1.0F);
     const ai3::WorldRay center = ai3::viewport_world_ray({0.5F, 0.5F}, view);
     check_direction(center.direction,
-                    glm::normalize(viewport.orbit().target() - viewport.orbit().position()));
+                    glm::normalize(viewport.editor_view().target() - viewport.editor_view().position()));
     const ai3::WorldRay upper_right = ai3::viewport_world_ray({1.0F, 0.0F}, view);
     CHECK(glm::dot(center.direction, upper_right.direction) < 0.95F);
     CHECK(glm::length(upper_right.direction) == doctest::Approx(1.0F));

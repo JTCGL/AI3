@@ -1056,15 +1056,16 @@ void EditorUi::draw_viewport()
             stable_imgui_label(localization_.text("viewport.view_source"), "viewport_view_source");
         const SceneObject* current_camera = state_.find_object(viewport_view_.scene_camera_id());
         const std::string current_source =
-            viewport_view_.source() == ViewSource::orbit || current_camera == nullptr
-                ? localization_.text("viewport.view_orbit")
+            viewport_view_.source() == ViewSource::editor_view || current_camera == nullptr
+                ? localization_.text("viewport.view_editor")
                 : current_camera->name;
         if (ImGui::BeginCombo(source_label.c_str(), current_source.c_str()))
         {
-            const bool orbit_selected = viewport_view_.source() == ViewSource::orbit;
-            if (ImGui::Selectable(localization_.text("viewport.view_orbit").c_str(),
-                                  orbit_selected))
-                viewport_view_.use_orbit();
+            const bool editor_view_selected =
+                viewport_view_.source() == ViewSource::editor_view;
+            if (ImGui::Selectable(localization_.text("viewport.view_editor").c_str(),
+                                  editor_view_selected))
+                viewport_view_.use_editor_view();
             for (const SceneObject* camera : state_.cameras(CameraKind::perspective))
             {
                 ImGui::PushID(reinterpret_cast<void*>(static_cast<std::uintptr_t>(camera->id)));
@@ -1102,7 +1103,8 @@ void EditorUi::draw_viewport()
             }
             const ImVec2 future_minimum = ImGui::GetCursorScreenPos();
             const ImVec2 mouse = ImGui::GetIO().MousePos;
-            if (viewport_view_.interaction_mode() == ViewportInteractionMode::selection &&
+            if (!transient_navigation_gesture_.has_value() &&
+                viewport_view_.interaction_mode() == ViewportInteractionMode::selection &&
                 mouse.x >= future_minimum.x && mouse.y >= future_minimum.y &&
                 mouse.x < future_minimum.x + region.x && mouse.y < future_minimum.y + region.y)
             {
@@ -1117,6 +1119,7 @@ void EditorUi::draw_viewport()
                                   ? static_cast<int>(translation_gesture_->selected_axis)
                                   : -1;
             if (helper_object != nullptr && !translation_gesture_.has_value() &&
+                !transient_navigation_gesture_.has_value() &&
                 viewport_view_.interaction_mode() == ViewportInteractionMode::selection)
             {
                 const auto projected = project_translation_gizmo(
@@ -1175,6 +1178,22 @@ void EditorUi::draw_viewport()
                     finish_translation_gesture();
             }
 
+            if (transient_navigation_gesture_.has_value())
+            {
+                if (!ImGui::IsMouseDown(ImGuiMouseButton_Middle) ||
+                    viewport_view_.source() != ViewSource::editor_view)
+                    transient_navigation_gesture_.reset();
+                else if (!translation_gesture_.has_value())
+                    viewport_view_.update_transient_navigation(
+                        *transient_navigation_gesture_, {io.MouseDelta.x, io.MouseDelta.y});
+            }
+
+            if (!transient_navigation_gesture_.has_value() &&
+                !translation_gesture_.has_value() && ImGui::IsItemHovered() &&
+                ImGui::IsMouseClicked(ImGuiMouseButton_Middle))
+                transient_navigation_gesture_ = viewport_view_.begin_transient_navigation(
+                    io.KeyAlt, {region.x, region.y});
+
             const ObjectId gizmo_object = translation_gesture_.has_value()
                                               ? translation_gesture_->object_id
                                               : state_.selection();
@@ -1203,12 +1222,14 @@ void EditorUi::draw_viewport()
             bool acquired_gizmo = false;
             TranslationAxis hovered_axis = TranslationAxis::none;
             if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
+                !transient_navigation_gesture_.has_value() &&
                 ImGui::IsItemHovered())
             {
                 const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
                 hovered_axis = pick_translation_axis(pointer, *projected_gizmo, 10.0F * ui_scale_);
             }
             if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
+                !transient_navigation_gesture_.has_value() &&
                 viewport_view_.interaction_mode() == ViewportInteractionMode::selection &&
                 ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
@@ -1237,14 +1258,14 @@ void EditorUi::draw_viewport()
                 }
             }
 
-            if (ImGui::IsItemHovered())
+            if (ImGui::IsItemHovered() && !transient_navigation_gesture_.has_value())
             {
+                if (io.MouseWheel != 0.0F)
+                    viewport_view_.zoom(io.MouseWheel);
                 if (viewport_view_.interaction_mode() == ViewportInteractionMode::navigation)
                 {
                     if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
                         viewport_view_.navigate(io.MouseDelta.x * 0.25F, -io.MouseDelta.y * 0.25F);
-                    if (io.MouseWheel != 0.0F)
-                        viewport_view_.zoom(io.MouseWheel);
                 }
                 else if (!acquired_gizmo && !translation_gesture_.has_value() &&
                          ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -1262,8 +1283,12 @@ void EditorUi::draw_viewport()
                 }
             }
         }
+        else
+            transient_navigation_gesture_.reset();
         ImGui::End();
     }
+    else
+        transient_navigation_gesture_.reset();
     state_.set_panel_visible(EditorPanel::viewport, visible);
 }
 

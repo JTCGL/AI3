@@ -50,9 +50,9 @@ ResolvedViewportView resolve_scene_camera(const EditorState& scene, const SceneO
 }
 } // namespace
 
-void ViewportView::use_orbit()
+void ViewportView::use_editor_view()
 {
-    source_ = ViewSource::orbit;
+    source_ = ViewSource::editor_view;
     scene_camera_id_ = no_object;
 }
 
@@ -75,17 +75,51 @@ ObjectId ViewportView::helper_hover_object(ObjectId picked_object) const
 
 bool ViewportView::navigate(float yaw_delta_degrees, float pitch_delta_degrees)
 {
-    if (interaction_mode_ != ViewportInteractionMode::navigation || source_ != ViewSource::orbit)
+    if (interaction_mode_ != ViewportInteractionMode::navigation ||
+        source_ != ViewSource::editor_view || !std::isfinite(yaw_delta_degrees) ||
+        !std::isfinite(pitch_delta_degrees) ||
+        (yaw_delta_degrees == 0.0F && pitch_delta_degrees == 0.0F))
         return false;
-    orbit_.orbit(yaw_delta_degrees, pitch_delta_degrees);
+    editor_view_.orbit(yaw_delta_degrees, pitch_delta_degrees);
     return true;
+}
+
+std::optional<TransientNavigationGesture>
+ViewportView::begin_transient_navigation(bool orbit_requested, glm::vec2 viewport_size) const
+{
+    if (source_ != ViewSource::editor_view || !std::isfinite(viewport_size.x) ||
+        !std::isfinite(viewport_size.y) || viewport_size.x <= 0.0F || viewport_size.y <= 0.0F)
+        return std::nullopt;
+    return TransientNavigationGesture{
+        orbit_requested ? TransientNavigationKind::orbit : TransientNavigationKind::pan,
+        viewport_size};
+}
+
+bool ViewportView::update_transient_navigation(const TransientNavigationGesture& gesture,
+                                               glm::vec2 pointer_delta_pixels)
+{
+    if (source_ != ViewSource::editor_view || !std::isfinite(gesture.viewport_size.x) ||
+        !std::isfinite(gesture.viewport_size.y) || gesture.viewport_size.x <= 0.0F ||
+        gesture.viewport_size.y <= 0.0F || !std::isfinite(pointer_delta_pixels.x) ||
+        !std::isfinite(pointer_delta_pixels.y) ||
+        (pointer_delta_pixels.x == 0.0F && pointer_delta_pixels.y == 0.0F))
+        return false;
+    switch (gesture.kind)
+    {
+    case TransientNavigationKind::pan:
+        return editor_view_.pan(pointer_delta_pixels, gesture.viewport_size);
+    case TransientNavigationKind::orbit:
+        editor_view_.orbit(pointer_delta_pixels.x * 0.25F, -pointer_delta_pixels.y * 0.25F);
+        return true;
+    }
+    return false;
 }
 
 bool ViewportView::zoom(float wheel_delta)
 {
-    if (interaction_mode_ != ViewportInteractionMode::navigation || source_ != ViewSource::orbit)
+    if (source_ != ViewSource::editor_view || !std::isfinite(wheel_delta) || wheel_delta == 0.0F)
         return false;
-    orbit_.zoom(wheel_delta);
+    editor_view_.zoom(wheel_delta);
     return true;
 }
 
@@ -98,18 +132,19 @@ ResolvedViewportView ViewportView::resolve(const EditorState& scene, float aspec
     {
         const SceneObject* camera = scene.find_object(scene_camera_id_);
         if (camera == nullptr || !is_supported_scene_camera(*camera))
-            use_orbit();
+            use_editor_view();
         else
             return resolve_scene_camera(scene, *camera, aspect_ratio);
     }
 
-    return {orbit_.view_matrix(), orbit_.projection_matrix(aspect_ratio), orbit_.position()};
+    return {editor_view_.view_matrix(), editor_view_.projection_matrix(aspect_ratio),
+            editor_view_.position()};
 }
 
 void ViewportView::reset()
 {
-    source_ = ViewSource::orbit;
+    source_ = ViewSource::editor_view;
     scene_camera_id_ = no_object;
-    orbit_.reset();
+    editor_view_.reset();
 }
 } // namespace ai3
