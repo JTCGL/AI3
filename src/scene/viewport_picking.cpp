@@ -55,7 +55,7 @@ WorldRay viewport_world_ray(glm::vec2 viewport_coordinates, const ResolvedViewpo
     return {origin, difference / length, length};
 }
 
-ObjectId pick_sphere(const EditorState& scene, const WorldRay& ray)
+ObjectId pick_primitive(const EditorState& scene, const WorldRay& ray)
 {
     const float direction_length = glm::length(ray.direction);
     if (!finite(ray.origin) || !finite(ray.direction) || !std::isfinite(direction_length) ||
@@ -93,59 +93,57 @@ ObjectId pick_sphere(const EditorState& scene, const WorldRay& ray)
             closest = object->id;
         }
     }
-    return closest;
-}
-
-ObjectId pick_box(const EditorState& scene, const WorldRay& ray)
-{
-    if (!finite(ray.origin) || !finite(ray.direction) || glm::length(ray.direction) <= 1e-8F)
-        return no_object;
-    const glm::vec3 direction = glm::normalize(ray.direction);
-    float closest = std::numeric_limits<float>::infinity();
-    ObjectId result = no_object;
     for (const SceneObject* object : scene.primitives(PrimitiveKind::box, {true, true}))
     {
         const glm::mat4 world = scene.world_transform_matrix(object->id);
-        const float det = glm::determinant(world);
-        if (!finite(world) || !std::isfinite(det) || std::abs(det) <= 1e-8F)
+        const float determinant = glm::determinant(world);
+        if (!finite(world) || !std::isfinite(determinant) || std::abs(determinant) <= 1e-8F)
             continue;
-        const glm::mat4 inv = glm::inverse(world);
-        const glm::vec3 o = glm::vec3(inv * glm::vec4(ray.origin, 1));
-        const glm::vec3 d = glm::vec3(inv * glm::vec4(direction, 0));
+        const glm::mat4 inverse = glm::inverse(world);
+        const glm::vec3 o = glm::vec3{inverse * glm::vec4{ray.origin, 1.0F}};
+        const glm::vec3 d = glm::vec3{inverse * glm::vec4{world_direction, 0.0F}};
         const glm::vec3 h{object->box.width_meters * 0.5F, object->box.length_meters * 0.5F,
                           object->box.height_meters * 0.5F};
-        float tmin = 0.0F, tmax = ray.maximum_distance;
-        bool hit = true;
-        for (int axis = 0; axis < 3; ++axis)
+        float near = 0.0F, far = ray.maximum_distance;
+        bool hit = finite(o) && finite(d);
+        for (int axis = 0; axis < 3 && hit; ++axis)
         {
             if (std::abs(d[axis]) <= 1e-8F)
-            {
-                if (o[axis] < -h[axis] || o[axis] > h[axis])
-                {
-                    hit = false;
-                    break;
-                }
-            }
+                hit = o[axis] >= -h[axis] && o[axis] <= h[axis];
             else
             {
                 float a = (-h[axis] - o[axis]) / d[axis], b = (h[axis] - o[axis]) / d[axis];
                 if (a > b)
                     std::swap(a, b);
-                tmin = std::max(tmin, a);
-                tmax = std::min(tmax, b);
-                if (tmin > tmax)
-                {
-                    hit = false;
-                    break;
-                }
+                near = std::max(near, a);
+                far = std::min(far, b);
+                hit = near <= far;
             }
         }
-        if (hit && tmin < closest)
+        if (hit && near < closest_distance)
         {
-            closest = tmin;
-            result = object->id;
+            closest_distance = near;
+            closest = object->id;
         }
     }
-    return result;
+    return closest;
+}
+
+ObjectId pick_sphere(const EditorState& scene, const WorldRay& ray)
+{
+    const ObjectId hit = pick_primitive(scene, ray);
+    return scene.find_object(hit) != nullptr &&
+                   scene.find_object(hit)->primitive_kind == PrimitiveKind::sphere
+               ? hit
+               : no_object;
+}
+
+ObjectId pick_box(const EditorState& scene, const WorldRay& ray)
+{
+    const ObjectId hit = pick_primitive(scene, ray);
+    return scene.find_object(hit) != nullptr &&
+                   scene.find_object(hit)->primitive_kind == PrimitiveKind::box
+               ? hit
+               : no_object;
 }
 } // namespace ai3

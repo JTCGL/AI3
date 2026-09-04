@@ -180,7 +180,7 @@ Json encode_payload(const SceneObject& object)
 }
 
 void decode_semantics(const std::string& category, const std::string& subtype, const Json& payload,
-                      SceneObject& object, bool legacy)
+                      SceneObject& object, bool legacy, bool allow_box)
 {
     if (category == "general" && subtype == "none")
     {
@@ -209,7 +209,7 @@ void decode_semantics(const std::string& category, const std::string& subtype, c
             invalid("sphere radius must be positive");
         return;
     }
-    if (category == "primitive" && subtype == "box")
+    if (allow_box && category == "primitive" && subtype == "box")
     {
         require_fields(payload,
                        {"width_meters", "length_meters", "height_meters", "width_segments",
@@ -504,7 +504,7 @@ class SceneDocumentCodec
             object.transform = decode_transform(value.at("transform"));
             decode_semantics(value.at("category").get<std::string>(),
                              value.at("subtype").get<std::string>(), value.at("payload"), object,
-                             legacy);
+                             legacy, version == format_version);
             EditorState::rebuild_bounds(object);
             candidate.objects_.push_back(std::move(object));
         }

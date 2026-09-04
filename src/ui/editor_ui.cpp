@@ -814,6 +814,69 @@ void EditorUi::draw_object_inspector()
                                               object->id, srgb_to_linear(fallback_srgb));
                                       });
             }
+            if (object->primitive_kind == PrimitiveKind::box)
+            {
+                BoundsDisplayState display = state_.bounds_display(object->id);
+                bool workspace_changed = ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.show_bounding_box"),
+                                       "box_bounds")
+                        .c_str(),
+                    &display.show_bounding_box);
+                workspace_changed |= ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.show_bounding_sphere"),
+                                       "box_sphere")
+                        .c_str(),
+                    &display.show_bounding_sphere);
+                workspace_changed |= ImGui::Checkbox(
+                    stable_imgui_label(localization_.text("inspector.hover_feedback"), "box_hover")
+                        .c_str(),
+                    &display.hover_feedback);
+                if (workspace_changed)
+                    document_session_.set_bounds_display(object->id, display);
+                BoxPrimitive box = object->box;
+                const auto dimension = [&](const char* key, const char* stable, float& value)
+                {
+                    float shown = length_from_meters(value, display_length_unit_);
+                    const bool changed = ImGui::DragFloat(
+                        stable_imgui_label(
+                            localization_.format(key, {{"unit", std::string(length_unit_symbol(
+                                                                    display_length_unit_))}}),
+                            stable)
+                            .c_str(),
+                        &shown, length_from_meters(0.05F, display_length_unit_),
+                        length_from_meters(0.001F, display_length_unit_),
+                        length_from_meters(9999.0F, display_length_unit_));
+                    if (changed)
+                        value = std::clamp(length_to_meters(shown, display_length_unit_), 0.001F,
+                                           9999.0F);
+                    return changed;
+                };
+                bool changed =
+                    dimension("inspector.width_with_unit", "box_width", box.width_meters);
+                changed |= dimension("inspector.length_with_unit", "box_length", box.length_meters);
+                changed |= dimension("inspector.height_with_unit", "box_height", box.height_meters);
+                changed |= ImGui::DragInt(
+                    stable_imgui_label(localization_.text("inspector.width_segments"),
+                                       "box_width_segments")
+                        .c_str(),
+                    &box.width_segments, 1, 1, 999);
+                changed |= ImGui::DragInt(
+                    stable_imgui_label(localization_.text("inspector.length_segments"),
+                                       "box_length_segments")
+                        .c_str(),
+                    &box.length_segments, 1, 1, 999);
+                changed |= ImGui::DragInt(
+                    stable_imgui_label(localization_.text("inspector.height_segments"),
+                                       "box_height_segments")
+                        .c_str(),
+                    &box.height_segments, 1, 1, 999);
+                apply_continuous_edit(document_session_.history(), changed,
+                                      [&] { state_.set_box(object->id, box); });
+                const Material* assigned = state_.find_material(box.material_id);
+                ImGui::Text("%s: %s", localization_.text("inspector.material").c_str(),
+                            assigned == nullptr ? localization_.text("material.none").c_str()
+                                                : assigned->name.c_str());
+            }
             if (object->camera_kind == CameraKind::perspective)
             {
                 const std::string camera_label = stable_imgui_label(
@@ -1048,7 +1111,8 @@ void EditorUi::draw_material_editor()
     }
     const SceneObject* selected = state_.find_object(state_.selection());
     const bool assignable =
-        selected != nullptr && selected->primitive_kind == PrimitiveKind::sphere;
+        selected != nullptr && (selected->primitive_kind == PrimitiveKind::sphere ||
+                                selected->primitive_kind == PrimitiveKind::box);
     ImGui::BeginDisabled(!assignable);
     if (ImGui::Button(localization_.text("material.assign_selected").c_str()))
         apply_discrete_edit(history,
@@ -1124,7 +1188,7 @@ void EditorUi::draw_viewport()
                 const glm::vec2 coordinates{(mouse.x - future_minimum.x) / region.x,
                                             (mouse.y - future_minimum.y) / region.y};
                 hovered_object_ = viewport_view_.helper_hover_object(
-                    pick_sphere(state_, viewport_world_ray(coordinates, resolved)));
+                    pick_primitive(state_, viewport_world_ray(coordinates, resolved)));
             }
             else
                 hovered_object_ = no_object;
@@ -1290,7 +1354,7 @@ void EditorUi::draw_viewport()
                         (io.MousePos.x - minimum.x) / (maximum.x - minimum.x),
                         (io.MousePos.y - minimum.y) / (maximum.y - minimum.y)};
                     const ObjectId hit =
-                        pick_sphere(state_, viewport_world_ray(coordinates, resolved));
+                        pick_primitive(state_, viewport_world_ray(coordinates, resolved));
                     if (hit == no_object)
                         state_.clear_selection();
                     else

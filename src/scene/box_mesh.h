@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scene/sphere_mesh.h"
+#include "scene/triangle_mesh.h"
 
 namespace ai3
 {
