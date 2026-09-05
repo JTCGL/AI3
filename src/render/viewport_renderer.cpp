@@ -298,15 +298,16 @@ ViewportRenderer::PrimitiveGeometry& ViewportRenderer::primitive_geometry(const 
 {
     auto [it, inserted] = geometry_cache_.try_emplace(object.id);
     PrimitiveGeometry& geometry = it->second;
-    if (!inserted && ((object.primitive_kind == PrimitiveKind::sphere &&
-                       geometry.radius_meters == object.sphere.radius_meters) ||
-                      (object.primitive_kind == PrimitiveKind::box &&
-                       geometry.box.width_meters == object.box.width_meters &&
-                       geometry.box.length_meters == object.box.length_meters &&
-                       geometry.box.height_meters == object.box.height_meters &&
-                       geometry.box.width_segments == object.box.width_segments &&
-                       geometry.box.length_segments == object.box.length_segments &&
-                       geometry.box.height_segments == object.box.height_segments)))
+    if (!inserted && geometry.primitive_kind == object.primitive_kind &&
+        ((object.primitive_kind == PrimitiveKind::sphere &&
+          geometry.radius_meters == object.sphere.radius_meters) ||
+         (object.primitive_kind == PrimitiveKind::box &&
+          geometry.box.width_meters == object.box.width_meters &&
+          geometry.box.length_meters == object.box.length_meters &&
+          geometry.box.height_meters == object.box.height_meters &&
+          geometry.box.width_segments == object.box.width_segments &&
+          geometry.box.length_segments == object.box.length_segments &&
+          geometry.box.height_segments == object.box.height_segments)))
         return geometry;
 
     destroy_geometry(geometry);
@@ -315,6 +316,7 @@ ViewportRenderer::PrimitiveGeometry& ViewportRenderer::primitive_geometry(const 
                                   : make_box_mesh(object.box);
     geometry.radius_meters = object.sphere.radius_meters;
     geometry.box = object.box;
+    geometry.primitive_kind = object.primitive_kind;
     geometry.index_count = static_cast<std::uint32_t>(mesh.indices.size());
     glGenVertexArrays(1, &geometry.vertex_array);
     glGenBuffers(1, &geometry.vertex_buffer);

@@ -66,6 +66,7 @@ class ViewportRenderer
 
     struct PrimitiveGeometry
     {
+        PrimitiveKind primitive_kind = PrimitiveKind::none;
         float radius_meters = 0.0F;
         BoxPrimitive box{};
         std::uint32_t vertex_array = 0;
