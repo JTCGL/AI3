@@ -159,6 +159,30 @@ TEST_CASE("non-invertible sphere transforms fail safely")
     CHECK(ai3::pick_sphere(scene, {{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, -1.0F}}) == ai3::no_object);
 }
 
+TEST_CASE("box picking is exact and type-specific mixed nearest selection")
+{
+    ai3::EditorState scene;
+    ai3::Transform box_transform;
+    box_transform.position = {0.0F, 0.0F, -4.0F};
+    box_transform.scale = {-2.0F, 1.0F, 1.0F};
+    const auto box = scene.create_box("Box");
+    REQUIRE(scene.set_local_transform(box, box_transform));
+    ai3::Transform sphere_transform;
+    sphere_transform.position = {0.0F, 0.0F, -8.0F};
+    const auto sphere = create_sphere(scene, sphere_transform);
+    const ai3::WorldRay ray{{0.0F, 0.0F, 0.0F}, {0.0F, 0.0F, -1.0F}};
+    CHECK(ai3::pick_primitive(scene, ray) == box);
+    CHECK(ai3::pick_box(scene, ray) == box);
+    CHECK(ai3::pick_sphere(scene, ray) == sphere);
+    CHECK(ai3::pick_box(scene, {{0.0F, 3.0F, 0.0F}, {0.0F, 0.0F, -1.0F}}) == ai3::no_object);
+    ai3::Transform singular;
+    singular.position = {0.0F, 0.0F, -2.0F};
+    singular.scale = {0.0F, 1.0F, 1.0F};
+    const auto singular_box = scene.create_box("Singular");
+    REQUIRE(scene.set_local_transform(singular_box, singular));
+    CHECK(ai3::pick_box(scene, ray) == box);
+}
+
 TEST_CASE("resolved ray excludes spheres beyond the projection far plane")
 {
     ai3::EditorState scene;

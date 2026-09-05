@@ -64,17 +64,19 @@ class ViewportRenderer
     void render_helpers(const HelperGeometry& helpers, const glm::mat4& view_projection,
                         HelperRenderRole role);
 
-    struct SphereGeometry
+    struct PrimitiveGeometry
     {
+        PrimitiveKind primitive_kind = PrimitiveKind::none;
         float radius_meters = 0.0F;
+        BoxPrimitive box{};
         std::uint32_t vertex_array = 0;
         std::uint32_t vertex_buffer = 0;
         std::uint32_t index_buffer = 0;
         std::uint32_t index_count = 0;
     };
 
-    SphereGeometry& sphere_geometry(const SceneObject& object);
-    static void destroy_geometry(SphereGeometry& geometry);
+    PrimitiveGeometry& primitive_geometry(const SceneObject& object);
+    static void destroy_geometry(PrimitiveGeometry& geometry);
 
     struct UnlitProgram;
     struct LambertProgram;
@@ -93,6 +95,6 @@ class ViewportRenderer
     RenderTargetSize size_{};
     std::uint64_t resize_count_ = 0;
     std::string gl_description_;
-    std::unordered_map<ObjectId, SphereGeometry> sphere_geometry_cache_;
+    std::unordered_map<ObjectId, PrimitiveGeometry> geometry_cache_;
 };
 } // namespace ai3

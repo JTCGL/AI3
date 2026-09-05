@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include "editor/editor_state.h"
+#include "scene/box_mesh.h"
 #include "scene/length_units.h"
 #include "scene/orbit_camera.h"
 #include "scene/render_target_size.h"
@@ -11,7 +13,9 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec4.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace
 {
@@ -170,6 +174,106 @@ TEST_CASE("sphere radius changes generated geometry bounds")
     for (std::size_t index = 0; index < small.vertices.size(); ++index)
         CHECK(glm::length(large.vertices[index].position) ==
               doctest::Approx(glm::length(small.vertices[index].position) * 2.5F));
+}
+
+TEST_CASE("box defaults validation mesh faces UVs and bounds")
+{
+    ai3::EditorState scene;
+    const auto id = scene.create_box("Box");
+    const auto* object = scene.find_object(id);
+    REQUIRE(object != nullptr);
+    CHECK(object->box.width_meters == 1.0F);
+    CHECK(object->box.length_meters == 1.0F);
+    CHECK(object->box.height_meters == 1.0F);
+    CHECK(object->box.width_segments == 1);
+    CHECK(object->box.length_segments == 1);
+    CHECK(object->box.height_segments == 1);
+    const auto mesh = ai3::make_box_mesh(object->box);
+    CHECK(mesh.vertices.size() == 24);
+    CHECK(mesh.indices.size() == 36);
+    CHECK(object->bounds.box->minimum == glm::vec3{-0.5F});
+    CHECK(object->bounds.box->maximum == glm::vec3{0.5F});
+    CHECK(object->bounds.sphere->radius == doctest::Approx(std::sqrt(3.0F) * 0.5F));
+    for (const auto& vertex : mesh.vertices)
+        CHECK(vertex.texcoord.x >= 0.0F);
+    CHECK_THROWS(scene.create_box("Bad", {0.0009F}));
+    CHECK_THROWS(scene.create_box("Bad", {10000.0F}));
+    CHECK_THROWS(scene.create_box("Bad", {1.0F, 1.0F, 1.0F, 0}));
+    CHECK_THROWS(scene.create_box("Bad", {1.0F, 1.0F, 1.0F, 1000}));
+    ai3::BoxPrimitive changed = object->box;
+    changed.width_meters = 2.0F;
+    changed.width_segments = 3;
+    REQUIRE(scene.set_box(id, changed));
+    CHECK(scene.find_object(id)->bounds.box->maximum.x == doctest::Approx(1.0F));
+}
+
+TEST_CASE("box validation accepts finite boundaries and rejects non-finite values")
+{
+    ai3::EditorState scene;
+    for (float dimension : {0.001F, 9999.0F})
+        CHECK(scene.create_box("Boundary", {dimension, dimension, dimension, 1, 1, 1}) !=
+              ai3::no_object);
+    for (float dimension :
+         {0.0009F, 10000.0F, std::numeric_limits<float>::quiet_NaN(),
+          std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity()})
+        CHECK_THROWS(scene.create_box("Invalid", {dimension}));
+    CHECK(scene.create_box("Segments", {1, 1, 1, 1, 999, 999}) != ai3::no_object);
+    CHECK_THROWS(scene.create_box("Invalid", {1, 1, 1, 0, 1, 1}));
+    CHECK_THROWS(scene.create_box("Invalid", {1, 1, 1, 1000, 1, 1}));
+}
+
+TEST_CASE("box non-uniform tessellation preserves face grids winding and UV spans")
+{
+    ai3::BoxPrimitive box;
+    box.width_meters = 2.0F;
+    box.length_meters = 3.0F;
+    box.height_meters = 4.0F;
+    box.width_segments = 2;
+    box.length_segments = 3;
+    box.height_segments = 4;
+    const auto mesh = ai3::make_box_mesh(box);
+    CHECK(mesh.indices.size() == 2 * (3 * 4 + 2 * 4 + 2 * 3) * 6);
+    CHECK(mesh.indices.size() / 3 == 104);
+    for (std::size_t i = 0; i < mesh.indices.size(); i += 3)
+    {
+        const auto& a = mesh.vertices[mesh.indices[i]];
+        const auto& b = mesh.vertices[mesh.indices[i + 1]];
+        const auto& c = mesh.vertices[mesh.indices[i + 2]];
+        CHECK(glm::dot(glm::cross(b.position - a.position, c.position - a.position), a.normal) >
+              0.0F);
+        CHECK(a.normal == b.normal);
+        CHECK(a.normal == c.normal);
+    }
+    for (int face = 0; face < 6; ++face)
+    {
+        const std::size_t begin = face == 0 ? 0
+                                            : (face == 1   ? 20
+                                               : face == 2 ? 40
+                                               : face == 3 ? 55
+                                               : face == 4 ? 70
+                                                           : 82);
+        float min_u = 1, max_u = 0, min_v = 1, max_v = 0;
+        const std::size_t count = face < 2 ? 20 : face < 4 ? 15 : 12;
+        for (std::size_t i = begin; i < begin + count; ++i)
+        {
+            min_u = std::min(min_u, mesh.vertices[i].texcoord.x);
+            max_u = std::max(max_u, mesh.vertices[i].texcoord.x);
+            min_v = std::min(min_v, mesh.vertices[i].texcoord.y);
+            max_v = std::max(max_v, mesh.vertices[i].texcoord.y);
+        }
+        CHECK(min_u == 0.0F);
+        CHECK(max_u == 1.0F);
+        CHECK(min_v == 0.0F);
+        CHECK(max_v == 1.0F);
+    }
+}
+
+TEST_CASE("sphere derived mesh emits equirectangular UVs")
+{
+    const auto mesh = ai3::make_sphere_mesh(1.0F);
+    CHECK(mesh.vertices.front().texcoord == glm::vec2{0.0F, 0.0F});
+    CHECK(mesh.vertices.back().texcoord.x == doctest::Approx(1.0F));
+    CHECK(mesh.vertices.back().texcoord.y == doctest::Approx(1.0F));
 }
 
 TEST_CASE("render target policy converts logical content to framebuffer pixels")

@@ -7,7 +7,7 @@ namespace ai3
 {
 SphereMesh make_sphere_mesh(float radius_meters)
 {
-    if (radius_meters <= 0.0F)
+    if (!std::isfinite(radius_meters) || radius_meters <= 0.0F)
         throw std::invalid_argument("Sphere radius must be positive");
 
     constexpr std::uint32_t latitude_segments = 16;
@@ -28,7 +28,10 @@ SphereMesh make_sphere_mesh(float radius_meters)
             const float azimuth =
                 2.0F * pi * static_cast<float>(longitude) / static_cast<float>(longitude_segments);
             const glm::vec3 normal{ring * std::cos(azimuth), ring * std::sin(azimuth), z};
-            mesh.vertices.push_back({normal * radius_meters, normal});
+            mesh.vertices.push_back({normal * radius_meters,
+                                     normal,
+                                     {static_cast<float>(longitude) / longitude_segments,
+                                      static_cast<float>(latitude) / latitude_segments}});
         }
     }
 

@@ -83,11 +83,11 @@ state and it edits one material at a time.
 ## Scene Documents
 
 AI3 Scene Documents are strict, versioned UTF-8 JSON files with the `.ai3scene` extension, format identifier
-`ai3-scene`, and current version `2`, with strict v1 migration. They persist exact nonzero object and material
+`ai3-scene`, and current version `3`, with strict v1/v2 migration. They persist exact nonzero object and material
 IDs and ordering, names, enabled and
 visible state, parent IDs, authoritative local TRS, durable category/subtype names, current semantic payloads,
 object/material allocators and default-name counters, material definitions, sphere assignments/fallback colors,
-and linear light colors. Quaternion arrays have stable `[w, x, y, z]` order
+and linear light colors, including Box dimensions and tessellation. Quaternion arrays have stable `[w, x, y, z]` order
 and are normalized. World transforms, Euler presentation, derived geometry, renderer state, and editor
 workspace/session state are outside the format.
 

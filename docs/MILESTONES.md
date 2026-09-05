@@ -154,3 +154,15 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 - Automated build, test, format, documentation, code review, and GitHub Actions evidence passed. Mouse-dependent
   physical verification was unavailable and explicitly deferred and accepted by the user; it was not reported as
   passed and may be performed later without reopening M18 unless a defect is found.
+
+## Milestone 19 — Box primitive and derived mesh foundation
+
+- Final reviewed implementation head for [PR #44](https://github.com/JTCGL/AI3/pull/44):
+  `f583182d64ee30c5e80aa95e9aa17036f8789599`
+- Added the centered Box primitive with independent width/length/height tessellation, hard face normals, planar
+  UVs, exact cached bounds, exact local-space picking, materials/fallback color, hierarchy/history/editor UI,
+  and strict Scene Document v3 persistence with genuine v1/v2 compatibility.
+- Extracted the neutral derived triangle-mesh representation shared by Sphere and Box, including UVs, while
+  explicitly deferring the future artist-editable/topological mesh model. Canonical checks and GitHub Actions
+  passed, and physical runtime verification passed on Termux ARM64 under the normal single-platform acceptance
+  policy while the T5600 was unavailable.

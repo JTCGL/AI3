@@ -14,7 +14,7 @@ requirements and demonstrated dependencies become clearer.
 - If configurable internal/document units are introduced, make them authoritative Scene Document data whose
   changes dirty the document, with an explicit format and conversion policy decision first.
 
-Version 2 Scene Documents, strict v1 migration, and revision-based single-document New/Open/Save/Save As with
+Version 3 Scene Documents (including Box), strict v1/v2 migration, and revision-based single-document New/Open/Save/Save As with
 unsaved-change protection are established. Scene files intentionally do not include viewport, layout, locale,
 display-unit, console, diagnostics, renderer, or other workspace/session state.
 

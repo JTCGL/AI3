@@ -4,7 +4,7 @@
 
 namespace ai3
 {
-using SphereMesh = TriangleMesh;
+struct BoxPrimitive;
 
-SphereMesh make_sphere_mesh(float radius_meters);
+TriangleMesh make_box_mesh(const BoxPrimitive& box);
 } // namespace ai3
