@@ -144,6 +144,7 @@ TEST_CASE("bounds reconstruct on document load and never serialize")
     {
         auto json = nlohmann::json::parse(document);
         json["version"] = version;
+        json["metadata"]["default_name_counters"].erase("box");
         if (version == 1)
         {
             json.erase("materials");

@@ -232,6 +232,56 @@ TEST_CASE("malformed format version identity hierarchy and metadata are rejected
     }
 }
 
+TEST_CASE("Scene Document v3 preserves Box semantics and rejects legacy Box payloads")
+{
+    ai3::EditorState source;
+    const auto material = source.create_material("Material");
+    ai3::BoxPrimitive box;
+    box.width_meters = 2.0F;
+    box.length_meters = 3.0F;
+    box.height_meters = 4.0F;
+    box.width_segments = 2;
+    box.length_segments = 3;
+    box.height_segments = 4;
+    box.material_id = material;
+    box.fallback_color = {0.1F, 0.2F, 0.3F};
+    const auto id = source.create_box("Box", box);
+    std::string text;
+    REQUIRE(ai3::serialize_scene_document(source, text));
+    const Json document = Json::parse(text);
+    CHECK(document.at("version") == 3);
+    CHECK(document.at("objects")[0].at("subtype") == "box");
+    ai3::EditorState loaded;
+    REQUIRE(ai3::deserialize_scene_document(text, loaded));
+    const auto* restored = loaded.find_object(id);
+    REQUIRE(restored != nullptr);
+    CHECK(restored->primitive_kind == ai3::PrimitiveKind::box);
+    CHECK(restored->box.width_meters == 2.0F);
+    CHECK(restored->box.length_meters == 3.0F);
+    CHECK(restored->box.height_meters == 4.0F);
+    CHECK(restored->box.width_segments == 2);
+    CHECK(restored->box.length_segments == 3);
+    CHECK(restored->box.height_segments == 4);
+    CHECK(restored->box.material_id == material);
+    CHECK(restored->box.fallback_color == glm::vec3{0.1F, 0.2F, 0.3F});
+    for (int version : {1, 2})
+    {
+        Json legacy = document;
+        legacy["version"] = version;
+        legacy["metadata"]["default_name_counters"].erase("box");
+        if (version == 1)
+        {
+            legacy.erase("materials");
+            legacy["metadata"].erase("next_material_id");
+            legacy["metadata"].erase("default_material_name_count");
+        }
+        ai3::EditorState destination;
+        CHECK_FALSE(ai3::deserialize_scene_document(legacy.dump(), destination));
+        legacy["metadata"]["default_name_counters"]["box"] = 0;
+        CHECK_FALSE(ai3::deserialize_scene_document(legacy.dump(), destination));
+    }
+}
+
 TEST_CASE("invalid types transforms quaternions and semantic payloads are rejected")
 {
     const Json valid = encoded(mixed_scene());

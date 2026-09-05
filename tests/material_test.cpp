@@ -176,6 +176,7 @@ TEST_CASE("Scene Document v1 migrates visible colors and sphere defaults determi
     REQUIRE(ai3::serialize_scene_document(source, text));
     auto legacy = nlohmann::json::parse(text);
     legacy["version"] = 1;
+    legacy["metadata"]["default_name_counters"].erase("box");
     legacy.erase("materials");
     legacy["metadata"].erase("next_material_id");
     legacy["metadata"].erase("default_material_name_count");

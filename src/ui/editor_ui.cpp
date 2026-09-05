@@ -860,22 +860,39 @@ void EditorUi::draw_object_inspector()
                                        "box_width_segments")
                         .c_str(),
                     &box.width_segments, 1, 1, 999);
+                box.width_segments = std::clamp(box.width_segments, 1, 999);
                 changed |= ImGui::DragInt(
                     stable_imgui_label(localization_.text("inspector.length_segments"),
                                        "box_length_segments")
                         .c_str(),
                     &box.length_segments, 1, 1, 999);
+                box.length_segments = std::clamp(box.length_segments, 1, 999);
                 changed |= ImGui::DragInt(
                     stable_imgui_label(localization_.text("inspector.height_segments"),
                                        "box_height_segments")
                         .c_str(),
                     &box.height_segments, 1, 1, 999);
+                box.height_segments = std::clamp(box.height_segments, 1, 999);
                 apply_continuous_edit(document_session_.history(), changed,
                                       [&] { state_.set_box(object->id, box); });
                 const Material* assigned = state_.find_material(box.material_id);
                 ImGui::Text("%s: %s", localization_.text("inspector.material").c_str(),
                             assigned == nullptr ? localization_.text("material.none").c_str()
                                                 : assigned->name.c_str());
+                glm::vec3 fallback_srgb = linear_to_srgb(box.fallback_color);
+                const bool fallback_changed = ImGui::ColorEdit3(
+                    stable_imgui_label(localization_.text("inspector.fallback_color"),
+                                       "box_fallback_color")
+                        .c_str(),
+                    glm::value_ptr(fallback_srgb));
+                apply_continuous_edit(document_session_.history(), fallback_changed,
+                                      [&]
+                                      {
+                                          BoxPrimitive changed_box = object->box;
+                                          changed_box.fallback_color =
+                                              srgb_to_linear(fallback_srgb);
+                                          state_.set_box(object->id, changed_box);
+                                      });
             }
             if (object->camera_kind == CameraKind::perspective)
             {

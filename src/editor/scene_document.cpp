@@ -410,8 +410,8 @@ class SceneDocumentCodec
                 !counters.contains("perspective_camera") || !counters.contains("directional_light"))
                 invalid("default-name counters is missing a required field");
             for (const auto& entry : counters.items())
-                if (entry.key() != "sphere" && entry.key() != "box" &&
-                    entry.key() != "perspective_camera" && entry.key() != "directional_light")
+                if (entry.key() != "sphere" && entry.key() != "perspective_camera" &&
+                    entry.key() != "directional_light")
                     invalid("default-name counters contains unsupported field " + entry.key());
         }
         const std::uint64_t sphere_count = unsigned_value(counters.at("sphere"), "sphere counter");
