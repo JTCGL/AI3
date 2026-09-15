@@ -3,6 +3,12 @@
 These instructions extend src/AGENTS.md and the repository root instructions.
 
 - Keep editor-facing state and drawing separate from ImGui lifecycle/backend ownership.
+- Dear ImGui is a frontend: translate user intent and concrete input lifecycle into Core operations. Do not add
+  semantic editing, history/transaction construction, document authority, spatial/tool policy, or renderer
+  invalidation authority to ImGui code. Existing interfaces remain usable until their scheduled migration.
+- Keep ImGui panel visibility, docking layout, native-dialog state, layout-reset requests, and Console-window
+  presentation/scrollback outside Core. Core diagnostics may be presented here without creating a generic
+  event bus.
 - All user-facing labels, menu entries, panel titles, empty-state messages, and inspector field labels must come from the localization system once it is available.
 - Do not use displayed English text as an internal identity. Docking/window identity must remain stable across locale changes; use hidden/stable ImGui IDs where needed so translating a title does not destroy persisted docking state.
 - Treat localized strings as UTF-8 and do not truncate by byte count when code-point-safe behavior is required.

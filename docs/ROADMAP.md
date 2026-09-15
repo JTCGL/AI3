@@ -4,6 +4,26 @@ This is a record of known future areas and architectural boundaries, not a commi
 a promise that every item will ship unchanged. Milestone planning sets approved scope. Ordering may change as
 requirements and demonstrated dependencies become clearer.
 
+## Core architecture migration
+
+[ADR 0009](decisions/0009-core-architecture-boundaries.md) establishes AI3 Core as the display-independent
+architectural center. M20 records the contract only; current classes and targets remain authoritative until
+their responsibilities are deliberately migrated. The planned sequence is:
+
+- M20 — Core architecture contract: document terminology, ownership, dependencies, and migration discipline.
+- M21 — Core Scene/Document extraction.
+- M22 — Core Workspace extraction.
+- M23 — Core semantic operations and undo boundary.
+- M24 — Continuous operations and viewport/tools boundary.
+- M25 — Core document/session and persistence boundary.
+- M26 — Renderer boundary.
+- M27 — Dependency enforcement and graphics-free headless proof.
+
+Each migration milestone must preserve buildability, tests, and behavior unless separately approved behavior
+work says otherwise. This sequence is current planning, not a promise of fixed ordering; demonstrated
+dependencies may require it to change. The program does not authorize speculative frameworks or any of the
+explicit non-goals in ADR 0009.
+
 ## Future document workflow
 
 - Define autosave, crash recovery, and recent-file behavior as separate workflow milestones.
@@ -18,11 +38,11 @@ Version 3 Scene Documents (including Box), strict v1/v2 migration, and revision-
 unsaved-change protection are established. Scene files intentionally do not include viewport, layout, locale,
 display-unit, console, diagnostics, renderer, or other workspace/session state.
 
-The version-1 `.ai3workspace` sidecar currently persists only per-object bounds-display switches. Before adding
-substantially more workspace or preference data, define ownership and persistence boundaries for candidates
-such as selection, active material, retained viewport mode, active transform tool/reference space, locale,
-display unit, and application-wide preferences. Per-document workspace state and application-wide preferences
-must not be conflated merely because both are non-scene data.
+The version-1 `.ai3workspace` sidecar currently persists only per-object bounds-display switches. ADR 0009 now
+assigns selection, bounds-display state, active material/editor selection where applicable, display units, and
+appropriate viewport/editor preferences to Core Workspace. M22 will extract that ownership; M25 will define
+the persistence boundary. Per-document Workspace state and application-wide preferences must not be conflated
+merely because both are non-scene data.
 
 ## Transform tools and editing workflow
 
@@ -109,19 +129,14 @@ not yet independent of UI lifetime/ownership.
 
 ## Scene content
 
-- Add a Box as the next concrete primitive candidate, with authoritative dimensions and
-  topology-appropriate X/Y/Z segment counts. Integrate it through cached bounds, rendering, picking,
-  materials, serialization, inspector editing, hierarchy, and Undo/Redo. Use this second primitive as
-  concrete pressure to extract only genuinely shared primitive seams rather than generalizing from the
-  sphere speculatively.
 - Make sphere tessellation explicit authoritative parameters in a later compatible primitive pass; do not
   silently treat the current procedural tessellation constants as authored sphere state.
 - Expand light types, primitive types, and their tooling as concrete requirements appear.
 - Add material deletion/duplication, library browsing, textures, multiple slots, or PBR only through later
   requirements that define their ownership and workflow.
 
-The current tagged category/subtype model provides explicit dispatch for sphere, perspective-camera, and
-directional-light data. It is not a commitment to a component system, renderer abstraction, or speculative
+The current tagged category/subtype model provides explicit dispatch for Sphere, Box, Perspective Camera, and
+Directional Light data. It is not a commitment to a component system, renderer abstraction, or speculative
 general-purpose framework.
 
 Reusable document-owned Lambert/Phong materials, sphere assignment with unlit fallback color, and the
@@ -140,7 +155,9 @@ expected to require deliberately separating concerns that are currently coupled:
 - image output;
 - eventual renderer regression tests based on produced images.
 
-The existing `headless-debug` configuration is intentionally graphics-free and tests core/domain behavior.
+M26 must first establish the narrow renderer input boundary, and M27 must enforce dependencies and prove the
+graphics-free Core path. The existing `headless-debug` configuration is intentionally graphics-free and tests
+current display-independent behavior.
 “Headless rendering” is a different future capability: it still needs a real graphics context and the concrete
 renderer, merely without Dear ImGui or a visible editor window. No context strategy, image format, comparison
 method, or new renderer abstraction is selected here.
