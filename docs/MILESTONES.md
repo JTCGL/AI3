@@ -166,3 +166,12 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   explicitly deferring the future artist-editable/topological mesh model. Canonical checks and GitHub Actions
   passed, and physical runtime verification passed on Termux ARM64 under the normal single-platform acceptance
   policy while the T5600 was unavailable.
+
+## Milestone 20 — Core architecture contract
+
+- Established AI3 Core as the approved display-independent architectural center and defined durable Scene,
+  Scene Document, Workspace, frontend, semantic-operation, history, viewport/tool, persistence, renderer,
+  platform, Application, and dependency boundaries in ADR 0009.
+- Recorded the incremental M21-M27 migration, identified current compatibility violations without changing
+  implementation, and reconciled agent guidance so new work does not deepen dependencies slated for removal.
+  M20 is documentation-only: no source, CMake, persistence-format, or runtime behavior changed.

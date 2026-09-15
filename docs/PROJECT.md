@@ -34,32 +34,44 @@ contracts before using the tools. CMake presets keep builds outside the source t
 preset builds the options, editor, scene, localization, and test targets without fetching SDL or Dear ImGui,
 discovering EGL/GLES, or defining the graphical executable and smoke test.
 
-Core/domain targets do not depend on SDL, Dear ImGui, EGL/GLES, or a display. Platform, render, and UI code may
-depend inward on core/domain code, but core/domain dependencies do not point outward. The current ownership
-split is:
+The previously loose "core/domain" terminology now has an approved destination: AI3 Core is the central,
+display-independent architectural framework described by
+[ADR 0009](decisions/0009-core-architecture-boundaries.md). Core is not yet a source directory, CMake target,
+or `ai3::Core` façade. Current headless targets remain independent of SDL, Dear ImGui, EGL/GLES, and a display;
+the M21-M27 program will incrementally align their responsibilities and dependencies with the approved Core
+contract while keeping each intermediate `main` buildable and behaviorally equivalent.
+
+The current ownership split is:
 
 - `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
   viewport state.
 - `editor`: display-independent object identity, lifecycle, hierarchy, selection, authoritative transforms,
   semantic object/material data, derived local bounds, per-object bounds-display workspace state, undo/redo
   transactions, and transactional Scene Document/workspace filesystem I/O.
-- `scene`: display-independent units, transform and camera math, procedural sphere geometry, render-target
+- `scene`: display-independent units, transform and camera math, procedural Sphere/Box geometry, render-target
   sizing, orbit view construction, viewport-view selection/resolution and interaction mode, sphere picking,
   axis-translation projection, hit testing and drag constraints, and shared API-independent helper geometry.
 - `localization`: external resource discovery and UTF-8 string lookup.
 - `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
-- `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, sphere geometry caches, the
+- `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, primitive geometry caches, the
   offscreen viewport framebuffer, and the depth-tested helper pass.
 - `ui`: Dear ImGui lifecycle and editor presentation/control. `EditorUi` receives references to authoritative
   `EditorState` and `ViewportView`, presents the display-independent document-session policy and SDL
   native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
+
+This current split has known migration violations. `EditorState` mixes authored Scene state, selection and
+bounds Workspace state, panel visibility, Console presentation data, and layout-reset intent. `EditorUi`
+constructs `DocumentSession`, chooses transaction boundaries for interactions, retains other Workspace state,
+and explicitly invalidates its renderer caches after document transitions. `ViewportRenderer` consumes the
+aggregate `EditorState` directly. These are accurate compatibility interfaces, not the target architecture;
+new work must not deepen them, and their extraction belongs to M21-M27 rather than M20.
 
 ## Editor and scene model
 
 Scenes start empty. `EditorState` is the only scene-object lifecycle and hierarchy authority. Object IDs are
 scene-owned, stable, monotonically allocated, and not reused after deletion. Objects share identity, name,
 enabled/visible state, a local transform, and a two-level semantic tag. Current concrete object subtypes are
-sphere primitive, perspective camera, and directional light; their payloads are plain tagged data rather
+Sphere and Box primitives, Perspective Camera, and Directional Light; their payloads are plain tagged data rather
 than polymorphic objects or components. Default-name counters are monotonic per category/subtype. Ordinary
 persistent mutations use explicit `EditorState` operations; public object lookup is read-only. Normal editor
 mutations participate in `EditorHistory` transactions whose boundaries represent one intentional edit. A
@@ -71,11 +83,11 @@ poses; deeper descendants retain their existing parents. Deletion is transaction
 be faithfully unparented as TRS. Selection is cleared only when the deleted object was selected.
 
 Sphere radius/fallback color/material assignment, perspective projection parameters, directional-light
-parameters, and independent reusable materials are authoritative semantic editor data. Sphere meshes are
-deterministic derived data. Each sphere also caches an object-local AABB and bounding sphere derived from its
-radius; creation, document loading, and real radius changes rebuild it, while transforms and unrelated changes
-do not. Directional lights and perspective cameras remain unbounded. Unassigned spheres render their unlit
-fallback; assigned spheres use Lambert or
+parameters, and independent reusable materials are authoritative semantic editor data. Sphere and Box meshes
+are deterministic derived data. Each primitive also caches an object-local AABB and bounding sphere derived
+from its semantic parameters; creation, document loading, and real parameter changes rebuild them, while
+transforms and unrelated changes do not. Directional lights and perspective cameras remain unbounded.
+Unassigned primitives render their unlit fallback; assigned primitives use Lambert or
 classic Phong. Materials have separate monotonic identity, may exist unassigned, and are not owned by cameras
 or lights. The Material Editor navigates all document materials while its active material remains workspace
 state and it edits one material at a time.

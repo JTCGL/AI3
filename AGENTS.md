@@ -58,10 +58,12 @@ Do not introduce desktop OpenGL, Vulkan, GLAD, a renderer abstraction, or multi-
 - Compile imgui_demo.cpp so the Dear ImGui demo and diagnostic windows remain available.
 - Prefer system EGL/GLES headers and libraries; do not vendor generated GL loaders for GLES3.
 - Do not vendor SDL3 or Dear ImGui source into this repository.
-- Keep core/domain targets buildable and testable without SDL, Dear ImGui, EGL/GLES, or a display system.
-- UI, render, and platform layers may depend inward on core/domain layers; core/domain layers must not
-  depend outward on SDL, Dear ImGui, or GLES. Place pure feature logic in headless-testable targets whenever
-  practical.
+- AI3 Core is the approved display-independent architectural center. Keep Core/domain code buildable and
+  testable without SDL, Dear ImGui, EGL/GLES, GLSL, a window, graphics context, or display server.
+- Frontend, render, platform, CLI, and test code may depend inward on Core/domain code; Core/domain dependencies
+  must not point outward to Dear ImGui, SDL, GLES/OpenGL/EGL, or GLSL. The current source layout predates this
+  boundary and will migrate incrementally; do not deepen a known outward dependency while using current
+  interfaces. Place pure feature logic in headless-testable targets whenever practical.
 
 ## Verification
 Before declaring work complete, run:
