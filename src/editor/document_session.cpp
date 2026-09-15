@@ -1,6 +1,6 @@
 #include "editor/document_session.h"
 #include "core/scene_document.h"
-#include "editor/workspace_document.h"
+#include "core/workspace_document.h"
 
 #include <utility>
 

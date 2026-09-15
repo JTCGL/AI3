@@ -1,6 +1,7 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "core/scene.h"
+#include "core/workspace.h"
 #include "scene/resolved_view.h"
 
 #include <glm/mat3x3.hpp>
@@ -32,8 +33,8 @@ struct HelperGeometry
 
 void append_object_bounds(HelperGeometry& result, const Scene& scene, const SceneObject& object,
                           const BoundsDisplayState& display, glm::vec3 color);
-HelperGeometry resolve_bounds_helper_geometry(const EditorState& scene, ObjectId selected_id,
-                                              ObjectId hovered_id);
+HelperGeometry resolve_bounds_helper_geometry(const Scene& scene, const Workspace& workspace,
+                                              ObjectId selected_id, ObjectId hovered_id);
 HelperGeometry resolve_translation_helper_geometry(ObjectId selected_id, glm::vec3 gizmo_pivot,
                                                    const glm::mat3& gizmo_basis,
                                                    const ResolvedViewportView& view,

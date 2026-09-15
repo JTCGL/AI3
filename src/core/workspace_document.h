@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "core/workspace.h"
 
 #include <filesystem>
 #include <map>

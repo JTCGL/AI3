@@ -7,12 +7,13 @@ requirements and demonstrated dependencies become clearer.
 ## Core architecture migration
 
 [ADR 0009](decisions/0009-core-architecture-boundaries.md) establishes AI3 Core as the display-independent
-architectural center. M20 recorded the contract and M21 extracted authored Scene/Document ownership into the
-real `ai3_core` target. Remaining responsibilities will migrate deliberately. The planned sequence is:
+architectural center. M20 recorded the contract, M21 extracted authored Scene/Document ownership, and M22
+extracted non-authored Workspace/Workspace Document ownership into the real `ai3_core` target. Remaining
+responsibilities will migrate deliberately. The planned sequence is:
 
 - M20 — Core architecture contract: document terminology, ownership, dependencies, and migration discipline.
 - M21 — Core Scene/Document extraction (completed).
-- M22 — Core Workspace extraction.
+- M22 — Core Workspace extraction (completed).
 - M23 — Core semantic operations and undo boundary.
 - M24 — Continuous operations and viewport/tools boundary.
 - M25 — Core document/session and persistence boundary.
@@ -40,8 +41,9 @@ display-unit, console, diagnostics, renderer, or other workspace/session state.
 
 The version-1 `.ai3workspace` sidecar currently persists only per-object bounds-display switches. ADR 0009 now
 assigns selection, bounds-display state, active material/editor selection where applicable, display units, and
-appropriate viewport/editor preferences to Core Workspace. M22 will extract that ownership; M25 will define
-the persistence boundary. Per-document Workspace state and application-wide preferences must not be conflated
+appropriate viewport/editor preferences to Core Workspace. M22 extracted the currently existing selection,
+bounds-display, active-material, and display-unit state without expanding v1 persistence; M25 will define the
+persistence boundary. Per-document Workspace state and application-wide preferences must not be conflated
 merely because both are non-scene data.
 
 ## Transform tools and editing workflow

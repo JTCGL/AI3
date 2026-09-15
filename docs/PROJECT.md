@@ -35,19 +35,21 @@ preset builds the options, Core, editor, scene, localization, and test targets w
 discovering EGL/GLES, or defining the graphical executable and smoke test.
 
 AI3 Core is the central, display-independent architectural framework described by
-[ADR 0009](decisions/0009-core-architecture-boundaries.md). `src/core` and the non-empty `ai3_core` target now
-own authored `Scene` state and Scene Document persistence; no `ai3::Core` façade exists. Core depends only on
-display-independent GLM and nlohmann/json and remains independent of SDL, Dear ImGui, EGL/GLES, and displays.
+[ADR 0009](decisions/0009-core-architecture-boundaries.md). `src/core` and the non-empty `ai3_core` target own
+authored `Scene`, non-authored `Workspace`, their document codecs, and display-length conversion; no
+`ai3::Core` façade exists. Core depends only on display-independent GLM and nlohmann/json and remains
+independent of SDL, Dear ImGui, EGL/GLES, and displays.
 
 The current ownership split is:
 
 - `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
   viewport state.
 - `core`: authored Scene identity, lifecycle, hierarchy, transforms, semantic object/material data, derived
-  local bounds, revision/naming state, and transactional Scene Document serialization/filesystem I/O.
-- `editor`: the `EditorState` compatibility façade, selection and per-object bounds-display workspace state,
-  frontend presentation state, undo/redo transactions, `DocumentSession`, and Workspace persistence.
-- `scene`: display-independent units, transform and camera math, procedural Sphere/Box geometry, render-target
+  local bounds, revision/naming state, non-authored Workspace selection, bounds-display state, active material
+  selection and display unit, plus transactional Scene and Workspace Document serialization/filesystem I/O.
+- `editor`: the `EditorState` compatibility façade, frontend presentation state, undo/redo transactions, and
+  `DocumentSession` coordination.
+- `scene`: display-independent transform and camera math, procedural Sphere/Box geometry, render-target
   sizing, orbit view construction, viewport-view selection/resolution and interaction mode, sphere picking,
   axis-translation projection, hit testing and drag constraints, and shared API-independent helper geometry.
 - `localization`: external resource discovery and UTF-8 string lookup.
@@ -59,12 +61,12 @@ The current ownership split is:
   native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
 
 This current split has known transitional dependencies. `EditorState` owns exactly one authoritative `Scene`
-and forwards its retained authored APIs while also retaining selection, bounds Workspace state, panel
-visibility, Console presentation data, and layout-reset intent until later milestones. `EditorUi`
-constructs `DocumentSession`, chooses transaction boundaries for interactions, retains other Workspace state,
-and explicitly invalidates its renderer caches after document transitions. Helper geometry and continuous
-translation operations still consume `EditorState` where Workspace or transaction behavior is required.
-These are compatibility interfaces scheduled for M22-M27.
+and one authoritative `Workspace`, forwards retained APIs, coordinates their validation/lifecycle behavior,
+and still retains panel visibility, Console presentation data, and layout-reset intent. `EditorUi` constructs
+`DocumentSession`, chooses transaction boundaries for interactions, and explicitly invalidates renderer caches
+after document transitions. The `ViewportView` state cluster and continuous translation operations remain
+deferred compatibility interfaces scheduled for M23-M27. `ai3_scene` depends on `ai3_core`, not `ai3_editor`;
+helper geometry consumes narrow `Scene` and `Workspace` inputs.
 
 ## Editor and scene model
 
@@ -105,22 +107,25 @@ and linear light colors, including Box dimensions and tessellation. Quaternion a
 and are normalized. World transforms, Euler presentation, derived geometry, renderer state, and editor
 workspace/session state are outside the format.
 
-The headless Core target owns serialization, validation, and ordinary-filesystem helpers through pinned
-nlohmann/json. A narrowly friended codec reconstructs a complete candidate with explicit identity and local
-hierarchy data; normal object creation still uses the lifecycle allocator. Load validates the entire candidate
+The headless Core target owns Scene and Workspace serialization, validation, and ordinary-filesystem helpers
+through pinned nlohmann/json. A narrowly friended Scene codec reconstructs a complete candidate with explicit
+identity and local hierarchy data; normal object creation still uses the lifecycle allocator. Load validates
+the entire candidate
 before replacing scene-owned state, and failure leaves the destination unchanged. The codec operates only on
 `Scene`; `DocumentSession` clears selection after successful load while preserving other editor presentation.
 
-An associated `.ai3workspace` sidecar stores each bounded object's default-off bounding-box, bounding-sphere,
+The Core-owned Workspace Document codec writes an associated `.ai3workspace` sidecar containing only each
+bounded object's default-off bounding-box, bounding-sphere,
 and hover-feedback switches by stable object ID. Missing data defaults off. Version-1 sidecars may contain the
 obsolete string-valued `helperRenderingMode` field, which is accepted and ignored; new writes omit it.
 Malformed data
 cannot invalidate an already loaded scene and is reported through the Console. Save and Save As atomically
 replace the associated sidecar only when Save or Save As is invoked; inspector changes remain in memory until
 then, and untitled workspace state remains in memory. A successful scene write marks the document clean and
-permits a pending transition even if the separately reported workspace write fails. Workspace state is
-excluded from Scene Documents, revision, dirty state, and ordinary history edits; deletion history retains
-only the removed object's switches for object-lifecycle restoration.
+permits a pending transition even if the separately reported workspace write fails. Selection, active material
+selection, display units, and viewport state are not persisted. Workspace state is excluded from Scene
+Documents, revision, dirty state, and ordinary history edits; deletion history retains only the removed
+object's switches for object-lifecycle restoration.
 
 `EditorHistory` uses internal authoritative before/after snapshots and exposes representation-independent
 begin/commit/cancel/undo/redo operations. Snapshots contain exact document state but exclude selection,

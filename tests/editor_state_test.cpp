@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
+#include "core/length_units.h"
 #include "editor/editor_state.h"
-#include "scene/length_units.h"
 #include "scene/scene_math.h"
 
 #include <glm/geometric.hpp>
@@ -362,4 +362,17 @@ TEST_CASE("EditorState authored compatibility API forwards to its sole Scene")
     REQUIRE(scene.rename_object(sphere, "Core-owned"));
     CHECK(state.find_object(sphere)->name == "Core-owned");
     CHECK(state.document_revision() == scene.document_revision());
+}
+
+TEST_CASE("EditorState exposes its sole Core Workspace through compatibility APIs")
+{
+    ai3::EditorState state;
+    ai3::Workspace& workspace = state.workspace();
+    const ai3::ObjectId sphere = state.create_sphere("Sphere");
+
+    REQUIRE(state.select(sphere));
+    CHECK(workspace.selection() == sphere);
+    REQUIRE(state.set_bounds_display(sphere, {true, false, true}));
+    CHECK(&state.bounds_workspace() == &workspace.bounds_display_states());
+    CHECK(workspace.bounds_display(sphere).hover_feedback);
 }

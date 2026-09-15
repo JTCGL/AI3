@@ -65,7 +65,7 @@ EditorHistory::EditorHistory(EditorState& state) : state_(state) {}
 
 EditorHistory::Snapshot EditorHistory::capture() const
 {
-    return {state_.scene_, state_.bounds_workspace_};
+    return {state_.scene_, state_.workspace_.bounds_display_states()};
 }
 
 bool EditorHistory::begin_transaction()
@@ -158,7 +158,7 @@ bool EditorHistory::redo()
         display = state_.bounds_display(id);
     restore(entry.after);
     for (const auto& [id, display] : entry.deleted_object_workspace)
-        state_.bounds_workspace_.erase(id);
+        state_.workspace_.remove_bounds_display(id);
     ++position_;
     return true;
 }
@@ -184,8 +184,9 @@ void EditorHistory::restore(const Snapshot& snapshot)
     const DocumentRevision revision = state_.scene_.document_revision_;
     state_.scene_ = snapshot.scene;
     state_.scene_.document_revision_ = revision;
-    if (state_.selection_ != no_object && state_.find_object(state_.selection_) == nullptr)
-        state_.selection_ = no_object;
+    if (state_.workspace_.selection() != no_object &&
+        state_.find_object(state_.workspace_.selection()) == nullptr)
+        state_.workspace_.clear_selection();
     state_.scene_.advance_document_revision();
 }
 

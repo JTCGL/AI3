@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
 
+#include "core/length_units.h"
 #include "core/scene.h"
 #include "scene/box_mesh.h"
-#include "scene/length_units.h"
 #include "scene/orbit_camera.h"
 #include "scene/render_target_size.h"
 #include "scene/scene_math.h"

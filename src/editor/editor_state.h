@@ -1,21 +1,14 @@
 #pragma once
 
 #include "core/scene.h"
+#include "core/workspace.h"
 
 #include <array>
-#include <map>
 #include <string>
 #include <vector>
 
 namespace ai3
 {
-struct BoundsDisplayState
-{
-    bool show_bounding_box = false;
-    bool show_bounding_sphere = false;
-    bool hover_feedback = false;
-};
-
 struct ConsoleMessage
 {
     std::string key;
@@ -37,6 +30,8 @@ class EditorState
     EditorState();
     Scene& scene();
     const Scene& scene() const;
+    Workspace& workspace();
+    const Workspace& workspace() const;
     ObjectId create_object(CreateObject object);
     ObjectId create_sphere(std::string localized_base_name, SpherePrimitive sphere = {});
     ObjectId create_box(std::string localized_base_name, BoxPrimitive box = {});
@@ -100,8 +95,7 @@ class EditorState
     private:
     friend class EditorHistory;
     Scene scene_;
-    ObjectId selection_ = no_object;
-    std::map<ObjectId, BoundsDisplayState> bounds_workspace_;
+    Workspace workspace_;
     std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,
                                                                                         true, true};
     std::vector<ConsoleMessage> console_messages_;

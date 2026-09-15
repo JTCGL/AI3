@@ -4,7 +4,6 @@
 #include "localization/localization.h"
 #include "render/viewport_renderer.h"
 #include "scene/helper_geometry.h"
-#include "scene/length_units.h"
 #include "scene/translation_gizmo.h"
 #include "scene/viewport_view.h"
 
@@ -60,7 +59,6 @@ class EditorUi
     SDL_Window* window_ = nullptr;
     std::shared_ptr<SceneDialogState> dialog_state_;
     DocumentTransition ready_transition_ = DocumentTransition::none;
-    LengthUnit display_length_unit_ = default_display_length_unit;
     float content_scale_ = 1.0F;
     float ui_scale_ = 1.0F;
     float font_size_ = 16.0F;
@@ -71,7 +69,6 @@ class EditorUi
     bool show_about_ = false;
     bool show_ai3_diagnostics_ = false;
     bool show_material_editor_ = false;
-    MaterialId active_material_id_ = no_material;
     std::pair<ObjectId, ObjectId> pending_reparent_ = {no_object, no_object};
     std::optional<AxisTranslationGesture> translation_gesture_;
     TransientNavigationGesture transient_navigation_gesture_;

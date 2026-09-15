@@ -173,6 +173,12 @@ TEST_CASE("workspace-only changes remain outside history and dirty state")
 {
     ai3::EditorState state;
     ai3::DocumentSession session(state);
+    const ai3::ObjectId sphere = state.create_sphere("Sphere");
+    session.mark_saved();
+    REQUIRE(state.select(sphere));
+    REQUIRE(state.set_bounds_display(sphere, {true, false, true}));
+    state.workspace().set_active_material(91);
+    state.workspace().set_display_length_unit(ai3::LengthUnit::kilometer);
     state.set_panel_visible(ai3::EditorPanel::console, false);
     state.add_console_message("diagnostic");
     state.request_layout_reset();

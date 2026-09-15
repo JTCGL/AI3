@@ -1,10 +1,10 @@
 #include "ui/editor_ui.h"
+#include "core/length_units.h"
 #include "core/scene_document.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "scene/color_space.h"
 #include "scene/helper_geometry.h"
-#include "scene/length_units.h"
 #include "scene/scene_math.h"
 #include "scene/translation_gizmo.h"
 #include "scene/viewport_picking.h"
@@ -502,10 +502,10 @@ void EditorUi::draw_main_menu(bool& running)
             {
                 for (const LengthUnitEntry& entry : length_unit_entries)
                 {
-                    const bool selected = display_length_unit_ == entry.unit;
+                    const bool selected = state_.workspace().display_length_unit() == entry.unit;
                     if (ImGui::MenuItem(localization_.text(entry.localization_key).c_str(), nullptr,
                                         selected))
-                        display_length_unit_ = entry.unit;
+                        state_.workspace().set_display_length_unit(entry.unit);
                 }
                 ImGui::EndMenu();
             }
@@ -777,14 +777,17 @@ void EditorUi::draw_object_inspector()
                     &bounds_display.hover_feedback);
                 if (workspace_changed)
                     document_session_.set_bounds_display(object->id, bounds_display);
-                float displayed_radius =
-                    length_from_meters(object->sphere.radius_meters, display_length_unit_);
+                float displayed_radius = length_from_meters(
+                    object->sphere.radius_meters, state_.workspace().display_length_unit());
                 const std::string radius_text = localization_.format(
                     "inspector.radius_with_unit",
-                    {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+                    {{"unit",
+                      std::string(length_unit_symbol(state_.workspace().display_length_unit()))}});
                 const std::string radius_label = stable_imgui_label(radius_text, "sphere_radius");
-                const float speed = length_from_meters(0.05F, display_length_unit_);
-                const float minimum = length_from_meters(0.001F, display_length_unit_);
+                const float speed =
+                    length_from_meters(0.05F, state_.workspace().display_length_unit());
+                const float minimum =
+                    length_from_meters(0.001F, state_.workspace().display_length_unit());
                 const bool changed =
                     ImGui::DragFloat(radius_label.c_str(), &displayed_radius, speed, minimum);
                 apply_continuous_edit(
@@ -793,7 +796,8 @@ void EditorUi::draw_object_inspector()
                     {
                         SpherePrimitive sphere = object->sphere;
                         sphere.radius_meters = std::max(
-                            0.001F, length_to_meters(displayed_radius, display_length_unit_));
+                            0.001F, length_to_meters(displayed_radius,
+                                                     state_.workspace().display_length_unit()));
                         state_.set_sphere(object->id, sphere);
                     });
                 const Material* assigned = state_.find_material(object->sphere.material_id);
@@ -836,19 +840,22 @@ void EditorUi::draw_object_inspector()
                 BoxPrimitive box = object->box;
                 const auto dimension = [&](const char* key, const char* stable, float& value)
                 {
-                    float shown = length_from_meters(value, display_length_unit_);
+                    float shown =
+                        length_from_meters(value, state_.workspace().display_length_unit());
                     const bool changed = ImGui::DragFloat(
                         stable_imgui_label(
-                            localization_.format(key, {{"unit", std::string(length_unit_symbol(
-                                                                    display_length_unit_))}}),
+                            localization_.format(
+                                key, {{"unit", std::string(length_unit_symbol(
+                                                   state_.workspace().display_length_unit()))}}),
                             stable)
                             .c_str(),
-                        &shown, length_from_meters(0.05F, display_length_unit_),
-                        length_from_meters(0.001F, display_length_unit_),
-                        length_from_meters(9999.0F, display_length_unit_));
+                        &shown, length_from_meters(0.05F, state_.workspace().display_length_unit()),
+                        length_from_meters(0.001F, state_.workspace().display_length_unit()),
+                        length_from_meters(9999.0F, state_.workspace().display_length_unit()));
                     if (changed)
-                        value = std::clamp(length_to_meters(shown, display_length_unit_), 0.001F,
-                                           9999.0F);
+                        value = std::clamp(
+                            length_to_meters(shown, state_.workspace().display_length_unit()),
+                            0.001F, 9999.0F);
                     return changed;
                 };
                 bool changed =
@@ -907,36 +914,39 @@ void EditorUi::draw_object_inspector()
                                                     0.5F, 0.1F, 179.9F);
                     apply_continuous_edit(document_session_.history(), changed, [&]
                                           { state_.set_perspective_camera(object->id, camera); });
-                    float near_display =
-                        length_from_meters(camera.near_plane_meters, display_length_unit_);
-                    float far_display =
-                        length_from_meters(camera.far_plane_meters, display_length_unit_);
+                    float near_display = length_from_meters(
+                        camera.near_plane_meters, state_.workspace().display_length_unit());
+                    float far_display = length_from_meters(
+                        camera.far_plane_meters, state_.workspace().display_length_unit());
                     const std::string near_text = localization_.format(
                         "inspector.near_plane_with_unit",
-                        {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+                        {{"unit", std::string(length_unit_symbol(
+                                      state_.workspace().display_length_unit()))}});
                     const std::string far_text = localization_.format(
                         "inspector.far_plane_with_unit",
-                        {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+                        {{"unit", std::string(length_unit_symbol(
+                                      state_.workspace().display_length_unit()))}});
                     changed = ImGui::DragFloat(
                         stable_imgui_label(near_text, "camera_near_plane").c_str(), &near_display,
-                        length_from_meters(0.01F, display_length_unit_),
-                        length_from_meters(0.001F, display_length_unit_));
-                    camera.near_plane_meters =
-                        std::max(0.001F, length_to_meters(near_display, display_length_unit_));
+                        length_from_meters(0.01F, state_.workspace().display_length_unit()),
+                        length_from_meters(0.001F, state_.workspace().display_length_unit()));
+                    camera.near_plane_meters = std::max(
+                        0.001F,
+                        length_to_meters(near_display, state_.workspace().display_length_unit()));
                     camera.far_plane_meters =
                         std::max(camera.near_plane_meters + 0.001F, camera.far_plane_meters);
                     apply_continuous_edit(document_session_.history(), changed, [&]
                                           { state_.set_perspective_camera(object->id, camera); });
                     camera = state_.find_object(object->id)->perspective_camera;
-                    near_display =
-                        length_from_meters(camera.near_plane_meters, display_length_unit_);
+                    near_display = length_from_meters(camera.near_plane_meters,
+                                                      state_.workspace().display_length_unit());
                     changed = ImGui::DragFloat(
                         stable_imgui_label(far_text, "camera_far_plane").c_str(), &far_display,
-                        length_from_meters(0.1F, display_length_unit_),
-                        length_from_meters(0.002F, display_length_unit_));
-                    camera.far_plane_meters =
-                        std::max(camera.near_plane_meters + 0.001F,
-                                 length_to_meters(far_display, display_length_unit_));
+                        length_from_meters(0.1F, state_.workspace().display_length_unit()),
+                        length_from_meters(0.002F, state_.workspace().display_length_unit()));
+                    camera.far_plane_meters = std::max(
+                        camera.near_plane_meters + 0.001F,
+                        length_to_meters(far_display, state_.workspace().display_length_unit()));
                     apply_continuous_edit(document_session_.history(), changed, [&]
                                           { state_.set_perspective_camera(object->id, camera); });
                 }
@@ -975,7 +985,8 @@ void EditorUi::draw_object_inspector()
             {
                 const std::string position_text = localization_.format(
                     "inspector.position_with_unit",
-                    {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+                    {{"unit",
+                      std::string(length_unit_symbol(state_.workspace().display_length_unit()))}});
                 const std::string position_label = stable_imgui_label(position_text, "position");
                 const std::string rotation_label =
                     stable_imgui_label(localization_.text("inspector.rotation"), "rotation");
@@ -984,17 +995,24 @@ void EditorUi::draw_object_inspector()
                 Transform transform = object->transform;
                 bool transform_changed = false;
                 glm::vec3 displayed_position{
-                    length_from_meters(transform.position.x, display_length_unit_),
-                    length_from_meters(transform.position.y, display_length_unit_),
-                    length_from_meters(transform.position.z, display_length_unit_)};
-                const float position_speed = length_from_meters(0.1F, display_length_unit_);
+                    length_from_meters(transform.position.x,
+                                       state_.workspace().display_length_unit()),
+                    length_from_meters(transform.position.y,
+                                       state_.workspace().display_length_unit()),
+                    length_from_meters(transform.position.z,
+                                       state_.workspace().display_length_unit())};
+                const float position_speed =
+                    length_from_meters(0.1F, state_.workspace().display_length_unit());
                 if (ImGui::DragFloat3(position_label.c_str(), glm::value_ptr(displayed_position),
                                       position_speed))
                 {
                     transform.position = {
-                        length_to_meters(displayed_position.x, display_length_unit_),
-                        length_to_meters(displayed_position.y, display_length_unit_),
-                        length_to_meters(displayed_position.z, display_length_unit_)};
+                        length_to_meters(displayed_position.x,
+                                         state_.workspace().display_length_unit()),
+                        length_to_meters(displayed_position.y,
+                                         state_.workspace().display_length_unit()),
+                        length_to_meters(displayed_position.z,
+                                         state_.workspace().display_length_unit())};
                     transform_changed = true;
                 }
                 apply_continuous_edit(document_session_.history(), transform_changed,
@@ -1036,9 +1054,10 @@ void EditorUi::draw_material_editor()
         return;
     }
     EditorHistory& history = document_session_.history();
-    if (state_.find_material(active_material_id_) == nullptr && !state_.materials().empty())
-        active_material_id_ = state_.materials().front().id;
-    const Material* active_material = state_.find_material(active_material_id_);
+    if (state_.find_material(state_.workspace().active_material()) == nullptr &&
+        !state_.materials().empty())
+        state_.workspace().set_active_material(state_.materials().front().id);
+    const Material* active_material = state_.find_material(state_.workspace().active_material());
     const std::string active_name =
         active_material == nullptr ? localization_.text("material.none") : active_material->name;
     ImGui::AlignTextToFramePadding();
@@ -1050,8 +1069,9 @@ void EditorUi::draw_material_editor()
         for (const Material& candidate : state_.materials())
         {
             ImGui::PushID(reinterpret_cast<void*>(static_cast<std::uintptr_t>(candidate.id)));
-            if (ImGui::Selectable(candidate.name.c_str(), candidate.id == active_material_id_))
-                active_material_id_ = candidate.id;
+            if (ImGui::Selectable(candidate.name.c_str(),
+                                  candidate.id == state_.workspace().active_material()))
+                state_.workspace().set_active_material(candidate.id);
             ImGui::PopID();
         }
         ImGui::EndCombo();
@@ -1061,15 +1081,15 @@ void EditorUi::draw_material_editor()
         apply_discrete_edit(history,
                             [&]
                             {
-                                active_material_id_ = state_.create_material(
-                                    localization_.text("material.default_name"));
+                                state_.workspace().set_active_material(state_.create_material(
+                                    localization_.text("material.default_name")));
                             });
     if (state_.materials().empty())
     {
         ImGui::End();
         return;
     }
-    Material material = *state_.find_material(active_material_id_);
+    Material material = *state_.find_material(state_.workspace().active_material());
     char name[128];
     std::snprintf(name, sizeof(name), "%s", material.name.c_str());
     const bool name_changed = ImGui::InputText(
@@ -1077,7 +1097,7 @@ void EditorUi::draw_material_editor()
         sizeof(name));
     apply_continuous_edit(history, name_changed,
                           [&] { state_.rename_material(material.id, name); });
-    material = *state_.find_material(active_material_id_);
+    material = *state_.find_material(state_.workspace().active_material());
     const char* shading =
         material.shading == MaterialShading::lambert ? "material.lambert" : "material.phong";
     if (ImGui::BeginCombo(
@@ -1098,7 +1118,7 @@ void EditorUi::draw_material_editor()
         }
         ImGui::EndCombo();
     }
-    material = *state_.find_material(active_material_id_);
+    material = *state_.find_material(state_.workspace().active_material());
     const auto color_control = [&](const char* key, const char* stable, glm::vec3 Material::* field)
     {
         glm::vec3 srgb = linear_to_srgb(material.*field);
@@ -1108,9 +1128,10 @@ void EditorUi::draw_material_editor()
                               [&]
                               {
                                   Material changed_material =
-                                      *state_.find_material(active_material_id_);
+                                      *state_.find_material(state_.workspace().active_material());
                                   changed_material.*field = srgb_to_linear(srgb);
-                                  state_.set_material(active_material_id_, changed_material);
+                                  state_.set_material(state_.workspace().active_material(),
+                                                      changed_material);
                               });
     };
     color_control("material.ambient", "material_ambient", &Material::ambient_color);
@@ -1118,7 +1139,7 @@ void EditorUi::draw_material_editor()
     if (material.shading == MaterialShading::phong)
     {
         color_control("material.specular", "material_specular", &Material::specular_color);
-        material = *state_.find_material(active_material_id_);
+        material = *state_.find_material(state_.workspace().active_material());
         const bool changed = ImGui::DragFloat(
             stable_imgui_label(localization_.text("material.shininess"), "material_shininess")
                 .c_str(),
@@ -1132,8 +1153,9 @@ void EditorUi::draw_material_editor()
                                 selected->primitive_kind == PrimitiveKind::box);
     ImGui::BeginDisabled(!assignable);
     if (ImGui::Button(localization_.text("material.assign_selected").c_str()))
-        apply_discrete_edit(history,
-                            [&] { state_.assign_material(selected->id, active_material_id_); });
+        apply_discrete_edit(
+            history,
+            [&] { state_.assign_material(selected->id, state_.workspace().active_material()); });
     ImGui::EndDisabled();
     ImGui::End();
 }
@@ -1233,8 +1255,8 @@ void EditorUi::draw_viewport()
                                                   ? translation_gesture_->frozen_screen_axis_length
                                                   : 72.0F * ui_scale_;
             const ObjectId helper_id = helper_object == nullptr ? no_object : helper_object->id;
-            const HelperGeometry bounds_helpers =
-                resolve_bounds_helper_geometry(state_, helper_id, hovered_object_);
+            const HelperGeometry bounds_helpers = resolve_bounds_helper_geometry(
+                state_.scene(), state_.workspace(), helper_id, hovered_object_);
             const HelperGeometry gizmo_helpers = resolve_translation_helper_geometry(
                 helper_id, helper_pivot, helper_basis, helper_gizmo_view, helper_gizmo_viewport,
                 helper_gizmo_length, highlighted);
@@ -1488,9 +1510,9 @@ void EditorUi::draw(bool& running)
         ImGui::TextUnformatted(font.c_str());
         ImGui::TextUnformatted(localization_.text("diagnostics.world_coordinates").c_str());
         ImGui::TextUnformatted(localization_.text("diagnostics.canonical_length").c_str());
-        const std::string display_unit =
-            localization_.format("diagnostics.display_length",
-                                 {{"unit", std::string(length_unit_symbol(display_length_unit_))}});
+        const std::string display_unit = localization_.format(
+            "diagnostics.display_length",
+            {{"unit", std::string(length_unit_symbol(state_.workspace().display_length_unit()))}});
         ImGui::TextUnformatted(display_unit.c_str());
         const RenderTargetSize render_size = viewport_renderer_.size();
         const std::string viewport_size = localization_.format(
