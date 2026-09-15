@@ -277,7 +277,7 @@ void ViewportRenderer::clear_geometry_cache()
     geometry_cache_.clear();
 }
 
-void ViewportRenderer::synchronize_geometry_cache(const EditorState& scene)
+void ViewportRenderer::synchronize_geometry_cache(const Scene& scene)
 {
     std::unordered_set<ObjectId> live_ids;
     for (const SceneObject& object : scene.objects())
@@ -396,7 +396,7 @@ void ViewportRenderer::resize(RenderTargetSize size)
     require_no_gl_error("Viewport framebuffer resize");
 }
 
-void ViewportRenderer::render(const EditorState& scene, const ResolvedViewportView& view,
+void ViewportRenderer::render(const Scene& scene, const ResolvedViewportView& view,
                               RenderTargetSize size, ViewportHelperInputs helpers)
 {
     synchronize_geometry_cache(scene);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "core/scene.h"
 #include "scene/helper_geometry.h"
 #include "scene/render_target_size.h"
 #include "scene/resolved_view.h"
@@ -49,9 +49,9 @@ class ViewportRenderer
     ViewportRenderer(const ViewportRenderer&) = delete;
     ViewportRenderer& operator=(const ViewportRenderer&) = delete;
 
-    void render(const EditorState& scene, const ResolvedViewportView& view, RenderTargetSize size,
+    void render(const Scene& scene, const ResolvedViewportView& view, RenderTargetSize size,
                 ViewportHelperInputs helpers = {});
-    void synchronize_geometry_cache(const EditorState& scene);
+    void synchronize_geometry_cache(const Scene& scene);
     void clear_geometry_cache();
     std::uint32_t texture() const { return color_texture_; }
     RenderTargetSize size() const { return size_; }

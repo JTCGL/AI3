@@ -175,3 +175,12 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 - Recorded the incremental M21-M27 migration, identified current compatibility violations without changing
   implementation, and reconciled agent guidance so new work does not deepen dependencies slated for removal.
   M20 is documentation-only: no source, CMake, persistence-format, or runtime behavior changed.
+
+## Milestone 21 — Core Scene extraction
+
+- Created the display-independent `ai3_core` target and made Core `Scene` the sole owner of authored objects,
+  materials, identity/allocation and naming state, transforms/hierarchy, semantic payloads, bounds, and revision.
+- Reduced `EditorState` to a compatibility façade around one `Scene` plus retained Workspace/frontend state;
+  moved Scene Document persistence physically into Core and preserved v1/v2 migration and version 3 output.
+- Converted authored scene math, viewport-camera resolution, primitive picking, renderer input, and direct Core
+  tests to `Scene`; retained history/session, Workspace helper, and continuous-operation seams for M22-M27.

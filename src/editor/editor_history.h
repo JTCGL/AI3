@@ -33,12 +33,7 @@ class EditorHistory
     private:
     struct Snapshot
     {
-        std::vector<SceneObject> objects;
-        std::vector<Material> materials;
-        ObjectId next_object_id = 1;
-        MaterialId next_material_id = 1;
-        std::uint64_t default_material_name_count = 0;
-        std::map<EditorState::SubtypeKey, std::uint64_t> default_name_counts;
+        Scene scene;
         std::map<ObjectId, BoundsDisplayState> bounds_workspace;
     };
     struct Entry

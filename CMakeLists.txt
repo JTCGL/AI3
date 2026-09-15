@@ -45,16 +45,22 @@ add_library(ai3_options STATIC
 )
 target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_library(ai3_editor STATIC
+add_library(ai3_core STATIC
     src/scene/color_space.cpp
+    src/core/scene.cpp
+    src/core/scene_document.cpp
+)
+target_include_directories(ai3_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(ai3_core PUBLIC glm::glm nlohmann_json::nlohmann_json)
+
+add_library(ai3_editor STATIC
     src/editor/document_session.cpp
     src/editor/editor_history.cpp
     src/editor/editor_state.cpp
-    src/editor/scene_document.cpp
     src/editor/workspace_document.cpp
 )
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(ai3_editor PUBLIC glm::glm nlohmann_json::nlohmann_json)
+target_link_libraries(ai3_editor PUBLIC ai3_core)
 
 add_library(ai3_scene STATIC
     src/scene/helper_geometry.cpp
@@ -69,7 +75,7 @@ add_library(ai3_scene STATIC
     src/scene/viewport_view.cpp
 )
 target_include_directories(ai3_scene PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(ai3_scene PUBLIC ai3_editor)
+target_link_libraries(ai3_scene PUBLIC ai3_core ai3_editor)
 
 add_library(ai3_localization STATIC
     src/localization/localization.cpp
@@ -161,6 +167,7 @@ if(TARGET ai3)
     ai3_enable_warnings(ai3)
 endif()
 ai3_enable_warnings(ai3_options)
+ai3_enable_warnings(ai3_core)
 ai3_enable_warnings(ai3_editor)
 ai3_enable_warnings(ai3_scene)
 ai3_enable_warnings(ai3_localization)
@@ -201,7 +208,7 @@ if(AI3_BUILD_TESTS)
 endif()
 
 if(AI3_HEADLESS)
-    set(ai3_headless_targets ai3_options ai3_editor ai3_scene ai3_localization)
+    set(ai3_headless_targets ai3_options ai3_core ai3_editor ai3_scene ai3_localization)
     if(TARGET ai3_tests)
         list(APPEND ai3_headless_targets ai3_tests)
     endif()

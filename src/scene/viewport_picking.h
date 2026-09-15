@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "core/scene.h"
 #include "scene/resolved_view.h"
 
 #include <glm/vec2.hpp>
@@ -21,7 +21,7 @@ struct WorldRay
 WorldRay viewport_world_ray(glm::vec2 viewport_coordinates, const ResolvedViewportView& view);
 
 // Returns the closest enabled, visible sphere hit in front of the ray origin.
-ObjectId pick_sphere(const EditorState& scene, const WorldRay& ray);
-ObjectId pick_box(const EditorState& scene, const WorldRay& ray);
-ObjectId pick_primitive(const EditorState& scene, const WorldRay& ray);
+ObjectId pick_sphere(const Scene& scene, const WorldRay& ray);
+ObjectId pick_box(const Scene& scene, const WorldRay& ray);
+ObjectId pick_primitive(const Scene& scene, const WorldRay& ray);
 } // namespace ai3

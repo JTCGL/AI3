@@ -65,13 +65,7 @@ EditorHistory::EditorHistory(EditorState& state) : state_(state) {}
 
 EditorHistory::Snapshot EditorHistory::capture() const
 {
-    return {state_.objects_,
-            state_.materials_,
-            state_.next_object_id_,
-            state_.next_material_id_,
-            state_.default_material_name_count_,
-            state_.default_name_counts_,
-            state_.bounds_workspace_};
+    return {state_.scene_, state_.bounds_workspace_};
 }
 
 bool EditorHistory::begin_transaction()
@@ -95,12 +89,13 @@ bool EditorHistory::commit_transaction()
     const HistoryStateId before_id = current_state_id();
     const HistoryStateId after_id = allocate_state_id();
     std::map<ObjectId, BoundsDisplayState> deleted_object_workspace;
-    const bool reset_scene = after.objects.empty() && after.next_object_id == 1 &&
-                             after.next_material_id == 1 && after.default_name_counts.empty() &&
-                             after.default_material_name_count == 0;
+    const bool reset_scene = after.scene.objects_.empty() && after.scene.next_object_id_ == 1 &&
+                             after.scene.next_material_id_ == 1 &&
+                             after.scene.default_name_counts_.empty() &&
+                             after.scene.default_material_name_count_ == 0;
     if (!reset_scene)
-        for (const SceneObject& object : transaction_before_.objects)
-            if (std::none_of(after.objects.begin(), after.objects.end(),
+        for (const SceneObject& object : transaction_before_.scene.objects_)
+            if (std::none_of(after.scene.objects_.begin(), after.scene.objects_.end(),
                              [id = object.id](const SceneObject& candidate)
                              { return candidate.id == id; }))
             {
@@ -186,28 +181,27 @@ void EditorHistory::restore(const Snapshot& snapshot)
     const Snapshot current = capture();
     if (snapshots_equal(current, snapshot))
         return;
-    state_.objects_ = snapshot.objects;
-    state_.materials_ = snapshot.materials;
-    state_.next_object_id_ = snapshot.next_object_id;
-    state_.next_material_id_ = snapshot.next_material_id;
-    state_.default_material_name_count_ = snapshot.default_material_name_count;
-    state_.default_name_counts_ = snapshot.default_name_counts;
+    const DocumentRevision revision = state_.scene_.document_revision_;
+    state_.scene_ = snapshot.scene;
+    state_.scene_.document_revision_ = revision;
     if (state_.selection_ != no_object && state_.find_object(state_.selection_) == nullptr)
         state_.selection_ = no_object;
-    state_.advance_document_revision();
+    state_.scene_.advance_document_revision();
 }
 
 bool EditorHistory::snapshots_equal(const Snapshot& left, const Snapshot& right)
 {
-    return left.next_object_id == right.next_object_id &&
-           left.next_material_id == right.next_material_id &&
-           left.default_material_name_count == right.default_material_name_count &&
-           left.default_name_counts == right.default_name_counts &&
-           left.materials.size() == right.materials.size() &&
-           std::equal(left.materials.begin(), left.materials.end(), right.materials.begin(),
+    return left.scene.next_object_id_ == right.scene.next_object_id_ &&
+           left.scene.next_material_id_ == right.scene.next_material_id_ &&
+           left.scene.default_material_name_count_ == right.scene.default_material_name_count_ &&
+           left.scene.default_name_counts_ == right.scene.default_name_counts_ &&
+           left.scene.materials_.size() == right.scene.materials_.size() &&
+           std::equal(left.scene.materials_.begin(), left.scene.materials_.end(),
+                      right.scene.materials_.begin(),
                       [](const Material& a, const Material& b) { return equal(a, b); }) &&
-           left.objects.size() == right.objects.size() &&
-           std::equal(left.objects.begin(), left.objects.end(), right.objects.begin(),
+           left.scene.objects_.size() == right.scene.objects_.size() &&
+           std::equal(left.scene.objects_.begin(), left.scene.objects_.end(),
+                      right.scene.objects_.begin(),
                       [](const SceneObject& left_object, const SceneObject& right_object)
                       { return equal(left_object, right_object); });
 }

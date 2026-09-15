@@ -55,8 +55,7 @@ WorldRay viewport_world_ray(glm::vec2 viewport_coordinates, const ResolvedViewpo
     return {origin, difference / length, length};
 }
 
-ObjectId pick_impl(const EditorState& scene, const WorldRay& ray, bool include_sphere,
-                   bool include_box)
+ObjectId pick_impl(const Scene& scene, const WorldRay& ray, bool include_sphere, bool include_box)
 {
     const float direction_length = glm::length(ray.direction);
     if (!finite(ray.origin) || !finite(ray.direction) || !std::isfinite(direction_length) ||
@@ -133,17 +132,17 @@ ObjectId pick_impl(const EditorState& scene, const WorldRay& ray, bool include_s
     return closest;
 }
 
-ObjectId pick_sphere(const EditorState& scene, const WorldRay& ray)
+ObjectId pick_sphere(const Scene& scene, const WorldRay& ray)
 {
     return pick_impl(scene, ray, true, false);
 }
 
-ObjectId pick_box(const EditorState& scene, const WorldRay& ray)
+ObjectId pick_box(const Scene& scene, const WorldRay& ray)
 {
     return pick_impl(scene, ray, false, true);
 }
 
-ObjectId pick_primitive(const EditorState& scene, const WorldRay& ray)
+ObjectId pick_primitive(const Scene& scene, const WorldRay& ray)
 {
     return pick_impl(scene, ray, true, true);
 }

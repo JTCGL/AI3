@@ -86,7 +86,7 @@ for milestone in "${milestone_files[@]}"; do
 done
 
 mapfile -t scene_versions < <(
-    sed -n 's/.*format_version = \([0-9][0-9]*\).*/\1/p' src/editor/scene_document.cpp
+    sed -n 's/.*format_version = \([0-9][0-9]*\).*/\1/p' src/core/scene_document.cpp
 )
 if [[ "${#scene_versions[@]}" -ne 1 ]]; then
     fail 'could not determine exactly one Scene Document format version from scene_document.cpp'

@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "editor/scene_document.h"
+#include "core/scene_document.h"
 #include "scene/scene_math.h"
 
 #include <nlohmann/json.hpp>
@@ -14,14 +14,14 @@ namespace
 {
 using Json = nlohmann::json;
 
-Json encoded(const ai3::EditorState& state)
+Json encoded(const ai3::Scene& state)
 {
     std::string text;
     REQUIRE(ai3::serialize_scene_document(state, text));
     return Json::parse(text);
 }
 
-bool load_json(const Json& document, ai3::EditorState& state)
+bool load_json(const Json& document, ai3::Scene& state)
 {
     std::string error;
     return ai3::deserialize_scene_document(document.dump(), state, &error);
@@ -34,7 +34,7 @@ void check_vec3(const glm::vec3& actual, const glm::vec3& expected)
     CHECK(actual.z == doctest::Approx(expected.z));
 }
 
-void check_same_scene(const ai3::EditorState& actual, const ai3::EditorState& expected)
+void check_same_scene(const ai3::Scene& actual, const ai3::Scene& expected)
 {
     REQUIRE(actual.objects().size() == expected.objects().size());
     for (std::size_t index = 0; index < expected.objects().size(); ++index)
@@ -69,9 +69,9 @@ void check_same_scene(const ai3::EditorState& actual, const ai3::EditorState& ex
     }
 }
 
-ai3::EditorState mixed_scene()
+ai3::Scene mixed_scene()
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     ai3::CreateObject root{"Raíz 世界"};
     root.enabled = false;
     root.transform.position = {1.25F, -2.5F, 3.75F};
@@ -105,8 +105,8 @@ ai3::EditorState mixed_scene()
 
 TEST_CASE("empty Scene Document round trips")
 {
-    ai3::EditorState source;
-    ai3::EditorState loaded;
+    ai3::Scene source;
+    ai3::Scene loaded;
     loaded.create_sphere("Old");
     std::string document;
     REQUIRE(ai3::serialize_scene_document(source, document));
@@ -117,12 +117,12 @@ TEST_CASE("empty Scene Document round trips")
 
 TEST_CASE("transactional load advances revision only when document state changes")
 {
-    ai3::EditorState source;
+    ai3::Scene source;
     source.create_sphere("Sphere");
     std::string document;
     REQUIRE(ai3::serialize_scene_document(source, document));
 
-    ai3::EditorState destination;
+    ai3::Scene destination;
     const auto initial = destination.document_revision();
     REQUIRE(ai3::deserialize_scene_document(document, destination));
     CHECK(destination.document_revision() == initial + 1);
@@ -135,23 +135,21 @@ TEST_CASE("transactional load advances revision only when document state changes
 
 TEST_CASE("mixed Scene Document preserves ordering identity hierarchy local state and semantics")
 {
-    ai3::EditorState source = mixed_scene();
-    REQUIRE(source.select(source.objects()[2].id));
+    ai3::Scene source = mixed_scene();
     std::string document;
     REQUIRE(ai3::serialize_scene_document(source, document));
     CHECK(document.find("orientation_wxyz") != std::string::npos);
     CHECK(document.find("Raíz 世界") != std::string::npos);
 
-    ai3::EditorState loaded;
+    ai3::Scene loaded;
     REQUIRE(ai3::deserialize_scene_document(document, loaded));
     check_same_scene(loaded, source);
-    CHECK(loaded.selection() == ai3::no_object);
     CHECK(loaded.create_object(ai3::CreateObject{"After"}) == 5);
 }
 
 TEST_CASE("allocator and localized default-name counters continue after deleted objects")
 {
-    ai3::EditorState source;
+    ai3::Scene source;
     source.create_sphere("Sphere");
     const ai3::ObjectId deleted_sphere = source.create_sphere("Sphere");
     source.create_perspective_camera("Camera");
@@ -162,7 +160,7 @@ TEST_CASE("allocator and localized default-name counters continue after deleted 
     REQUIRE(source.delete_object(deleted_camera));
     REQUIRE(source.delete_object(deleted_light));
 
-    ai3::EditorState loaded;
+    ai3::Scene loaded;
     REQUIRE(load_json(encoded(source), loaded));
     const ai3::ObjectId sphere = loaded.create_sphere("Esfera");
     const ai3::ObjectId camera = loaded.create_perspective_camera("Cámara");
@@ -175,18 +173,16 @@ TEST_CASE("allocator and localized default-name counters continue after deleted 
 
 TEST_CASE("malformed format version identity hierarchy and metadata are rejected transactionally")
 {
-    ai3::EditorState source = mixed_scene();
+    ai3::Scene source = mixed_scene();
     const Json valid = encoded(source);
     std::vector<std::string> malformed = {"", "{", "[]", "null", "not json"};
     for (const std::string& text : malformed)
     {
-        ai3::EditorState destination;
+        ai3::Scene destination;
         const ai3::ObjectId existing = destination.create_sphere("Existing");
-        REQUIRE(destination.select(existing));
         CHECK_FALSE(ai3::deserialize_scene_document(text, destination));
         CHECK(destination.objects().size() == 1);
         CHECK(destination.objects()[0].id == existing);
-        CHECK(destination.selection() == existing);
     }
 
     std::vector<Json> invalid_documents;
@@ -223,18 +219,16 @@ TEST_CASE("malformed format version identity hierarchy and metadata are rejected
 
     for (const Json& candidate : invalid_documents)
     {
-        ai3::EditorState destination;
-        const ai3::ObjectId existing = destination.create_sphere("Existing");
-        REQUIRE(destination.select(existing));
+        ai3::Scene destination;
+        destination.create_sphere("Existing");
         CHECK_FALSE(load_json(candidate, destination));
         CHECK(destination.objects().size() == 1);
-        CHECK(destination.selection() == existing);
     }
 }
 
 TEST_CASE("Scene Document v3 preserves Box semantics and rejects legacy Box payloads")
 {
-    ai3::EditorState source;
+    ai3::Scene source;
     const auto material = source.create_material("Material");
     ai3::BoxPrimitive box;
     box.width_meters = 2.0F;
@@ -251,7 +245,7 @@ TEST_CASE("Scene Document v3 preserves Box semantics and rejects legacy Box payl
     const Json document = Json::parse(text);
     CHECK(document.at("version") == 3);
     CHECK(document.at("objects")[0].at("subtype") == "box");
-    ai3::EditorState loaded;
+    ai3::Scene loaded;
     REQUIRE(ai3::deserialize_scene_document(text, loaded));
     const auto* restored = loaded.find_object(id);
     REQUIRE(restored != nullptr);
@@ -275,7 +269,7 @@ TEST_CASE("Scene Document v3 preserves Box semantics and rejects legacy Box payl
             legacy["metadata"].erase("next_material_id");
             legacy["metadata"].erase("default_material_name_count");
         }
-        ai3::EditorState destination;
+        ai3::Scene destination;
         CHECK_FALSE(ai3::deserialize_scene_document(legacy.dump(), destination));
         legacy["metadata"]["default_name_counters"]["box"] = 0;
         CHECK_FALSE(ai3::deserialize_scene_document(legacy.dump(), destination));
@@ -314,7 +308,7 @@ TEST_CASE("invalid types transforms quaternions and semantic payloads are reject
 
     for (const Json& candidate : invalid_documents)
     {
-        ai3::EditorState destination;
+        ai3::Scene destination;
         destination.create_object(ai3::CreateObject{"Keep"});
         CHECK_FALSE(load_json(candidate, destination));
         CHECK(destination.objects()[0].name == "Keep");
@@ -327,8 +321,8 @@ TEST_CASE("Scene Document filesystem round trip uses ordinary temporary files")
     const std::filesystem::path path =
         std::filesystem::temp_directory_path() /
         ("ai3-scene-document-" + std::to_string(unique) + ".ai3scene");
-    const ai3::EditorState source = mixed_scene();
-    ai3::EditorState loaded;
+    const ai3::Scene source = mixed_scene();
+    ai3::Scene loaded;
     std::string error;
     REQUIRE(ai3::save_scene_document_file(source, path, &error));
     REQUIRE(ai3::load_scene_document_file(path, loaded, &error));

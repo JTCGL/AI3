@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "core/scene.h"
 #include "scene/orbit_camera.h"
 #include "scene/resolved_view.h"
 #include "scene/scene_math.h"
@@ -44,7 +44,7 @@ class ViewportView
     const OrbitCamera& orbit() const { return orbit_; }
 
     void use_editor_view();
-    bool use_scene_camera(const EditorState& scene, ObjectId camera_id);
+    bool use_scene_camera(const Scene& scene, ObjectId camera_id);
     void set_interaction_mode(ViewportInteractionMode mode);
     void set_transform_tool(ViewportTransformTool tool) { transform_tool_ = tool; }
     void set_reference_space(CoordinateSpace space) { reference_space_ = space; }
@@ -53,7 +53,7 @@ class ViewportView
     bool transient_navigate(TransientNavigationOperation operation, glm::vec2 pointer_delta,
                             float logical_viewport_height);
     bool zoom(float wheel_delta);
-    ResolvedViewportView resolve(const EditorState& scene, float aspect_ratio);
+    ResolvedViewportView resolve(const Scene& scene, float aspect_ratio);
     void reset();
 
     private:

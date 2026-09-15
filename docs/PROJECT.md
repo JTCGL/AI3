@@ -31,23 +31,22 @@ The main synchronization command explicitly switches to `main`; it is not the fe
 Both commands delegate all formatting, configuration, build, and test behavior to `check.sh`. Verification
 requires CMake 3.25 or newer and defines source formatting with clang-format 21.x; the scripts validate both
 contracts before using the tools. CMake presets keep builds outside the source tree. The `headless-debug`
-preset builds the options, editor, scene, localization, and test targets without fetching SDL or Dear ImGui,
+preset builds the options, Core, editor, scene, localization, and test targets without fetching SDL or Dear ImGui,
 discovering EGL/GLES, or defining the graphical executable and smoke test.
 
-The previously loose "core/domain" terminology now has an approved destination: AI3 Core is the central,
-display-independent architectural framework described by
-[ADR 0009](decisions/0009-core-architecture-boundaries.md). Core is not yet a source directory, CMake target,
-or `ai3::Core` façade. Current headless targets remain independent of SDL, Dear ImGui, EGL/GLES, and a display;
-the M21-M27 program will incrementally align their responsibilities and dependencies with the approved Core
-contract while keeping each intermediate `main` buildable and behaviorally equivalent.
+AI3 Core is the central, display-independent architectural framework described by
+[ADR 0009](decisions/0009-core-architecture-boundaries.md). `src/core` and the non-empty `ai3_core` target now
+own authored `Scene` state and Scene Document persistence; no `ai3::Core` façade exists. Core depends only on
+display-independent GLM and nlohmann/json and remains independent of SDL, Dear ImGui, EGL/GLES, and displays.
 
 The current ownership split is:
 
 - `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
   viewport state.
-- `editor`: display-independent object identity, lifecycle, hierarchy, selection, authoritative transforms,
-  semantic object/material data, derived local bounds, per-object bounds-display workspace state, undo/redo
-  transactions, and transactional Scene Document/workspace filesystem I/O.
+- `core`: authored Scene identity, lifecycle, hierarchy, transforms, semantic object/material data, derived
+  local bounds, revision/naming state, and transactional Scene Document serialization/filesystem I/O.
+- `editor`: the `EditorState` compatibility façade, selection and per-object bounds-display workspace state,
+  frontend presentation state, undo/redo transactions, `DocumentSession`, and Workspace persistence.
 - `scene`: display-independent units, transform and camera math, procedural Sphere/Box geometry, render-target
   sizing, orbit view construction, viewport-view selection/resolution and interaction mode, sphere picking,
   axis-translation projection, hit testing and drag constraints, and shared API-independent helper geometry.
@@ -59,21 +58,24 @@ The current ownership split is:
   `EditorState` and `ViewportView`, presents the display-independent document-session policy and SDL
   native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
 
-This current split has known migration violations. `EditorState` mixes authored Scene state, selection and
-bounds Workspace state, panel visibility, Console presentation data, and layout-reset intent. `EditorUi`
+This current split has known transitional dependencies. `EditorState` owns exactly one authoritative `Scene`
+and forwards its retained authored APIs while also retaining selection, bounds Workspace state, panel
+visibility, Console presentation data, and layout-reset intent until later milestones. `EditorUi`
 constructs `DocumentSession`, chooses transaction boundaries for interactions, retains other Workspace state,
-and explicitly invalidates its renderer caches after document transitions. `ViewportRenderer` consumes the
-aggregate `EditorState` directly. These are accurate compatibility interfaces, not the target architecture;
-new work must not deepen them, and their extraction belongs to M21-M27 rather than M20.
+and explicitly invalidates its renderer caches after document transitions. Helper geometry and continuous
+translation operations still consume `EditorState` where Workspace or transaction behavior is required.
+These are compatibility interfaces scheduled for M22-M27.
 
 ## Editor and scene model
 
-Scenes start empty. `EditorState` is the only scene-object lifecycle and hierarchy authority. Object IDs are
+Scenes start empty. Core `Scene` is the sole scene-object lifecycle and hierarchy authority; `EditorState`
+delegates its compatibility operations to the one `Scene` it owns. Object IDs are
 scene-owned, stable, monotonically allocated, and not reused after deletion. Objects share identity, name,
 enabled/visible state, a local transform, and a two-level semantic tag. Current concrete object subtypes are
 Sphere and Box primitives, Perspective Camera, and Directional Light; their payloads are plain tagged data rather
 than polymorphic objects or components. Default-name counters are monotonic per category/subtype. Ordinary
-persistent mutations use explicit `EditorState` operations; public object lookup is read-only. Normal editor
+persistent mutations use `Scene` operations, currently reached through `EditorState` in the frontend; public
+object lookup is read-only. Normal editor
 mutations participate in `EditorHistory` transactions whose boundaries represent one intentional edit. A
 monotonic document revision advances for each real serialized-state change and authoritative history
 restoration, never rewinds on Undo, and ignores no-op assignments and workspace interaction.
@@ -103,11 +105,11 @@ and linear light colors, including Box dimensions and tessellation. Quaternion a
 and are normalized. World transforms, Euler presentation, derived geometry, renderer state, and editor
 workspace/session state are outside the format.
 
-The headless editor target owns serialization, validation, and ordinary-filesystem helpers through pinned
+The headless Core target owns serialization, validation, and ordinary-filesystem helpers through pinned
 nlohmann/json. A narrowly friended codec reconstructs a complete candidate with explicit identity and local
 hierarchy data; normal object creation still uses the lifecycle allocator. Load validates the entire candidate
-before replacing scene-owned state, and failure leaves the destination unchanged. Successful load clears
-selection while preserving non-document editor state such as console, panel visibility, and layout intent.
+before replacing scene-owned state, and failure leaves the destination unchanged. The codec operates only on
+`Scene`; `DocumentSession` clears selection after successful load while preserving other editor presentation.
 
 An associated `.ai3workspace` sidecar stores each bounded object's default-off bounding-box, bounding-sphere,
 and hover-feedback switches by stable object ID. Missing data defaults off. Version-1 sidecars may contain the
@@ -145,7 +147,7 @@ Authoritative orientations are normalized `glm::quat` values. Human-facing Euler
 intrinsic XYZ order and use centralized conversion helpers. Metric display units affect presentation only.
 See [ADR 0003](decisions/0003-spatial-conventions.md).
 
-Object transforms are local-to-parent TRS; a root local transform is also its world transform. `EditorState`
+Object transforms are local-to-parent TRS; a root local transform is also its world transform. `Scene`
 recursively resolves world transforms for every consumer. All object categories may parent one another.
 Reparenting rejects missing parents, self-parenting, descendants, cycles, non-invertible parents, and affine
 results that cannot be reconstructed faithfully as TRS. Successful reparenting is transactional and preserves

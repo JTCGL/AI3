@@ -1,5 +1,5 @@
+#include "core/scene_document.h"
 #include "editor/document_session.h"
-#include "editor/scene_document.h"
 #include "editor/workspace_document.h"
 #include "render/viewport_renderer.h"
 #include "scene/helper_geometry.h"
@@ -137,7 +137,7 @@ TEST_CASE("bounds reconstruct on document load and never serialize")
     ai3::EditorState source;
     source.create_sphere("Sphere", {3.0F});
     std::string document;
-    REQUIRE(ai3::serialize_scene_document(source, document));
+    REQUIRE(ai3::serialize_scene_document(source.scene(), document));
     CHECK(document.find("bounds") == std::string::npos);
     CHECK(document.find("showBounding") == std::string::npos);
     for (int version : {1, 2})
@@ -154,7 +154,7 @@ TEST_CASE("bounds reconstruct on document load and never serialize")
             json["objects"][0]["payload"].erase("fallback_color_linear");
         }
         ai3::EditorState loaded;
-        REQUIRE(ai3::deserialize_scene_document(json.dump(), loaded));
+        REQUIRE(ai3::deserialize_scene_document(json.dump(), loaded.scene()));
         REQUIRE(loaded.objects()[0].bounds.sphere);
         CHECK(loaded.objects()[0].bounds.sphere->radius == doctest::Approx(3.0F));
     }
@@ -316,22 +316,22 @@ TEST_CASE("world gizmo geometry projects to the requested apparent size")
         orbit.orbit().zoom(zoom);
         for (const glm::vec2 viewport : {glm::vec2{800.0F, 600.0F}, glm::vec2{1440.0F, 600.0F}})
             for (float length : {72.0F, 108.0F, 144.0F})
-                check_gizmo_apparent_length(orbit.resolve(scene, viewport.x / viewport.y), viewport,
-                                            {}, rotated, length);
+                check_gizmo_apparent_length(orbit.resolve(scene.scene(), viewport.x / viewport.y),
+                                            viewport, {}, rotated, length);
     }
 
     const auto camera = scene.create_perspective_camera("Camera", {60.0F, 0.1F, 200.0F});
     ai3::ViewportView scene_camera;
-    REQUIRE(scene_camera.use_scene_camera(scene, camera));
+    REQUIRE(scene_camera.use_scene_camera(scene.scene(), camera));
     for (float depth : {-3.0F, -12.0F, -40.0F})
-        check_gizmo_apparent_length(scene_camera.resolve(scene, 16.0F / 9.0F), {1280.0F, 720.0F},
-                                    {0.0F, 0.0F, depth}, rotated, 108.0F);
+        check_gizmo_apparent_length(scene_camera.resolve(scene.scene(), 16.0F / 9.0F),
+                                    {1280.0F, 720.0F}, {0.0F, 0.0F, depth}, rotated, 108.0F);
 
     glm::mat3 collapsed{1.0F};
     collapsed[1] = glm::vec3{0.0F};
     const auto collapsed_geometry = ai3::resolve_translation_helper_geometry(
-        99, {0.0F, 0.0F, -5.0F}, collapsed, scene_camera.resolve(scene, 1.0F), {800.0F, 800.0F},
-        72.0F);
+        99, {0.0F, 0.0F, -5.0F}, collapsed, scene_camera.resolve(scene.scene(), 1.0F),
+        {800.0F, 800.0F}, 72.0F);
     CHECK(collapsed_geometry.lines.size() == 1);
 }
 
@@ -349,7 +349,8 @@ TEST_CASE("helper bounds are deterministic and apply the complete world transfor
     const auto id = scene.create_object(sphere);
     REQUIRE(scene.set_bounds_display(id, {true, true, true}));
     ai3::HelperGeometry geometry;
-    ai3::append_object_bounds(geometry, scene, *scene.find_object(id), glm::vec3{1.0F});
+    ai3::append_object_bounds(geometry, scene.scene(), *scene.find_object(id),
+                              scene.bounds_display(id), glm::vec3{1.0F});
     CHECK(geometry.lines.size() == 12 + 3 * 48);
     CHECK(geometry.lines[0].start == glm::vec3{4.0F, 1.5F, 3.5F});
     auto hovered = ai3::resolve_bounds_helper_geometry(scene, ai3::no_object, id);
@@ -402,16 +403,16 @@ TEST_CASE("frozen gizmo inputs remain separate from current bounds and camera vi
     ai3::EditorState scene;
     const auto camera = scene.create_perspective_camera("Camera", {55.0F, 0.1F, 200.0F});
     ai3::ViewportView viewport;
-    REQUIRE(viewport.use_scene_camera(scene, camera));
+    REQUIRE(viewport.use_scene_camera(scene.scene(), camera));
     const glm::vec2 frozen_size{960.0F, 540.0F};
-    const ai3::ResolvedViewportView frozen_view = viewport.resolve(scene, 16.0F / 9.0F);
+    const ai3::ResolvedViewportView frozen_view = viewport.resolve(scene.scene(), 16.0F / 9.0F);
     const glm::mat3 frozen_basis = glm::mat3{glm::rotate(
         glm::mat4{1.0F}, glm::radians(27.0F), glm::normalize(glm::vec3{1.0F, 2.0F, 1.0F}))};
 
     ai3::Transform moved_camera = scene.find_object(camera)->transform;
     moved_camera.position = {1.0F, 0.0F, -5.0F};
     REQUIRE(scene.set_local_transform(camera, moved_camera));
-    const ai3::ResolvedViewportView current_view = viewport.resolve(scene, 16.0F / 9.0F);
+    const ai3::ResolvedViewportView current_view = viewport.resolve(scene.scene(), 16.0F / 9.0F);
     CHECK(current_view.view != frozen_view.view);
 
     const auto gizmo = ai3::resolve_translation_helper_geometry(

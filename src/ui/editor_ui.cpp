@@ -1,5 +1,5 @@
 #include "ui/editor_ui.h"
-#include "editor/scene_document.h"
+#include "core/scene_document.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "scene/color_space.h"
@@ -1164,7 +1164,7 @@ void EditorUi::draw_viewport()
                 const bool selected = viewport_view_.source() == ViewSource::scene_camera &&
                                       viewport_view_.scene_camera_id() == camera->id;
                 if (ImGui::Selectable(camera->name.c_str(), selected))
-                    viewport_view_.use_scene_camera(state_, camera->id);
+                    viewport_view_.use_scene_camera(state_.scene(), camera->id);
                 ImGui::PopID();
             }
             ImGui::EndCombo();
@@ -1177,7 +1177,8 @@ void EditorUi::draw_viewport()
                 render_target_size(region.x, region.y, framebuffer_scale.x, framebuffer_scale.y);
             const float aspect_ratio =
                 static_cast<float>(requested.width) / static_cast<float>(requested.height);
-            const ResolvedViewportView resolved = viewport_view_.resolve(state_, aspect_ratio);
+            const ResolvedViewportView resolved =
+                viewport_view_.resolve(state_.scene(), aspect_ratio);
             if (viewport_view_.source() != ViewSource::editor_view)
                 transient_navigation_gesture_.release();
             const ObjectId helper_object_id = translation_gesture_.has_value()
@@ -1192,7 +1193,7 @@ void EditorUi::draw_viewport()
                 helper_basis =
                     translation_gesture_.has_value()
                         ? translation_gesture_->frozen_basis
-                        : coordinate_space_basis(state_, helper_object->id,
+                        : coordinate_space_basis(state_.scene(), helper_object->id,
                                                  viewport_view_.reference_space(), resolved.view);
             }
             const ImVec2 future_minimum = ImGui::GetCursorScreenPos();
@@ -1205,7 +1206,7 @@ void EditorUi::draw_viewport()
                 const glm::vec2 coordinates{(mouse.x - future_minimum.x) / region.x,
                                             (mouse.y - future_minimum.y) / region.y};
                 hovered_object_ = viewport_view_.helper_hover_object(
-                    pick_primitive(state_, viewport_world_ray(coordinates, resolved)));
+                    pick_primitive(state_.scene(), viewport_world_ray(coordinates, resolved)));
             }
             else
                 hovered_object_ = no_object;
@@ -1238,7 +1239,7 @@ void EditorUi::draw_viewport()
                 helper_id, helper_pivot, helper_basis, helper_gizmo_view, helper_gizmo_viewport,
                 helper_gizmo_length, highlighted);
             const ViewportHelperInputs helpers{&bounds_helpers, &gizmo_helpers, &helper_gizmo_view};
-            viewport_renderer_.render(state_, resolved, requested, helpers);
+            viewport_renderer_.render(state_.scene(), resolved, requested, helpers);
             ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
                          {0.0F, 1.0F}, {1.0F, 0.0F});
             const ImVec2 minimum = ImGui::GetItemRectMin();
@@ -1303,7 +1304,7 @@ void EditorUi::draw_viewport()
                 basis =
                     translation_gesture_.has_value()
                         ? translation_gesture_->frozen_basis
-                        : coordinate_space_basis(state_, selected->id,
+                        : coordinate_space_basis(state_.scene(), selected->id,
                                                  viewport_view_.reference_space(), resolved.view);
                 const float screen_axis_length =
                     translation_gesture_.has_value()
@@ -1371,7 +1372,7 @@ void EditorUi::draw_viewport()
                         (io.MousePos.x - minimum.x) / (maximum.x - minimum.x),
                         (io.MousePos.y - minimum.y) / (maximum.y - minimum.y)};
                     const ObjectId hit =
-                        pick_primitive(state_, viewport_world_ray(coordinates, resolved));
+                        pick_primitive(state_.scene(), viewport_world_ray(coordinates, resolved));
                     if (hit == no_object)
                         state_.clear_selection();
                     else

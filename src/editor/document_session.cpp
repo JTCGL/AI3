@@ -1,5 +1,5 @@
 #include "editor/document_session.h"
-#include "editor/scene_document.h"
+#include "core/scene_document.h"
 #include "editor/workspace_document.h"
 
 #include <utility>
@@ -76,7 +76,7 @@ DocumentSaveResult DocumentSession::save(std::string* scene_error, std::string* 
             *scene_error = "Scene Document has no associated path";
         return {};
     }
-    if (!save_scene_document_file(state_, document_path_, scene_error))
+    if (!save_scene_document_file(state_.scene(), document_path_, scene_error))
         return {};
     mark_saved();
     return {true, save_workspace(workspace_error)};
@@ -85,7 +85,7 @@ DocumentSaveResult DocumentSession::save(std::string* scene_error, std::string* 
 DocumentSaveResult DocumentSession::save_as(std::filesystem::path path, std::string* scene_error,
                                             std::string* workspace_error)
 {
-    if (!save_scene_document_file(state_, path, scene_error))
+    if (!save_scene_document_file(state_.scene(), path, scene_error))
         return {};
     mark_saved_as(std::move(path));
     return {true, save_workspace(workspace_error)};
@@ -93,8 +93,9 @@ DocumentSaveResult DocumentSession::save_as(std::filesystem::path path, std::str
 
 bool DocumentSession::open(std::filesystem::path path, std::string* error)
 {
-    if (!load_scene_document_file(path, state_, error))
+    if (!load_scene_document_file(path, state_.scene(), error))
         return false;
+    state_.clear_selection();
     mark_opened(std::move(path));
     WorkspaceDocument workspace;
     std::string workspace_error;

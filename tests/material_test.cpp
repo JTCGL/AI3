@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
 
+#include "core/scene_document.h"
 #include "editor/document_session.h"
 #include "editor/editor_history.h"
-#include "editor/scene_document.h"
 #include "scene/color_space.h"
 
 #include <limits>
@@ -14,13 +14,13 @@ namespace
 nlohmann::json encoded(const ai3::EditorState& state)
 {
     std::string document;
-    REQUIRE(ai3::serialize_scene_document(state, document));
+    REQUIRE(ai3::serialize_scene_document(state.scene(), document));
     return nlohmann::json::parse(document);
 }
 
 bool load(const nlohmann::json& document, ai3::EditorState& state)
 {
-    return ai3::deserialize_scene_document(document.dump(), state);
+    return ai3::deserialize_scene_document(document.dump(), state.scene());
 }
 } // namespace
 
@@ -149,10 +149,10 @@ TEST_CASE("Scene Document v2 round trips materials and rejects dangling assignme
     const ai3::ObjectId sphere = source.create_sphere("Sphere");
     REQUIRE(source.assign_material(sphere, material));
     std::string document;
-    REQUIRE(ai3::serialize_scene_document(source, document));
+    REQUIRE(ai3::serialize_scene_document(source.scene(), document));
     CHECK(document.find("\"version\": 3") != std::string::npos);
     ai3::EditorState loaded;
-    REQUIRE(ai3::deserialize_scene_document(document, loaded));
+    REQUIRE(ai3::deserialize_scene_document(document, loaded.scene()));
     CHECK(loaded.materials().size() == 1);
     CHECK(loaded.find_material(material)->shading == ai3::MaterialShading::phong);
     CHECK(loaded.find_object(sphere)->sphere.material_id == material);
@@ -163,7 +163,7 @@ TEST_CASE("Scene Document v2 round trips materials and rejects dangling assignme
         text.replace(pos, 16, "\"material_id\": 9");
         return text;
     }();
-    CHECK_FALSE(ai3::deserialize_scene_document(dangling, loaded));
+    CHECK_FALSE(ai3::deserialize_scene_document(dangling, loaded.scene()));
     CHECK(loaded.find_object(sphere)->sphere.material_id == material);
 }
 
@@ -173,7 +173,7 @@ TEST_CASE("Scene Document v1 migrates visible colors and sphere defaults determi
     source.create_sphere("Sphere");
     source.create_directional_light("Light", {{0.5F, 0.25F, 1.0F}, 2.0F});
     std::string text;
-    REQUIRE(ai3::serialize_scene_document(source, text));
+    REQUIRE(ai3::serialize_scene_document(source.scene(), text));
     auto legacy = nlohmann::json::parse(text);
     legacy["version"] = 1;
     legacy["metadata"]["default_name_counters"].erase("box");
@@ -187,7 +187,7 @@ TEST_CASE("Scene Document v1 migrates visible colors and sphere defaults determi
     light["color"] = light["color_linear"];
     light.erase("color_linear");
     ai3::EditorState loaded;
-    REQUIRE(ai3::deserialize_scene_document(legacy.dump(), loaded));
+    REQUIRE(ai3::deserialize_scene_document(legacy.dump(), loaded.scene()));
     CHECK(loaded.materials().empty());
     CHECK(loaded.objects()[0].sphere.material_id == ai3::no_material);
     CHECK(ai3::linear_to_srgb(loaded.objects()[0].sphere.fallback_color.x) ==
