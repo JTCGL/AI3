@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "core/scene.h"
 
 #include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
@@ -25,8 +25,8 @@ enum class CoordinateSpace
 
 // Returns an orthonormal reference-space basis expressed in world coordinates. Reference space
 // selects manipulation axes and is intentionally separate from local-to-parent transform storage.
-glm::mat3 coordinate_space_basis(const EditorState& scene, ObjectId id, CoordinateSpace space,
+glm::mat3 coordinate_space_basis(const Scene& scene, ObjectId id, CoordinateSpace space,
                                  const glm::mat4& view_matrix = glm::mat4{1.0F});
-glm::vec3 camera_forward_direction(const EditorState& scene, ObjectId camera_id);
-glm::vec3 directional_light_direction(const EditorState& scene, ObjectId light_id);
+glm::vec3 camera_forward_direction(const Scene& scene, ObjectId camera_id);
+glm::vec3 directional_light_direction(const Scene& scene, ObjectId light_id);
 } // namespace ai3

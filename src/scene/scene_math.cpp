@@ -45,7 +45,7 @@ glm::vec3 local_forward_from_orientation(const glm::quat& orientation)
     return glm::normalize(orientation) * glm::vec3{0.0F, 0.0F, -1.0F};
 }
 
-glm::mat3 coordinate_space_basis(const EditorState& scene, ObjectId id, CoordinateSpace space,
+glm::mat3 coordinate_space_basis(const Scene& scene, ObjectId id, CoordinateSpace space,
                                  const glm::mat4& view_matrix)
 {
     const SceneObject* object = scene.find_object(id);
@@ -67,7 +67,7 @@ glm::mat3 coordinate_space_basis(const EditorState& scene, ObjectId id, Coordina
     throw std::invalid_argument("Unknown coordinate space");
 }
 
-glm::vec3 camera_forward_direction(const EditorState& scene, ObjectId camera_id)
+glm::vec3 camera_forward_direction(const Scene& scene, ObjectId camera_id)
 {
     const SceneObject* camera = scene.find_object(camera_id);
     if (camera == nullptr || camera->category != ObjectCategory::camera ||
@@ -76,7 +76,7 @@ glm::vec3 camera_forward_direction(const EditorState& scene, ObjectId camera_id)
     return local_forward_from_orientation(scene.world_orientation(camera_id));
 }
 
-glm::vec3 directional_light_direction(const EditorState& scene, ObjectId light_id)
+glm::vec3 directional_light_direction(const Scene& scene, ObjectId light_id)
 {
     const SceneObject* light = scene.find_object(light_id);
     if (light == nullptr || light->category != ObjectCategory::light ||

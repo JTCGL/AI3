@@ -30,8 +30,8 @@ struct HelperGeometry
     std::vector<ColoredTriangle> triangles;
 };
 
-void append_object_bounds(HelperGeometry& result, const EditorState& scene,
-                          const SceneObject& object, glm::vec3 color);
+void append_object_bounds(HelperGeometry& result, const Scene& scene, const SceneObject& object,
+                          const BoundsDisplayState& display, glm::vec3 color);
 HelperGeometry resolve_bounds_helper_geometry(const EditorState& scene, ObjectId selected_id,
                                               ObjectId hovered_id);
 HelperGeometry resolve_translation_helper_geometry(ObjectId selected_id, glm::vec3 gizmo_pivot,

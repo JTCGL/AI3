@@ -83,7 +83,7 @@ TEST_CASE("axis constraints freeze start state and safely choose fallback")
 {
     ai3::EditorState state;
     ai3::ViewportView viewport;
-    const ai3::ResolvedViewportView view = viewport.resolve(state, 1.0F);
+    const ai3::ResolvedViewportView view = viewport.resolve(state.scene(), 1.0F);
     const ai3::WorldRay start{{0.0F, 2.0F, 5.0F}, {0.0F, 0.0F, -1.0F}};
     const ai3::AxisDragConstraint normal =
         ai3::begin_axis_drag_constraint(start, {}, {1.0F, 0.0F, 0.0F}, view);
@@ -116,7 +116,7 @@ TEST_CASE("gizmo sizing projection and hit testing are display independent")
 {
     ai3::EditorState state;
     ai3::ViewportView viewport;
-    const ai3::ResolvedViewportView view = viewport.resolve(state, 1.0F);
+    const ai3::ResolvedViewportView view = viewport.resolve(state.scene(), 1.0F);
     const glm::mat3 basis{1.0F};
     const auto near_gizmo =
         ai3::project_translation_gizmo({}, basis, view, {800.0F, 600.0F}, 72.0F);

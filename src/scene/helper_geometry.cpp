@@ -18,10 +18,9 @@ glm::vec3 transform_point(const glm::mat4& matrix, glm::vec3 point)
 }
 } // namespace
 
-void append_object_bounds(HelperGeometry& result, const EditorState& scene,
-                          const SceneObject& object, glm::vec3 color)
+void append_object_bounds(HelperGeometry& result, const Scene& scene, const SceneObject& object,
+                          const BoundsDisplayState& display, glm::vec3 color)
 {
-    const BoundsDisplayState& display = scene.bounds_display(object.id);
     const glm::mat4 world = scene.world_transform_matrix(object.id);
     if (display.show_bounding_box && object.bounds.box)
     {
@@ -83,7 +82,7 @@ HelperGeometry resolve_bounds_helper_geometry(const EditorState& scene, ObjectId
         const bool hovered =
             object.id == hovered_id && scene.bounds_display(object.id).hover_feedback;
         if (selected || hovered)
-            append_object_bounds(result, scene, object,
+            append_object_bounds(result, scene.scene(), object, scene.bounds_display(object.id),
                                  selected ? glm::vec3{1.0F} : glm::vec3{1.0F, 1.0F, 0.0F});
     }
     return result;

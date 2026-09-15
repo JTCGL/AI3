@@ -124,6 +124,7 @@ TEST_CASE("session file open is transactional and successful open is clean")
     ai3::EditorState state;
     const ai3::ObjectId existing = state.create_object(ai3::CreateObject{"Existing"});
     ai3::DocumentSession session(state);
+    REQUIRE(state.select(existing));
     session.mark_saved_as("original.ai3scene");
     edit(session, [&] { state.rename_object(existing, "Dirty existing"); });
     REQUIRE(session.history().can_undo());
@@ -138,10 +139,12 @@ TEST_CASE("session file open is transactional and successful open is clean")
     CHECK(session.document_path() == path_before_failure);
     CHECK(session.dirty() == dirty_before_failure);
     CHECK(session.history().can_undo());
+    CHECK(state.selection() == existing);
 
     REQUIRE(session.open(valid));
     CHECK(state.objects().size() == 1);
     CHECK(state.objects()[0].name == "Loaded 1");
+    CHECK(state.selection() == ai3::no_object);
     CHECK(session.document_path() == valid);
     CHECK_FALSE(session.dirty());
     CHECK_FALSE(session.history().can_undo());

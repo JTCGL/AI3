@@ -1,196 +1,19 @@
 #pragma once
 
-#include <glm/gtc/quaternion.hpp>
-#include <glm/mat4x4.hpp>
-#include <glm/vec3.hpp>
+#include "core/scene.h"
 
 #include <array>
-#include <cstdint>
 #include <map>
-#include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace ai3
 {
-class SceneDocumentCodec;
-class EditorHistory;
-using ObjectId = std::uint64_t;
-using MaterialId = std::uint64_t;
-using DocumentRevision = std::uint64_t;
-constexpr ObjectId no_object = 0;
-constexpr MaterialId no_material = 0;
-
-struct Transform
-{
-    glm::vec3 position{0.0F};
-    glm::quat orientation{1.0F, 0.0F, 0.0F, 0.0F};
-    glm::vec3 scale{1.0F};
-};
-
-glm::mat4 compose_transform(const Transform& transform);
-bool valid_transform(const Transform& transform);
-
-struct ResolvedTransform
-{
-    glm::mat4 matrix{1.0F};
-    glm::vec3 position{0.0F};
-    glm::quat orientation{1.0F, 0.0F, 0.0F, 0.0F};
-};
-
-enum class ObjectCategory
-{
-    general,
-    primitive,
-    camera,
-    light
-};
-enum class PrimitiveKind
-{
-    none,
-    sphere,
-    box
-};
-enum class CameraKind
-{
-    none,
-    perspective
-};
-enum class LightKind
-{
-    none,
-    directional
-};
-
-struct SpherePrimitive
-{
-    float radius_meters = 1.0F;
-    MaterialId material_id = no_material;
-    // Linear RGB equivalent of the established artist-facing sRGB blue (0.22, 0.58, 0.92).
-    glm::vec3 fallback_color{0.0396819F, 0.2957F, 0.827571F};
-};
-struct BoxPrimitive
-{
-    float width_meters = 1.0F;
-    float length_meters = 1.0F;
-    float height_meters = 1.0F;
-    int width_segments = 1;
-    int length_segments = 1;
-    int height_segments = 1;
-    MaterialId material_id = no_material;
-    glm::vec3 fallback_color{0.0396819F, 0.2957F, 0.827571F};
-};
-struct PerspectiveCamera
-{
-    float vertical_fov_degrees = 50.0F;
-    float near_plane_meters = 0.1F;
-    float far_plane_meters = 100.0F;
-};
-struct DirectionalLight
-{
-    glm::vec3 color{1.0F};
-    float intensity = 1.0F;
-};
-
-struct AxisAlignedBounds
-{
-    glm::vec3 minimum{0.0F};
-    glm::vec3 maximum{0.0F};
-};
-struct BoundingSphere
-{
-    glm::vec3 center{0.0F};
-    float radius = 0.0F;
-};
-struct ObjectBounds
-{
-    std::optional<AxisAlignedBounds> box;
-    std::optional<BoundingSphere> sphere;
-};
-
 struct BoundsDisplayState
 {
     bool show_bounding_box = false;
     bool show_bounding_sphere = false;
     bool hover_feedback = false;
-};
-
-enum class MaterialShading
-{
-    lambert,
-    phong
-};
-
-struct Material
-{
-    MaterialId id = no_material;
-    std::string name;
-    MaterialShading shading = MaterialShading::lambert;
-    // Artist-authored ambient contribution for M14's simplified lighting model; no ambient light
-    // exists.
-    glm::vec3 ambient_color{0.02F};
-    glm::vec3 diffuse_color{0.214041F};
-    glm::vec3 specular_color{1.0F};
-    float specular_power = 32.0F;
-};
-
-struct SceneObject
-{
-    ObjectId id = no_object;
-    std::string name;
-    bool enabled = true;
-    bool visible = true;
-    // Authoritative local-to-parent transform; for a root object this is also its world transform.
-    Transform transform;
-    ObjectCategory category = ObjectCategory::general;
-    PrimitiveKind primitive_kind = PrimitiveKind::none;
-    CameraKind camera_kind = CameraKind::none;
-    LightKind light_kind = LightKind::none;
-    SpherePrimitive sphere;
-    BoxPrimitive box;
-    PerspectiveCamera perspective_camera;
-    DirectionalLight directional_light;
-    // Derived object-local runtime cache. Authoritative semantic parameters remain the source.
-    ObjectBounds bounds;
-
-    ObjectId parent_id() const { return parent_id_; }
-
-    private:
-    ObjectId parent_id_ = no_object;
-    friend class EditorState;
-    friend class SceneDocumentCodec;
-};
-
-struct CreateObject
-{
-    explicit CreateObject(std::string object_name, ObjectId object_parent = no_object,
-                          Transform object_transform = {}, bool object_enabled = true,
-                          bool object_visible = true)
-        : name(std::move(object_name)), parent(object_parent), transform(object_transform),
-          enabled(object_enabled), visible(object_visible)
-    {
-    }
-
-    std::string name;
-    ObjectId parent = no_object;
-    Transform transform;
-    bool enabled = true;
-    bool visible = true;
-    ObjectCategory category = ObjectCategory::general;
-    PrimitiveKind primitive_kind = PrimitiveKind::none;
-    CameraKind camera_kind = CameraKind::none;
-    LightKind light_kind = LightKind::none;
-    SpherePrimitive sphere;
-    BoxPrimitive box;
-    PerspectiveCamera perspective_camera;
-    DirectionalLight directional_light;
-};
-
-struct ObjectQueryFilter
-{
-    bool enabled_only = false;
-    bool visible_only = false;
 };
 
 struct ConsoleMessage
@@ -212,6 +35,8 @@ class EditorState
 {
     public:
     EditorState();
+    Scene& scene();
+    const Scene& scene() const;
     ObjectId create_object(CreateObject object);
     ObjectId create_sphere(std::string localized_base_name, SpherePrimitive sphere = {});
     ObjectId create_box(std::string localized_base_name, BoxPrimitive box = {});
@@ -274,34 +99,7 @@ class EditorState
 
     private:
     friend class EditorHistory;
-    friend class SceneDocumentCodec;
-    struct SubtypeKey
-    {
-        ObjectCategory category;
-        int subtype;
-        bool operator<(const SubtypeKey& other) const
-        {
-            return std::pair{category, subtype} < std::pair{other.category, other.subtype};
-        }
-        bool operator==(const SubtypeKey& other) const
-        {
-            return category == other.category && subtype == other.subtype;
-        }
-    };
-    ObjectId create_named_object(std::string localized_base_name, CreateObject object,
-                                 SubtypeKey subtype);
-    SceneObject* find_object_mutable(ObjectId id);
-    Material* find_material_mutable(MaterialId id);
-    void advance_document_revision();
-    static void rebuild_bounds(SceneObject& object);
-
-    std::vector<SceneObject> objects_;
-    std::vector<Material> materials_;
-    ObjectId next_object_id_ = 1;
-    MaterialId next_material_id_ = 1;
-    std::uint64_t default_material_name_count_ = 0;
-    std::map<SubtypeKey, std::uint64_t> default_name_counts_;
-    DocumentRevision document_revision_ = 0;
+    Scene scene_;
     ObjectId selection_ = no_object;
     std::map<ObjectId, BoundsDisplayState> bounds_workspace_;
     std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,

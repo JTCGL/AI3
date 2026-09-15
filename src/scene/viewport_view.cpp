@@ -26,7 +26,7 @@ bool is_supported_scene_camera(const SceneObject& object)
     return false;
 }
 
-ResolvedViewportView resolve_scene_camera(const EditorState& scene, const SceneObject& camera,
+ResolvedViewportView resolve_scene_camera(const Scene& scene, const SceneObject& camera,
                                           float aspect_ratio)
 {
     const ResolvedTransform world = scene.world_transform(camera.id);
@@ -56,7 +56,7 @@ void ViewportView::use_editor_view()
     scene_camera_id_ = no_object;
 }
 
-bool ViewportView::use_scene_camera(const EditorState& scene, ObjectId camera_id)
+bool ViewportView::use_scene_camera(const Scene& scene, ObjectId camera_id)
 {
     const SceneObject* camera = scene.find_object(camera_id);
     if (camera == nullptr || !is_supported_scene_camera(*camera))
@@ -98,7 +98,7 @@ bool ViewportView::zoom(float wheel_delta)
     return orbit_.zoom(wheel_delta);
 }
 
-ResolvedViewportView ViewportView::resolve(const EditorState& scene, float aspect_ratio)
+ResolvedViewportView ViewportView::resolve(const Scene& scene, float aspect_ratio)
 {
     if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0F)
         throw std::invalid_argument("Viewport aspect ratio must be positive");

@@ -1,5 +1,5 @@
 #include "scene/box_mesh.h"
-#include "editor/editor_state.h"
+#include "core/scene.h"
 
 #include <array>
 #include <cmath>

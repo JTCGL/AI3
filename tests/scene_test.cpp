@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "editor/editor_state.h"
+#include "core/scene.h"
 #include "scene/box_mesh.h"
 #include "scene/length_units.h"
 #include "scene/orbit_camera.h"
@@ -178,7 +178,7 @@ TEST_CASE("sphere radius changes generated geometry bounds")
 
 TEST_CASE("box defaults validation mesh faces UVs and bounds")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     const auto id = scene.create_box("Box");
     const auto* object = scene.find_object(id);
     REQUIRE(object != nullptr);
@@ -209,7 +209,7 @@ TEST_CASE("box defaults validation mesh faces UVs and bounds")
 
 TEST_CASE("box validation accepts finite boundaries and rejects non-finite values")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     for (float dimension : {0.001F, 9999.0F})
         CHECK(scene.create_box("Boundary", {dimension, dimension, dimension, 1, 1, 1}) !=
               ai3::no_object);

@@ -1,4 +1,4 @@
-#include "editor/scene_document.h"
+#include "core/scene_document.h"
 #include "scene/color_space.h"
 
 #include <glm/common.hpp>
@@ -287,7 +287,7 @@ std::string message(const std::exception& error)
 class SceneDocumentCodec
 {
     public:
-    static Json encode(const EditorState& scene)
+    static Json encode(const Scene& scene)
     {
         Json materials = Json::array();
         std::set<MaterialId> material_ids;
@@ -372,7 +372,7 @@ class SceneDocumentCodec
                 {"objects", std::move(objects)}};
     }
 
-    static void decode(const Json& root, EditorState& destination)
+    static void decode(const Json& root, Scene& destination)
     {
         if (!root.is_object() || !root.contains("version"))
             invalid("document is missing version");
@@ -428,7 +428,7 @@ class SceneDocumentCodec
         const Json& values = root.at("objects");
         if (!values.is_array())
             invalid("objects must be an array");
-        EditorState candidate;
+        Scene candidate;
         candidate.objects_.clear();
         candidate.next_object_id_ = next_id;
         candidate.default_name_counts_.clear();
@@ -505,7 +505,7 @@ class SceneDocumentCodec
             decode_semantics(value.at("category").get<std::string>(),
                              value.at("subtype").get<std::string>(), value.at("payload"), object,
                              legacy, version == format_version);
-            EditorState::rebuild_bounds(object);
+            Scene::rebuild_bounds(object);
             candidate.objects_.push_back(std::move(object));
         }
         if (next_id <= maximum_id)
@@ -546,13 +546,12 @@ class SceneDocumentCodec
         destination.next_material_id_ = candidate.next_material_id_;
         destination.default_material_name_count_ = candidate.default_material_name_count_;
         destination.default_name_counts_ = std::move(candidate.default_name_counts_);
-        destination.selection_ = no_object;
         if (changed)
             destination.advance_document_revision();
     }
 };
 
-bool serialize_scene_document(const EditorState& scene, std::string& document, std::string* error)
+bool serialize_scene_document(const Scene& scene, std::string& document, std::string* error)
 {
     try
     {
@@ -567,8 +566,7 @@ bool serialize_scene_document(const EditorState& scene, std::string& document, s
     }
 }
 
-bool deserialize_scene_document(std::string_view document, EditorState& destination,
-                                std::string* error)
+bool deserialize_scene_document(std::string_view document, Scene& destination, std::string* error)
 {
     try
     {
@@ -583,7 +581,7 @@ bool deserialize_scene_document(std::string_view document, EditorState& destinat
     }
 }
 
-bool save_scene_document_file(const EditorState& scene, const std::filesystem::path& path,
+bool save_scene_document_file(const Scene& scene, const std::filesystem::path& path,
                               std::string* error)
 {
     std::string document;
@@ -606,7 +604,7 @@ bool save_scene_document_file(const EditorState& scene, const std::filesystem::p
     return true;
 }
 
-bool load_scene_document_file(const std::filesystem::path& path, EditorState& destination,
+bool load_scene_document_file(const std::filesystem::path& path, Scene& destination,
                               std::string* error)
 {
     std::ifstream stream(path, std::ios::binary);

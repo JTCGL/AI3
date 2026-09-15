@@ -277,15 +277,15 @@ TEST_CASE("root camera and light directions derive from quaternion negative Z")
     ai3::EditorState state;
     const ai3::ObjectId camera = state.create_perspective_camera("Camera");
     const ai3::ObjectId light = state.create_directional_light("Directional Light");
-    check_vec3(ai3::camera_forward_direction(state, camera), {0.0F, 0.0F, -1.0F});
+    check_vec3(ai3::camera_forward_direction(state.scene(), camera), {0.0F, 0.0F, -1.0F});
     ai3::Transform camera_transform = state.find_object(camera)->transform;
     camera_transform.orientation = ai3::orientation_from_euler_degrees({90.0F, 0.0F, 0.0F});
     REQUIRE(state.set_local_transform(camera, camera_transform));
-    check_vec3(ai3::camera_forward_direction(state, camera), {0.0F, 1.0F, 0.0F});
+    check_vec3(ai3::camera_forward_direction(state.scene(), camera), {0.0F, 1.0F, 0.0F});
     ai3::Transform light_transform = state.find_object(light)->transform;
     light_transform.orientation = ai3::orientation_from_euler_degrees({0.0F, 90.0F, 0.0F});
     REQUIRE(state.set_local_transform(light, light_transform));
-    check_vec3(ai3::directional_light_direction(state, light), {-1.0F, 0.0F, 0.0F});
+    check_vec3(ai3::directional_light_direction(state.scene(), light), {-1.0F, 0.0F, 0.0F});
 }
 
 TEST_CASE("deletion preserves descendants and clears only a deleted selection")
@@ -350,4 +350,16 @@ TEST_CASE("selection mutable transforms panels console and layout remain headles
     CHECK(state.panel_visible(ai3::EditorPanel::console));
     CHECK(state.consume_layout_reset_request());
     CHECK_FALSE(state.consume_layout_reset_request());
+}
+
+TEST_CASE("EditorState authored compatibility API forwards to its sole Scene")
+{
+    ai3::EditorState state;
+    ai3::Scene& scene = state.scene();
+    const ai3::ObjectId sphere = state.create_sphere("Sphere");
+    REQUIRE(scene.find_object(sphere) != nullptr);
+    CHECK(&state.objects() == &scene.objects());
+    REQUIRE(scene.rename_object(sphere, "Core-owned"));
+    CHECK(state.find_object(sphere)->name == "Core-owned");
+    CHECK(state.document_revision() == scene.document_revision());
 }

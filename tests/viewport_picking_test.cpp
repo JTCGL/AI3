@@ -9,7 +9,7 @@
 
 namespace
 {
-ai3::ObjectId create_sphere(ai3::EditorState& scene, ai3::Transform transform = {},
+ai3::ObjectId create_sphere(ai3::Scene& scene, ai3::Transform transform = {},
                             ai3::ObjectId parent = ai3::no_object, float radius = 1.0F,
                             bool enabled = true, bool visible = true)
 {
@@ -20,7 +20,7 @@ ai3::ObjectId create_sphere(ai3::EditorState& scene, ai3::Transform transform = 
     return scene.create_object(object);
 }
 
-ai3::ObjectId create_camera(ai3::EditorState& scene, ai3::Transform transform = {})
+ai3::ObjectId create_camera(ai3::Scene& scene, ai3::Transform transform = {})
 {
     ai3::CreateObject object{"Camera", ai3::no_object, transform};
     object.category = ai3::ObjectCategory::camera;
@@ -38,7 +38,7 @@ void check_direction(const glm::vec3& actual, const glm::vec3& expected)
 
 TEST_CASE("viewport coordinates construct center and off-center world rays")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     ai3::ViewportView viewport;
     const ai3::ResolvedViewportView view = viewport.resolve(scene, 1.0F);
     const ai3::WorldRay center = ai3::viewport_world_ray({0.5F, 0.5F}, view);
@@ -51,14 +51,14 @@ TEST_CASE("viewport coordinates construct center and off-center world rays")
 
 TEST_CASE("picking works through orbit and scene-camera resolved views")
 {
-    ai3::EditorState orbit_scene;
+    ai3::Scene orbit_scene;
     const ai3::ObjectId orbit_sphere = create_sphere(orbit_scene);
     ai3::ViewportView orbit_viewport;
     const ai3::WorldRay orbit_ray =
         ai3::viewport_world_ray({0.5F, 0.5F}, orbit_viewport.resolve(orbit_scene, 1.0F));
     CHECK(ai3::pick_sphere(orbit_scene, orbit_ray) == orbit_sphere);
 
-    ai3::EditorState camera_scene;
+    ai3::Scene camera_scene;
     const ai3::ObjectId camera = create_camera(camera_scene);
     ai3::Transform sphere_transform;
     sphere_transform.position = {0.0F, 0.0F, -5.0F};
@@ -72,7 +72,7 @@ TEST_CASE("picking works through orbit and scene-camera resolved views")
 
 TEST_CASE("picking uses authoritative translated and hierarchical sphere transforms")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     ai3::Transform parent_transform;
     parent_transform.position = {1.0F, 0.0F, 0.0F};
     parent_transform.orientation = ai3::orientation_from_euler_degrees({0.0F, 0.0F, 90.0F});
@@ -91,7 +91,7 @@ TEST_CASE("picking uses authoritative translated and hierarchical sphere transfo
 
 TEST_CASE("inverse-local intersection handles non-uniform and reflected scale")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     ai3::Transform uniform;
     uniform.position = {-6.0F, 0.0F, -6.0F};
     uniform.scale = {2.0F, 2.0F, 2.0F};
@@ -114,7 +114,7 @@ TEST_CASE("inverse-local intersection handles non-uniform and reflected scale")
 
 TEST_CASE("nearest visible enabled sphere wins and misses clear to no object")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     ai3::Transform hidden_transform;
     hidden_transform.position = {0.0F, 0.0F, -2.0F};
     create_sphere(scene, hidden_transform, ai3::no_object, 1.0F, true, false);
@@ -133,7 +133,7 @@ TEST_CASE("nearest visible enabled sphere wins and misses clear to no object")
 
 TEST_CASE("nearest hit comparison retains the shared world-ray parameter across scales")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     ai3::Transform farther_stretched;
     farther_stretched.position = {0.0F, 0.0F, -10.0F};
     farther_stretched.scale = {0.5F, 2.0F, 5.0F};
@@ -151,7 +151,7 @@ TEST_CASE("nearest hit comparison retains the shared world-ray parameter across 
 
 TEST_CASE("non-invertible sphere transforms fail safely")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     ai3::Transform singular;
     singular.position = {0.0F, 0.0F, -2.0F};
     singular.scale = {1.0F, 0.0F, 1.0F};
@@ -161,7 +161,7 @@ TEST_CASE("non-invertible sphere transforms fail safely")
 
 TEST_CASE("box picking is exact and type-specific mixed nearest selection")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     ai3::Transform box_transform;
     box_transform.position = {0.0F, 0.0F, -4.0F};
     box_transform.scale = {-2.0F, 1.0F, 1.0F};
@@ -185,7 +185,7 @@ TEST_CASE("box picking is exact and type-specific mixed nearest selection")
 
 TEST_CASE("resolved ray excludes spheres beyond the projection far plane")
 {
-    ai3::EditorState scene;
+    ai3::Scene scene;
     const ai3::ObjectId camera = create_camera(scene);
     ai3::Transform beyond_far;
     beyond_far.position = {0.0F, 0.0F, -150.0F};

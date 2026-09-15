@@ -95,8 +95,8 @@ TEST_CASE("mixed object categories can parent each other and inherit directions"
     const ai3::ObjectId second_light =
         scene.create_object(object("Light 2", ai3::ObjectCategory::light, second_primitive));
 
-    check_vec3(ai3::camera_forward_direction(scene, camera), {0.0F, 1.0F, 0.0F});
-    check_vec3(ai3::directional_light_direction(scene, light), {0.0F, 1.0F, 0.0F});
+    check_vec3(ai3::camera_forward_direction(scene.scene(), camera), {0.0F, 1.0F, 0.0F});
+    check_vec3(ai3::directional_light_direction(scene.scene(), light), {0.0F, 1.0F, 0.0F});
     CHECK(scene.find_object(second_light)->parent_id() == second_primitive);
     CHECK(scene.children_of(camera) == std::vector<ai3::ObjectId>{light});
 }
@@ -325,13 +325,15 @@ TEST_CASE("coordinate-space bases distinguish local parent world and editor view
                                    transform({}, {0.0F, 0.0F, 90.0F})));
     const ai3::ObjectId child = scene.create_object(object(
         "Child", ai3::ObjectCategory::primitive, parent, transform({}, {90.0F, 0.0F, 0.0F})));
-    const glm::mat3 local = ai3::coordinate_space_basis(scene, child, ai3::CoordinateSpace::local);
+    const glm::mat3 local =
+        ai3::coordinate_space_basis(scene.scene(), child, ai3::CoordinateSpace::local);
     const glm::mat3 parent_basis =
-        ai3::coordinate_space_basis(scene, child, ai3::CoordinateSpace::parent);
-    const glm::mat3 world = ai3::coordinate_space_basis(scene, child, ai3::CoordinateSpace::world);
+        ai3::coordinate_space_basis(scene.scene(), child, ai3::CoordinateSpace::parent);
+    const glm::mat3 world =
+        ai3::coordinate_space_basis(scene.scene(), child, ai3::CoordinateSpace::world);
     ai3::OrbitCamera editor_camera;
-    const glm::mat3 view = ai3::coordinate_space_basis(scene, child, ai3::CoordinateSpace::view,
-                                                       editor_camera.view_matrix());
+    const glm::mat3 view = ai3::coordinate_space_basis(
+        scene.scene(), child, ai3::CoordinateSpace::view, editor_camera.view_matrix());
 
     check_vec3(parent_basis * glm::vec3{1, 0, 0}, {0, 1, 0});
     check_vec3(local * glm::vec3{0, 1, 0}, {0, 0, 1});
