@@ -1,11 +1,12 @@
 #include <doctest/doctest.h>
 
-#include "editor/editor_history.h"
-#include "scene/scene_math.h"
+#include "core/edit_operations.h"
+
+#include <glm/gtc/quaternion.hpp>
 
 namespace
 {
-template <typename Edit> bool transact(ai3::EditorHistory& history, Edit&& edit)
+template <typename Edit> bool transact(ai3::EditHistory& history, Edit&& edit)
 {
     REQUIRE(history.begin_transaction());
     edit();
@@ -15,149 +16,158 @@ template <typename Edit> bool transact(ai3::EditorHistory& history, Edit&& edit)
 
 TEST_CASE("transactions group live mutations and support undo redo cancel and no-ops")
 {
-    ai3::EditorState state;
-    ai3::EditorHistory history(state);
-    REQUIRE(transact(history, [&] { state.create_sphere("Sphere"); }));
+    ai3::Scene scene;
+    ai3::Workspace workspace;
+    ai3::EditHistory history(scene, workspace);
+    ai3::EditOperations operations(scene, workspace, history);
+    REQUIRE(transact(history, [&] { operations.create_sphere("Sphere"); }));
     CHECK(history.can_undo());
-    CHECK(state.objects().size() == 1);
+    CHECK(scene.objects().size() == 1);
     REQUIRE(history.undo());
-    CHECK(state.objects().empty());
+    CHECK(scene.objects().empty());
     REQUIRE(history.redo());
-    CHECK(state.objects().size() == 1);
+    CHECK(scene.objects().size() == 1);
 
     REQUIRE(history.begin_transaction());
-    state.rename_object(1, "Intermediate");
-    state.rename_object(1, "Final");
+    operations.rename_object(1, "Intermediate");
+    operations.rename_object(1, "Final");
     REQUIRE(history.commit_transaction());
     REQUIRE(history.undo());
-    CHECK(state.find_object(1)->name == "Sphere 1");
+    CHECK(scene.find_object(1)->name == "Sphere 1");
     REQUIRE(history.redo());
-    CHECK(state.find_object(1)->name == "Final");
+    CHECK(scene.find_object(1)->name == "Final");
 
     REQUIRE(history.begin_transaction());
-    state.rename_object(1, "Final");
+    operations.rename_object(1, "Final");
     CHECK_FALSE(history.commit_transaction());
     CHECK_FALSE(history.can_redo());
 
     REQUIRE(history.begin_transaction());
-    state.set_sphere(1, {4.0F});
+    operations.set_sphere(1, {4.0F});
     REQUIRE(history.cancel_transaction());
-    CHECK(state.find_object(1)->sphere.radius_meters == doctest::Approx(1.0F));
+    CHECK(scene.find_object(1)->sphere.radius_meters == doctest::Approx(1.0F));
 }
 
 TEST_CASE("history restores exact authoritative scene state and allocator metadata")
 {
-    ai3::EditorState state;
-    ai3::EditorHistory history(state);
+    ai3::Scene scene;
+    ai3::Workspace workspace;
+    ai3::EditHistory history(scene, workspace);
+    ai3::EditOperations operations(scene, workspace, history);
     ai3::ObjectId root = ai3::no_object;
     ai3::ObjectId sphere = ai3::no_object;
     ai3::ObjectId camera = ai3::no_object;
     REQUIRE(transact(history,
                      [&]
                      {
-                         root = state.create_object(ai3::CreateObject{"Root"});
-                         sphere = state.create_sphere("Sphere", {2.5F});
-                         camera = state.create_perspective_camera("Camera");
+                         root = operations.create_object(ai3::CreateObject{"Root"});
+                         sphere = operations.create_sphere("Sphere", {2.5F});
+                         camera = operations.create_perspective_camera("Camera");
                          ai3::Transform transform;
                          transform.position = {1.0F, 2.0F, 3.0F};
-                         transform.orientation =
-                             ai3::orientation_from_euler_degrees({10.0F, 20.0F, 30.0F});
+                         transform.orientation = glm::angleAxis(
+                             glm::radians(37.0F), glm::normalize(glm::vec3{1.0F, 2.0F, 3.0F}));
                          transform.scale = {2.0F, 3.0F, 4.0F};
-                         state.set_local_transform(sphere, transform);
-                         state.reparent_object(sphere, root);
-                         state.set_perspective_camera(camera, {65.0F, 0.25F, 500.0F});
+                         operations.set_local_transform(sphere, transform);
+                         operations.reparent_object(sphere, root);
+                         operations.set_perspective_camera(camera, {65.0F, 0.25F, 500.0F});
                      }));
-    const ai3::Transform expected_transform = state.find_object(sphere)->transform;
+    const ai3::Transform expected_transform = scene.find_object(sphere)->transform;
 
     REQUIRE(transact(history,
                      [&]
                      {
-                         state.delete_object(root);
-                         state.set_sphere(sphere, {9.0F});
-                         state.create_directional_light("Light");
+                         operations.delete_object(root);
+                         operations.set_sphere(sphere, {9.0F});
+                         operations.create_directional_light("Light");
                      }));
     REQUIRE(history.undo());
-    REQUIRE(state.objects().size() == 3);
-    CHECK(state.objects()[0].id == root);
-    CHECK(state.objects()[1].id == sphere);
-    CHECK(state.objects()[2].id == camera);
-    CHECK(state.find_object(sphere)->parent_id() == root);
-    CHECK(state.find_object(sphere)->transform.position == expected_transform.position);
-    CHECK(state.find_object(sphere)->transform.scale == expected_transform.scale);
-    CHECK(state.find_object(sphere)->sphere.radius_meters == doctest::Approx(2.5F));
-    CHECK(state.find_object(camera)->perspective_camera.far_plane_meters ==
+    REQUIRE(scene.objects().size() == 3);
+    CHECK(scene.objects()[0].id == root);
+    CHECK(scene.objects()[1].id == sphere);
+    CHECK(scene.objects()[2].id == camera);
+    CHECK(scene.find_object(sphere)->parent_id() == root);
+    CHECK(scene.find_object(sphere)->transform.position == expected_transform.position);
+    CHECK(scene.find_object(sphere)->transform.orientation == expected_transform.orientation);
+    CHECK(scene.find_object(sphere)->transform.scale == expected_transform.scale);
+    CHECK(scene.find_object(sphere)->sphere.radius_meters == doctest::Approx(2.5F));
+    CHECK(scene.find_object(camera)->perspective_camera.far_plane_meters ==
           doctest::Approx(500.0F));
 
     REQUIRE(transact(history,
                      [&]
                      {
-                         CHECK(state.create_sphere("Sphere") == 4);
-                         CHECK(state.find_object(4)->name == "Sphere 2");
-                         CHECK(state.create_directional_light("Light") == 5);
-                         CHECK(state.find_object(5)->name == "Light 1");
+                         CHECK(operations.create_sphere("Sphere") == 4);
+                         CHECK(scene.find_object(4)->name == "Sphere 2");
+                         CHECK(operations.create_directional_light("Light") == 5);
+                         CHECK(scene.find_object(5)->name == "Light 1");
                      }));
     CHECK_FALSE(history.can_redo());
 }
 
 TEST_CASE("delete reparent reset invalid edits and revisions obey transaction semantics")
 {
-    ai3::EditorState state;
-    ai3::EditorHistory history(state);
+    ai3::Scene scene;
+    ai3::Workspace workspace;
+    ai3::EditHistory history(scene, workspace);
+    ai3::EditOperations operations(scene, workspace, history);
     ai3::ObjectId parent = ai3::no_object;
     ai3::ObjectId child = ai3::no_object;
     transact(history,
              [&]
              {
-                 parent = state.create_object(ai3::CreateObject{"Parent"});
-                 child = state.create_sphere("Sphere");
+                 parent = operations.create_object(ai3::CreateObject{"Parent"});
+                 child = operations.create_sphere("Sphere");
              });
-    const ai3::DocumentRevision before = state.document_revision();
-    REQUIRE(transact(history, [&] { state.reparent_object(child, parent); }));
+    const ai3::DocumentRevision before = scene.document_revision();
+    REQUIRE(transact(history, [&] { operations.reparent_object(child, parent); }));
     REQUIRE(history.undo());
-    CHECK(state.find_object(child)->parent_id() == ai3::no_object);
+    CHECK(scene.find_object(child)->parent_id() == ai3::no_object);
     REQUIRE(history.redo());
-    CHECK(state.find_object(child)->parent_id() == parent);
-    CHECK(state.document_revision() > before);
+    CHECK(scene.find_object(child)->parent_id() == parent);
+    CHECK(scene.document_revision() > before);
 
-    REQUIRE(transact(history, [&] { state.delete_object(parent); }));
+    REQUIRE(transact(history, [&] { operations.delete_object(parent); }));
     REQUIRE(history.undo());
-    CHECK(state.find_object(parent) != nullptr);
-    REQUIRE(transact(history, [&] { state.reset_scene(); }));
-    CHECK(state.objects().empty());
+    CHECK(scene.find_object(parent) != nullptr);
+    REQUIRE(transact(history, [&] { operations.reset_scene(); }));
+    CHECK(scene.objects().empty());
     REQUIRE(history.undo());
-    CHECK(state.find_object(parent) != nullptr);
+    CHECK(scene.find_object(parent) != nullptr);
 
     REQUIRE(history.begin_transaction());
-    CHECK_FALSE(state.reparent_object(child, child));
+    CHECK_FALSE(operations.reparent_object(child, child));
     CHECK_FALSE(history.commit_transaction());
 }
 
 TEST_CASE("history does not snapshot the whole Core Workspace")
 {
-    ai3::EditorState state;
-    ai3::EditorHistory history(state);
-    const ai3::ObjectId sphere = state.create_sphere("Sphere");
+    ai3::Scene scene;
+    ai3::Workspace workspace;
+    ai3::EditHistory history(scene, workspace);
+    ai3::EditOperations operations(scene, workspace, history);
+    const ai3::ObjectId sphere = operations.create_sphere("Sphere");
     history.rebaseline();
 
-    REQUIRE(transact(history, [&] { state.rename_object(sphere, "Renamed"); }));
-    REQUIRE(state.select(sphere));
-    REQUIRE(state.set_bounds_display(sphere, {true, true, true}));
-    state.workspace().set_active_material(77);
-    state.workspace().set_display_length_unit(ai3::LengthUnit::centimeter);
+    REQUIRE(transact(history, [&] { operations.rename_object(sphere, "Renamed"); }));
+    REQUIRE(operations.select(sphere));
+    REQUIRE(operations.set_bounds_display(sphere, {true, true, true}));
+    workspace.set_active_material(77);
+    workspace.set_display_length_unit(ai3::LengthUnit::centimeter);
 
     REQUIRE(history.undo());
-    CHECK(state.find_object(sphere)->name == "Sphere 1");
-    CHECK(state.selection() == sphere);
-    CHECK(state.bounds_display(sphere).show_bounding_box);
-    CHECK(state.bounds_display(sphere).show_bounding_sphere);
-    CHECK(state.bounds_display(sphere).hover_feedback);
-    CHECK(state.workspace().active_material() == 77);
-    CHECK(state.workspace().display_length_unit() == ai3::LengthUnit::centimeter);
+    CHECK(scene.find_object(sphere)->name == "Sphere 1");
+    CHECK(workspace.selection() == sphere);
+    CHECK(workspace.bounds_display(sphere).show_bounding_box);
+    CHECK(workspace.bounds_display(sphere).show_bounding_sphere);
+    CHECK(workspace.bounds_display(sphere).hover_feedback);
+    CHECK(workspace.active_material() == 77);
+    CHECK(workspace.display_length_unit() == ai3::LengthUnit::centimeter);
 
     REQUIRE(history.redo());
-    CHECK(state.find_object(sphere)->name == "Renamed");
-    CHECK(state.selection() == sphere);
-    CHECK(state.bounds_display(sphere).hover_feedback);
-    CHECK(state.workspace().active_material() == 77);
-    CHECK(state.workspace().display_length_unit() == ai3::LengthUnit::centimeter);
+    CHECK(scene.find_object(sphere)->name == "Renamed");
+    CHECK(workspace.selection() == sphere);
+    CHECK(workspace.bounds_display(sphere).hover_feedback);
+    CHECK(workspace.active_material() == 77);
+    CHECK(workspace.display_length_unit() == ai3::LengthUnit::centimeter);
 }

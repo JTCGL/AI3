@@ -1,7 +1,6 @@
 #pragma once
 
-#include "core/scene.h"
-#include "core/workspace.h"
+#include "core/edit_operations.h"
 
 #include <array>
 #include <string>
@@ -32,6 +31,10 @@ class EditorState
     const Scene& scene() const;
     Workspace& workspace();
     const Workspace& workspace() const;
+    EditHistory& history();
+    const EditHistory& history() const;
+    EditOperations& operations();
+    const EditOperations& operations() const;
     ObjectId create_object(CreateObject object);
     ObjectId create_sphere(std::string localized_base_name, SpherePrimitive sphere = {});
     ObjectId create_box(std::string localized_base_name, BoxPrimitive box = {});
@@ -93,9 +96,10 @@ class EditorState
     bool consume_layout_reset_request();
 
     private:
-    friend class EditorHistory;
     Scene scene_;
     Workspace workspace_;
+    EditHistory history_;
+    EditOperations operations_;
     std::array<bool, static_cast<std::size_t>(EditorPanel::count)> panel_visibility_ = {true, true,
                                                                                         true, true};
     std::vector<ConsoleMessage> console_messages_;

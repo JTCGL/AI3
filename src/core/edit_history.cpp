@@ -1,4 +1,4 @@
-#include "editor/editor_history.h"
+#include "core/edit_history.h"
 
 #include <algorithm>
 #include <limits>
@@ -61,14 +61,16 @@ bool equal(const Material& left, const Material& right)
 }
 } // namespace
 
-EditorHistory::EditorHistory(EditorState& state) : state_(state) {}
-
-EditorHistory::Snapshot EditorHistory::capture() const
+EditHistory::EditHistory(Scene& scene, Workspace& workspace) : scene_(scene), workspace_(workspace)
 {
-    return {state_.scene_, state_.workspace_.bounds_display_states()};
 }
 
-bool EditorHistory::begin_transaction()
+EditHistory::Snapshot EditHistory::capture() const
+{
+    return {scene_, workspace_.bounds_display_states()};
+}
+
+bool EditHistory::begin_transaction()
 {
     if (transaction_active_)
         return false;
@@ -77,7 +79,7 @@ bool EditorHistory::begin_transaction()
     return true;
 }
 
-bool EditorHistory::commit_transaction()
+bool EditHistory::commit_transaction()
 {
     if (!transaction_active_)
         return false;
@@ -99,9 +101,9 @@ bool EditorHistory::commit_transaction()
                              [id = object.id](const SceneObject& candidate)
                              { return candidate.id == id; }))
             {
-                const auto display = transaction_before_.bounds_workspace.find(object.id);
+                const auto display = transaction_before_.object_lifecycle_bounds.find(object.id);
                 deleted_object_workspace.emplace(
-                    object.id, display == transaction_before_.bounds_workspace.end()
+                    object.id, display == transaction_before_.object_lifecycle_bounds.end()
                                    ? BoundsDisplayState{}
                                    : display->second);
             }
@@ -111,64 +113,64 @@ bool EditorHistory::commit_transaction()
     return true;
 }
 
-bool EditorHistory::cancel_transaction()
+bool EditHistory::cancel_transaction()
 {
     if (!transaction_active_)
         return false;
     std::map<ObjectId, BoundsDisplayState> removed_object_workspace;
-    for (const auto& [id, display] : transaction_before_.bounds_workspace)
-        if (state_.find_object(id) == nullptr)
+    for (const auto& [id, display] : transaction_before_.object_lifecycle_bounds)
+        if (scene_.find_object(id) == nullptr)
             removed_object_workspace.emplace(id, display);
     Snapshot before = std::move(transaction_before_);
     transaction_active_ = false;
     restore(before);
     for (const auto& [id, display] : removed_object_workspace)
-        if (state_.find_object(id) != nullptr)
-            state_.set_bounds_display(id, display);
+        if (scene_.find_object(id) != nullptr)
+            workspace_.set_bounds_display(id, display);
     return true;
 }
 
-bool EditorHistory::transaction_active() const { return transaction_active_; }
-bool EditorHistory::has_uncommitted_changes() const
+bool EditHistory::transaction_active() const { return transaction_active_; }
+bool EditHistory::has_uncommitted_changes() const
 {
     return transaction_active_ && !snapshots_equal(transaction_before_, capture());
 }
-bool EditorHistory::can_undo() const { return !transaction_active_ && position_ > 0; }
-bool EditorHistory::can_redo() const { return !transaction_active_ && position_ < entries_.size(); }
+bool EditHistory::can_undo() const { return !transaction_active_ && position_ > 0; }
+bool EditHistory::can_redo() const { return !transaction_active_ && position_ < entries_.size(); }
 
-bool EditorHistory::undo()
+bool EditHistory::undo()
 {
     if (!can_undo())
         return false;
     const Entry& entry = entries_[position_ - 1];
     restore(entry.before);
     for (const auto& [id, display] : entry.deleted_object_workspace)
-        if (state_.find_object(id) != nullptr)
-            state_.set_bounds_display(id, display);
+        if (scene_.find_object(id) != nullptr)
+            workspace_.set_bounds_display(id, display);
     --position_;
     return true;
 }
 
-bool EditorHistory::redo()
+bool EditHistory::redo()
 {
     if (!can_redo())
         return false;
     Entry& entry = entries_[position_];
     for (auto& [id, display] : entry.deleted_object_workspace)
-        display = state_.bounds_display(id);
+        display = workspace_.bounds_display(id);
     restore(entry.after);
     for (const auto& [id, display] : entry.deleted_object_workspace)
-        state_.workspace_.remove_bounds_display(id);
+        workspace_.remove_bounds_display(id);
     ++position_;
     return true;
 }
 
-HistoryStateId EditorHistory::current_state_id() const
+HistoryStateId EditHistory::current_state_id() const
 {
     return position_ == 0 ? baseline_id_ : entries_[position_ - 1].after_id;
 }
 
-void EditorHistory::rebaseline()
+void EditHistory::rebaseline()
 {
     transaction_active_ = false;
     entries_.clear();
@@ -176,21 +178,21 @@ void EditorHistory::rebaseline()
     baseline_id_ = allocate_state_id();
 }
 
-void EditorHistory::restore(const Snapshot& snapshot)
+void EditHistory::restore(const Snapshot& snapshot)
 {
     const Snapshot current = capture();
     if (snapshots_equal(current, snapshot))
         return;
-    const DocumentRevision revision = state_.scene_.document_revision_;
-    state_.scene_ = snapshot.scene;
-    state_.scene_.document_revision_ = revision;
-    if (state_.workspace_.selection() != no_object &&
-        state_.find_object(state_.workspace_.selection()) == nullptr)
-        state_.workspace_.clear_selection();
-    state_.scene_.advance_document_revision();
+    const DocumentRevision revision = scene_.document_revision_;
+    scene_ = snapshot.scene;
+    scene_.document_revision_ = revision;
+    if (workspace_.selection() != no_object &&
+        scene_.find_object(workspace_.selection()) == nullptr)
+        workspace_.clear_selection();
+    scene_.advance_document_revision();
 }
 
-bool EditorHistory::snapshots_equal(const Snapshot& left, const Snapshot& right)
+bool EditHistory::snapshots_equal(const Snapshot& left, const Snapshot& right)
 {
     return left.scene.next_object_id_ == right.scene.next_object_id_ &&
            left.scene.next_material_id_ == right.scene.next_material_id_ &&
@@ -207,10 +209,10 @@ bool EditorHistory::snapshots_equal(const Snapshot& left, const Snapshot& right)
                       { return equal(left_object, right_object); });
 }
 
-HistoryStateId EditorHistory::allocate_state_id()
+HistoryStateId EditHistory::allocate_state_id()
 {
     if (next_state_id_ == std::numeric_limits<HistoryStateId>::max())
-        throw std::overflow_error("Editor history state identity exhausted");
+        throw std::overflow_error("Edit history state identity exhausted");
     return next_state_id_++;
 }
 } // namespace ai3

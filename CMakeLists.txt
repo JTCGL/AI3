@@ -47,6 +47,8 @@ target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_library(ai3_core STATIC
     src/scene/color_space.cpp
+    src/core/edit_history.cpp
+    src/core/edit_operations.cpp
     src/core/length_units.cpp
     src/core/scene.cpp
     src/core/scene_document.cpp
@@ -58,7 +60,6 @@ target_link_libraries(ai3_core PUBLIC glm::glm nlohmann_json::nlohmann_json)
 
 add_library(ai3_editor STATIC
     src/editor/document_session.cpp
-    src/editor/editor_history.cpp
     src/editor/editor_state.cpp
 )
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -179,7 +180,6 @@ if(AI3_BUILD_TESTS)
     add_executable(ai3_tests
         tests/command_line_test.cpp
         tests/document_session_test.cpp
-        tests/editor_history_test.cpp
         tests/editor_state_test.cpp
         tests/hierarchy_test.cpp
         tests/localization_test.cpp
@@ -197,6 +197,14 @@ if(AI3_BUILD_TESTS)
     target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor ai3_scene ai3_localization doctest::doctest)
     ai3_enable_warnings(ai3_tests)
     add_test(NAME ai3_unit_tests COMMAND ai3_tests)
+    add_executable(ai3_core_tests
+        tests/core_test_main.cpp
+        tests/edit_operations_test.cpp
+        tests/editor_history_test.cpp
+    )
+    target_link_libraries(ai3_core_tests PRIVATE ai3_core doctest::doctest)
+    ai3_enable_warnings(ai3_core_tests)
+    add_test(NAME ai3_core_tests COMMAND ai3_core_tests)
     add_test(NAME ai3_resource_copy_test
         COMMAND ${CMAKE_COMMAND}
             -DSOURCE_ASSETS=${CMAKE_CURRENT_SOURCE_DIR}/assets
@@ -212,7 +220,7 @@ endif()
 if(AI3_HEADLESS)
     set(ai3_headless_targets ai3_options ai3_core ai3_editor ai3_scene ai3_localization)
     if(TARGET ai3_tests)
-        list(APPEND ai3_headless_targets ai3_tests)
+        list(APPEND ai3_headless_targets ai3_tests ai3_core_tests)
     endif()
     foreach(target IN LISTS ai3_headless_targets)
         get_target_property(link_libraries ${target} LINK_LIBRARIES)

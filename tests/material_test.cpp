@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
 
+#include "core/edit_history.h"
 #include "core/scene_document.h"
 #include "editor/document_session.h"
-#include "editor/editor_history.h"
 #include "scene/color_space.h"
 
 #include <limits>
@@ -108,7 +108,7 @@ TEST_CASE("history restores material creation edits assignments and cancellation
 {
     ai3::EditorState state;
     const ai3::ObjectId sphere = state.create_sphere("Sphere");
-    ai3::EditorHistory history{state};
+    ai3::EditHistory& history = state.history();
     REQUIRE(history.begin_transaction());
     const ai3::MaterialId material = state.create_material("Material");
     REQUIRE(state.assign_material(sphere, material));
