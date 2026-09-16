@@ -1,6 +1,6 @@
 #include "core/scene_document.h"
+#include "core/workspace_document.h"
 #include "editor/document_session.h"
-#include "editor/workspace_document.h"
 #include "render/viewport_renderer.h"
 #include "scene/helper_geometry.h"
 #include "scene/translation_gizmo.h"
@@ -353,22 +353,23 @@ TEST_CASE("helper bounds are deterministic and apply the complete world transfor
                               scene.bounds_display(id), glm::vec3{1.0F});
     CHECK(geometry.lines.size() == 12 + 3 * 48);
     CHECK(geometry.lines[0].start == glm::vec3{4.0F, 1.5F, 3.5F});
-    auto hovered = ai3::resolve_bounds_helper_geometry(scene, ai3::no_object, id);
+    auto hovered =
+        ai3::resolve_bounds_helper_geometry(scene.scene(), scene.workspace(), ai3::no_object, id);
     REQUIRE_FALSE(hovered.lines.empty());
     CHECK(hovered.lines[0].color == glm::vec3{1.0F, 1.0F, 0.0F});
-    auto selected = ai3::resolve_bounds_helper_geometry(scene, id, id);
+    auto selected = ai3::resolve_bounds_helper_geometry(scene.scene(), scene.workspace(), id, id);
     REQUIRE_FALSE(selected.lines.empty());
     CHECK(selected.lines[0].color == glm::vec3{1.0F});
     ai3::ViewportView viewport;
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
     CHECK(viewport.helper_hover_object(id) == ai3::no_object);
     const auto navigation_bounds = ai3::resolve_bounds_helper_geometry(
-        scene, ai3::no_object, viewport.helper_hover_object(id));
+        scene.scene(), scene.workspace(), ai3::no_object, viewport.helper_hover_object(id));
     CHECK(navigation_bounds.lines.empty());
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::selection);
     CHECK(viewport.helper_hover_object(id) == id);
     const auto selection_bounds = ai3::resolve_bounds_helper_geometry(
-        scene, ai3::no_object, viewport.helper_hover_object(id));
+        scene.scene(), scene.workspace(), ai3::no_object, viewport.helper_hover_object(id));
     CHECK_FALSE(selection_bounds.lines.empty());
 }
 
@@ -432,7 +433,8 @@ TEST_CASE("frozen gizmo inputs remain separate from current bounds and camera vi
     ai3::Transform moved_sphere = scene.find_object(sphere)->transform;
     moved_sphere.position = {7.0F, 8.0F, 9.0F};
     REQUIRE(scene.set_local_transform(sphere, moved_sphere));
-    const auto bounds = ai3::resolve_bounds_helper_geometry(scene, sphere, ai3::no_object);
+    const auto bounds = ai3::resolve_bounds_helper_geometry(scene.scene(), scene.workspace(),
+                                                            sphere, ai3::no_object);
     REQUIRE_FALSE(bounds.lines.empty());
     CHECK(bounds.lines.front().start == glm::vec3{6.0F, 7.0F, 8.0F});
 }

@@ -14,6 +14,8 @@ EditorState::EditorState() : console_messages_({{"console.initialized", {}}, {"c
 }
 Scene& EditorState::scene() { return scene_; }
 const Scene& EditorState::scene() const { return scene_; }
+Workspace& EditorState::workspace() { return workspace_; }
+const Workspace& EditorState::workspace() const { return workspace_; }
 
 ObjectId EditorState::create_object(CreateObject object)
 {
@@ -96,45 +98,47 @@ bool EditorState::delete_object(ObjectId id)
 {
     if (!scene_.delete_object(id))
         return false;
-    bounds_workspace_.erase(id);
-    if (selection_ == id)
+    workspace_.remove_bounds_display(id);
+    if (workspace_.selection() == id)
         clear_selection();
     return true;
 }
 bool EditorState::reset_scene()
 {
     const bool changed = scene_.reset_scene();
-    selection_ = no_object;
-    bounds_workspace_.clear();
+    workspace_.clear_selection();
+    workspace_.replace_bounds_display({});
     return changed;
 }
 
 const BoundsDisplayState& EditorState::bounds_display(ObjectId id) const
 {
-    static const BoundsDisplayState defaults;
-    const auto found = bounds_workspace_.find(id);
-    return found == bounds_workspace_.end() ? defaults : found->second;
+    return workspace_.bounds_display(id);
 }
 bool EditorState::set_bounds_display(ObjectId id, BoundsDisplayState display)
 {
     const SceneObject* object = find_object(id);
     if (object == nullptr || !object->bounds.box.has_value() || !object->bounds.sphere.has_value())
         return false;
-    if (!display.show_bounding_box && !display.show_bounding_sphere && !display.hover_feedback)
-        bounds_workspace_.erase(id);
-    else
-        bounds_workspace_[id] = display;
+    workspace_.set_bounds_display(id, display);
     return true;
 }
 void EditorState::replace_bounds_workspace(std::map<ObjectId, BoundsDisplayState> workspace)
 {
-    bounds_workspace_.clear();
+    std::map<ObjectId, BoundsDisplayState> validated;
     for (const auto& [id, display] : workspace)
-        set_bounds_display(id, display);
+    {
+        const SceneObject* object = find_object(id);
+        if (object != nullptr && object->bounds.box.has_value() &&
+            object->bounds.sphere.has_value() &&
+            (display.show_bounding_box || display.show_bounding_sphere || display.hover_feedback))
+            validated.emplace(id, display);
+    }
+    workspace_.replace_bounds_display(std::move(validated));
 }
 const std::map<ObjectId, BoundsDisplayState>& EditorState::bounds_workspace() const
 {
-    return bounds_workspace_;
+    return workspace_.bounds_display_states();
 }
 
 DocumentRevision EditorState::document_revision() const { return scene_.document_revision(); }
@@ -176,17 +180,17 @@ glm::mat4 EditorState::world_transform_matrix(ObjectId id) const
 glm::vec3 EditorState::world_position(ObjectId id) const { return scene_.world_position(id); }
 glm::quat EditorState::world_orientation(ObjectId id) const { return scene_.world_orientation(id); }
 
-ObjectId EditorState::selection() const { return selection_; }
+ObjectId EditorState::selection() const { return workspace_.selection(); }
 bool EditorState::select(ObjectId id)
 {
     const SceneObject* object = find_object(id);
-    if (object == nullptr || selection_ == id)
+    if (object == nullptr || workspace_.selection() == id)
         return false;
-    selection_ = id;
+    workspace_.set_selection(id);
     add_console_message("console.selected", object->name);
     return true;
 }
-void EditorState::clear_selection() { selection_ = no_object; }
+void EditorState::clear_selection() { workspace_.clear_selection(); }
 bool EditorState::panel_visible(EditorPanel panel) const
 {
     return panel_visibility_.at(panel_index(panel));

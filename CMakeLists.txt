@@ -47,8 +47,11 @@ target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_library(ai3_core STATIC
     src/scene/color_space.cpp
+    src/core/length_units.cpp
     src/core/scene.cpp
     src/core/scene_document.cpp
+    src/core/workspace.cpp
+    src/core/workspace_document.cpp
 )
 target_include_directories(ai3_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3_core PUBLIC glm::glm nlohmann_json::nlohmann_json)
@@ -57,14 +60,12 @@ add_library(ai3_editor STATIC
     src/editor/document_session.cpp
     src/editor/editor_history.cpp
     src/editor/editor_state.cpp
-    src/editor/workspace_document.cpp
 )
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3_editor PUBLIC ai3_core)
 
 add_library(ai3_scene STATIC
     src/scene/helper_geometry.cpp
-    src/scene/length_units.cpp
     src/scene/orbit_camera.cpp
     src/scene/render_target_size.cpp
     src/scene/scene_math.cpp
@@ -75,7 +76,7 @@ add_library(ai3_scene STATIC
     src/scene/viewport_view.cpp
 )
 target_include_directories(ai3_scene PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(ai3_scene PUBLIC ai3_core ai3_editor)
+target_link_libraries(ai3_scene PUBLIC ai3_core)
 
 add_library(ai3_localization STATIC
     src/localization/localization.cpp
@@ -191,6 +192,7 @@ if(AI3_BUILD_TESTS)
         tests/ui_identity_test.cpp
         tests/viewport_picking_test.cpp
         tests/viewport_view_test.cpp
+        tests/workspace_test.cpp
     )
     target_link_libraries(ai3_tests PRIVATE ai3_options ai3_editor ai3_scene ai3_localization doctest::doctest)
     ai3_enable_warnings(ai3_tests)

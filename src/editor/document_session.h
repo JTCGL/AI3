@@ -1,7 +1,7 @@
 #pragma once
 
+#include "core/workspace_document.h"
 #include "editor/editor_history.h"
-#include "editor/workspace_document.h"
 
 #include <filesystem>
 #include <string>

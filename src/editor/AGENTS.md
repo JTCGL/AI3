@@ -15,8 +15,9 @@ These instructions extend `src/AGENTS.md` and the repository root instructions.
   monotonic, scene-owned identities. Deleting an object deletes only that object; its direct children become
   roots while preserving world-space pose, and selection is cleared only when the deleted object was selected.
 - Object identity, hierarchy, renderable classification, authoritative transforms, and other authored content
-  belong to Core Scene. Selection and bounds-display state belong to Core Workspace. Existing co-location in
-  `EditorState` is temporary; renderers may consume current state but must not duplicate its authority.
+  belong to Core Scene. Selection, bounds-display state, active material selection, and display units belong to
+  Core Workspace. `EditorState` owns exactly one of each as a compatibility/coordinator façade; renderers may
+  consume current state but must not duplicate its authority.
 - Core owns undo/redo and semantic transaction behavior. Frontends may report concrete interaction lifecycle
   intent, but new transaction authority must not accumulate in UI code.
 - Primitive kind and parameters are authoritative semantic scene data. UI and rendering consume them but

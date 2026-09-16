@@ -1,4 +1,4 @@
-#include "editor/workspace_document.h"
+#include "core/workspace_document.h"
 
 #include <nlohmann/json.hpp>
 
@@ -80,8 +80,10 @@ bool deserialize_workspace(std::string_view document, WorkspaceDocument& workspa
             if (!root["helperRenderingMode"].is_string())
                 fail("workspace helper rendering mode must be a string");
         }
-        for (const auto& [key, value] : root["objects"].items())
+        for (const auto& item : root["objects"].items())
         {
+            const std::string& key = item.key();
+            const Json& value = item.value();
             if (!value.is_object())
                 fail("workspace object entry must be an object");
             for (const auto& [field_name, ignored] : value.items())

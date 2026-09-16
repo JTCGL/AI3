@@ -131,3 +131,33 @@ TEST_CASE("delete reparent reset invalid edits and revisions obey transaction se
     CHECK_FALSE(state.reparent_object(child, child));
     CHECK_FALSE(history.commit_transaction());
 }
+
+TEST_CASE("history does not snapshot the whole Core Workspace")
+{
+    ai3::EditorState state;
+    ai3::EditorHistory history(state);
+    const ai3::ObjectId sphere = state.create_sphere("Sphere");
+    history.rebaseline();
+
+    REQUIRE(transact(history, [&] { state.rename_object(sphere, "Renamed"); }));
+    REQUIRE(state.select(sphere));
+    REQUIRE(state.set_bounds_display(sphere, {true, true, true}));
+    state.workspace().set_active_material(77);
+    state.workspace().set_display_length_unit(ai3::LengthUnit::centimeter);
+
+    REQUIRE(history.undo());
+    CHECK(state.find_object(sphere)->name == "Sphere 1");
+    CHECK(state.selection() == sphere);
+    CHECK(state.bounds_display(sphere).show_bounding_box);
+    CHECK(state.bounds_display(sphere).show_bounding_sphere);
+    CHECK(state.bounds_display(sphere).hover_feedback);
+    CHECK(state.workspace().active_material() == 77);
+    CHECK(state.workspace().display_length_unit() == ai3::LengthUnit::centimeter);
+
+    REQUIRE(history.redo());
+    CHECK(state.find_object(sphere)->name == "Renamed");
+    CHECK(state.selection() == sphere);
+    CHECK(state.bounds_display(sphere).hover_feedback);
+    CHECK(state.workspace().active_material() == 77);
+    CHECK(state.workspace().display_length_unit() == ai3::LengthUnit::centimeter);
+}

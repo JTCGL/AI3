@@ -1,6 +1,6 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "core/scene.h"
 #include "scene/resolved_view.h"
 #include "scene/viewport_picking.h"
 

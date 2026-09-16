@@ -184,3 +184,12 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
   moved Scene Document persistence physically into Core and preserved v1/v2 migration and version 3 output.
 - Converted authored scene math, viewport-camera resolution, primitive picking, renderer input, and direct Core
   tests to `Scene`; retained history/session, Workspace helper, and continuous-operation seams for M22-M27.
+
+## Milestone 22 — Core Workspace extraction
+
+- Added the display-independent Core `Workspace` as the sole owner of selection, per-object bounds-display
+  state, active material selection, and display length unit; `EditorState` now coordinates exactly one `Scene`
+  and one `Workspace` while retaining frontend presentation compatibility state.
+- Moved Workspace Document v1 persistence and display-length conversion into `ai3_core` without expanding the
+  sidecar boundary or changing history/dirty semantics, narrowed helper geometry to `Scene`/`Workspace`, and
+  removed the transitional `ai3_scene` dependency on `ai3_editor`.

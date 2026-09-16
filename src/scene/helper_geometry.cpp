@@ -72,17 +72,17 @@ void append_object_bounds(HelperGeometry& result, const Scene& scene, const Scen
     }
 }
 
-HelperGeometry resolve_bounds_helper_geometry(const EditorState& scene, ObjectId selected_id,
-                                              ObjectId hovered_id)
+HelperGeometry resolve_bounds_helper_geometry(const Scene& scene, const Workspace& workspace,
+                                              ObjectId selected_id, ObjectId hovered_id)
 {
     HelperGeometry result;
     for (const SceneObject& object : scene.objects())
     {
         const bool selected = object.id == selected_id;
         const bool hovered =
-            object.id == hovered_id && scene.bounds_display(object.id).hover_feedback;
+            object.id == hovered_id && workspace.bounds_display(object.id).hover_feedback;
         if (selected || hovered)
-            append_object_bounds(result, scene.scene(), object, scene.bounds_display(object.id),
+            append_object_bounds(result, scene, object, workspace.bounds_display(object.id),
                                  selected ? glm::vec3{1.0F} : glm::vec3{1.0F, 1.0F, 0.0F});
     }
     return result;

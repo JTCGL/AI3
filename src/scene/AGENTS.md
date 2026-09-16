@@ -9,9 +9,9 @@ These instructions extend `src/AGENTS.md` and the repository root instructions.
   lengths. Display units are presentation only.
 - Store orientations as `glm::quat`. Human-facing Euler values are degrees using intrinsic XYZ and must
   use the centralized scene conversion helpers.
-- Core Scene is the approved owner of object identity, hierarchy, authoritative transforms, primitive semantic
-  parameters, materials, lights, cameras, revision, and persisted naming-counter semantics. `EditorState`
-  remains the current compatibility owner until those responsibilities are deliberately migrated.
+- Core Scene owns object identity, hierarchy, authoritative transforms, primitive semantic parameters,
+  materials, lights, cameras, revision, and persisted naming-counter semantics. `EditorState` remains a
+  compatibility façade around its one authoritative Core Scene.
 - Scene state must not acquire selection, bounds-display state, panels, layout, dialogs, console presentation,
   or other frontend/workspace state.
 - Procedural primitive meshes are derived from Core Scene semantic parameters and must never become
