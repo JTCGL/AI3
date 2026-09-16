@@ -193,3 +193,15 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 - Moved Workspace Document v1 persistence and display-length conversion into `ai3_core` without expanding the
   sidecar boundary or changing history/dirty semantics, narrowed helper geometry to `Scene`/`Workspace`, and
   removed the transitional `ai3_scene` dependency on `ai3_editor`.
+
+## Milestone 23 — Core semantic operations and undo boundary
+
+- Moved snapshot-backed undo/redo authority into Core `EditHistory`, directly over `Scene` and `Workspace`,
+  while preserving exact authored restoration, checkpoints, revision behavior, and deleted-object bounds-state
+  lifecycle handling without making ordinary Workspace changes undoable.
+- Added typed Core `EditOperations` with self-transactional discrete edits and participation in existing
+  continuous transactions; moved object lifecycle and Scene-dependent Workspace coordination out of
+  `EditorState`, which now remains a compatibility/presentation façade.
+- Routed frontend semantic mutations and `DocumentSession` checkpoints through the Core authorities, retained
+  the M23 continuous ImGui/gizmo transaction lifecycle for M24, and added direct graphics-free Core editing
+  coverage without changing persistence formats or renderer behavior.

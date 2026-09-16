@@ -15,7 +15,7 @@
 namespace ai3
 {
 class SceneDocumentCodec;
-class EditorHistory;
+class EditHistory;
 using ObjectId = std::uint64_t;
 using MaterialId = std::uint64_t;
 using DocumentRevision = std::uint64_t;
@@ -236,7 +236,7 @@ class Scene
     glm::quat world_orientation(ObjectId id) const;
 
     private:
-    friend class EditorHistory;
+    friend class EditHistory;
     friend class SceneDocumentCodec;
     struct SubtypeKey
     {

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "editor/editor_state.h"
+#include "core/scene.h"
+#include "core/workspace.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -11,10 +12,12 @@ namespace ai3
 {
 using HistoryStateId = std::uint64_t;
 
-class EditorHistory
+class EditHistory
 {
     public:
-    explicit EditorHistory(EditorState& state);
+    EditHistory(Scene& scene, Workspace& workspace);
+    EditHistory(const EditHistory&) = delete;
+    EditHistory& operator=(const EditHistory&) = delete;
 
     bool begin_transaction();
     bool commit_transaction();
@@ -34,7 +37,7 @@ class EditorHistory
     struct Snapshot
     {
         Scene scene;
-        std::map<ObjectId, BoundsDisplayState> bounds_workspace;
+        std::map<ObjectId, BoundsDisplayState> object_lifecycle_bounds;
     };
     struct Entry
     {
@@ -50,7 +53,8 @@ class EditorHistory
     void restore(const Snapshot& snapshot);
     HistoryStateId allocate_state_id();
 
-    EditorState& state_;
+    Scene& scene_;
+    Workspace& workspace_;
     std::vector<Entry> entries_;
     std::size_t position_ = 0;
     HistoryStateId baseline_id_ = 1;

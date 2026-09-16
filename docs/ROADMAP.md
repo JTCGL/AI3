@@ -7,14 +7,15 @@ requirements and demonstrated dependencies become clearer.
 ## Core architecture migration
 
 [ADR 0009](decisions/0009-core-architecture-boundaries.md) establishes AI3 Core as the display-independent
-architectural center. M20 recorded the contract, M21 extracted authored Scene/Document ownership, and M22
-extracted non-authored Workspace/Workspace Document ownership into the real `ai3_core` target. Remaining
+architectural center. M20 recorded the contract, M21 extracted authored Scene/Document ownership, M22
+extracted non-authored Workspace/Workspace Document ownership, and M23 extracted snapshot history and typed
+semantic edit operations into the real `ai3_core` target. Remaining
 responsibilities will migrate deliberately. The planned sequence is:
 
 - M20 — Core architecture contract: document terminology, ownership, dependencies, and migration discipline.
 - M21 — Core Scene/Document extraction (completed).
 - M22 — Core Workspace extraction (completed).
-- M23 — Core semantic operations and undo boundary.
+- M23 — Core semantic operations and undo boundary (completed).
 - M24 — Continuous operations and viewport/tools boundary.
 - M25 — Core document/session and persistence boundary.
 - M26 — Renderer boundary.

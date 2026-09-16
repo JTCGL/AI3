@@ -70,7 +70,7 @@ TEST_CASE("viewport interaction mode is workspace state")
     CHECK(viewport.interaction_mode() == ai3::ViewportInteractionMode::navigation);
     CHECK(scene.document_revision() == revision);
     CHECK(session.history().current_state_id() == history_state);
-    CHECK_FALSE(session.history().can_undo());
+    CHECK(session.history().can_undo());
     CHECK_FALSE(session.dirty());
     CHECK(scene.selection() == camera);
     CHECK(viewport.source() == ai3::ViewSource::scene_camera);
@@ -230,7 +230,7 @@ TEST_CASE("Editor View navigation preserves document and retained workspace stat
     CHECK(scene.selection() == selected);
     CHECK(scene.document_revision() == revision);
     CHECK(session.history().current_state_id() == history);
-    CHECK_FALSE(session.history().can_undo());
+    CHECK(session.history().can_undo());
     CHECK_FALSE(session.dirty());
     CHECK(viewport.interaction_mode() == ai3::ViewportInteractionMode::selection);
     CHECK(viewport.transform_tool() == ai3::ViewportTransformTool::translation);

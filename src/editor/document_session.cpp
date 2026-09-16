@@ -7,9 +7,13 @@
 namespace ai3
 {
 DocumentSession::DocumentSession(EditorState& state)
-    : state_(state), history_(state), clean_revision_(state.document_revision()),
-      clean_history_state_(history_.current_state_id())
+    : state_(state), history_(state.history()), clean_revision_(state.document_revision())
 {
+    // The Core-owned history outlives this session facade. Constructing a new
+    // session observes the current authority and establishes a clean
+    // checkpoint; it must not erase an existing undo/redo stack. Explicit
+    // document lifecycle operations (open/new) rebaseline below.
+    clean_history_state_ = history_.current_state_id();
 }
 
 bool DocumentSession::dirty() const
@@ -19,8 +23,8 @@ bool DocumentSession::dirty() const
 }
 const std::filesystem::path& DocumentSession::document_path() const { return document_path_; }
 DocumentRevision DocumentSession::clean_revision() const { return clean_revision_; }
-EditorHistory& DocumentSession::history() { return history_; }
-const EditorHistory& DocumentSession::history() const { return history_; }
+EditHistory& DocumentSession::history() { return history_; }
+const EditHistory& DocumentSession::history() const { return history_; }
 DocumentTransition DocumentSession::pending_transition() const { return pending_transition_; }
 
 TransitionRequestResult DocumentSession::request_transition(DocumentTransition transition)
@@ -137,12 +141,5 @@ void DocumentSession::new_document()
     mark_saved();
 }
 
-bool DocumentSession::reset_scene()
-{
-    if (!history_.begin_transaction())
-        return false;
-    const bool changed = state_.reset_scene();
-    history_.commit_transaction();
-    return changed;
-}
+bool DocumentSession::reset_scene() { return state_.operations().reset_scene(); }
 } // namespace ai3

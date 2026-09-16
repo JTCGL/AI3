@@ -109,7 +109,7 @@ std::string decimal(float value, int precision)
 }
 
 template <typename Mutation>
-void apply_continuous_edit(EditorHistory& history, bool changed, Mutation&& mutation)
+void apply_continuous_edit(EditHistory& history, bool changed, Mutation&& mutation)
 {
     if (ImGui::IsItemActivated())
         history.begin_transaction();
@@ -122,14 +122,6 @@ void apply_continuous_edit(EditorHistory& history, bool changed, Mutation&& muta
         else
             history.cancel_transaction();
     }
-}
-
-template <typename Mutation> void apply_discrete_edit(EditorHistory& history, Mutation&& mutation)
-{
-    if (!history.begin_transaction())
-        return;
-    std::forward<Mutation>(mutation)();
-    history.commit_transaction();
 }
 
 void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
@@ -407,7 +399,7 @@ void EditorUi::draw_main_menu(bool& running)
                 request_transition(DocumentTransition::quit, running);
             ImGui::EndMenu();
         }
-        EditorHistory& history = document_session_.history();
+        EditHistory& history = document_session_.history();
         if (ImGui::BeginMenu(localization_.text("menu.edit").c_str()))
         {
             if (ImGui::MenuItem(localization_.text("action.undo").c_str(),
@@ -443,49 +435,33 @@ void EditorUi::draw_main_menu(bool& running)
         {
             if (ImGui::MenuItem(localization_.text("action.create_sphere").c_str()))
             {
-                apply_discrete_edit(history,
-                                    [&]
-                                    {
-                                        const ObjectId sphere = state_.create_sphere(
-                                            localization_.text("object.sphere"));
-                                        state_.select(sphere);
-                                    });
+                const ObjectId sphere =
+                    state_.operations().create_sphere(localization_.text("object.sphere"));
+                state_.select(sphere);
             }
             if (ImGui::MenuItem(localization_.text("action.create_box").c_str()))
             {
-                apply_discrete_edit(history,
-                                    [&]
-                                    {
-                                        const ObjectId box =
-                                            state_.create_box(localization_.text("object.box"));
-                                        state_.select(box);
-                                    });
+                const ObjectId box =
+                    state_.operations().create_box(localization_.text("object.box"));
+                state_.select(box);
             }
             if (ImGui::MenuItem(localization_.text("action.create_perspective_camera").c_str()))
             {
-                apply_discrete_edit(history,
-                                    [&]
-                                    {
-                                        const ObjectId camera = state_.create_perspective_camera(
-                                            localization_.text("object.camera"));
-                                        state_.select(camera);
-                                    });
+                const ObjectId camera = state_.operations().create_perspective_camera(
+                    localization_.text("object.camera"));
+                state_.select(camera);
             }
             if (ImGui::MenuItem(localization_.text("action.create_directional_light").c_str()))
             {
-                apply_discrete_edit(history,
-                                    [&]
-                                    {
-                                        const ObjectId light = state_.create_directional_light(
-                                            localization_.text("object.directional_light"));
-                                        state_.select(light);
-                                    });
+                const ObjectId light = state_.operations().create_directional_light(
+                    localization_.text("object.directional_light"));
+                state_.select(light);
             }
             ImGui::Separator();
             const bool has_selection = state_.selection() != no_object;
             if (ImGui::MenuItem(localization_.text("action.delete_selected").c_str(), nullptr,
                                 false, has_selection))
-                apply_discrete_edit(history, [&] { state_.delete_object(state_.selection()); });
+                state_.operations().delete_object(state_.selection());
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(localization_.text("menu.view").c_str()))
@@ -681,16 +657,11 @@ void EditorUi::apply_pending_reparent()
     if (object == nullptr)
         return;
     const std::string object_name = object->name;
-    EditorHistory& history = document_session_.history();
-    history.begin_transaction();
-    if (!state_.reparent_object(dragged, new_parent))
+    if (!state_.operations().reparent_object(dragged, new_parent))
     {
-        history.cancel_transaction();
         state_.add_console_message("console.reparent_rejected", object_name);
         state_.set_panel_visible(EditorPanel::console, true);
     }
-    else
-        history.commit_transaction();
 }
 
 void EditorUi::draw_scene_graph()
@@ -731,7 +702,7 @@ void EditorUi::draw_object_inspector()
                 stable_imgui_label(localization_.text("inspector.name"), "inspector_name");
             const bool name_changed = ImGui::InputText(name_label.c_str(), name, sizeof(name));
             apply_continuous_edit(document_session_.history(), name_changed,
-                                  [&] { state_.rename_object(object->id, name); });
+                                  [&] { state_.operations().rename_object(object->id, name); });
             const char* type_key = "type.object";
             if (object->primitive_kind == PrimitiveKind::sphere)
                 type_key = "type.sphere";
@@ -748,15 +719,13 @@ void EditorUi::draw_object_inspector()
                 stable_imgui_label(localization_.text("inspector.enabled"), "inspector_enabled");
             bool enabled = object->enabled;
             if (ImGui::Checkbox(enabled_label.c_str(), &enabled))
-                apply_discrete_edit(document_session_.history(),
-                                    [&] { state_.set_object_enabled(object->id, enabled); });
+                state_.operations().set_object_enabled(object->id, enabled);
             ImGui::SameLine();
             const std::string visible_label =
                 stable_imgui_label(localization_.text("inspector.visible"), "inspector_visible");
             bool object_visible = object->visible;
             if (ImGui::Checkbox(visible_label.c_str(), &object_visible))
-                apply_discrete_edit(document_session_.history(),
-                                    [&] { state_.set_object_visible(object->id, object_visible); });
+                state_.operations().set_object_visible(object->id, object_visible);
             if (object->primitive_kind == PrimitiveKind::sphere)
             {
                 BoundsDisplayState bounds_display = state_.bounds_display(object->id);
@@ -798,7 +767,7 @@ void EditorUi::draw_object_inspector()
                         sphere.radius_meters = std::max(
                             0.001F, length_to_meters(displayed_radius,
                                                      state_.workspace().display_length_unit()));
-                        state_.set_sphere(object->id, sphere);
+                        state_.operations().set_sphere(object->id, sphere);
                     });
                 const Material* assigned = state_.find_material(object->sphere.material_id);
                 const std::string material_name =
@@ -814,7 +783,7 @@ void EditorUi::draw_object_inspector()
                 apply_continuous_edit(document_session_.history(), fallback_changed,
                                       [&]
                                       {
-                                          state_.set_sphere_fallback_color(
+                                          state_.operations().set_sphere_fallback_color(
                                               object->id, srgb_to_linear(fallback_srgb));
                                       });
             }
@@ -881,7 +850,7 @@ void EditorUi::draw_object_inspector()
                     &box.height_segments, 1, 1, 999);
                 box.height_segments = std::clamp(box.height_segments, 1, 999);
                 apply_continuous_edit(document_session_.history(), changed,
-                                      [&] { state_.set_box(object->id, box); });
+                                      [&] { state_.operations().set_box(object->id, box); });
                 const Material* assigned = state_.find_material(box.material_id);
                 ImGui::Text("%s: %s", localization_.text("inspector.material").c_str(),
                             assigned == nullptr ? localization_.text("material.none").c_str()
@@ -898,7 +867,7 @@ void EditorUi::draw_object_inspector()
                                           BoxPrimitive changed_box = object->box;
                                           changed_box.fallback_color =
                                               srgb_to_linear(fallback_srgb);
-                                          state_.set_box(object->id, changed_box);
+                                          state_.operations().set_box(object->id, changed_box);
                                       });
             }
             if (object->camera_kind == CameraKind::perspective)
@@ -912,8 +881,9 @@ void EditorUi::draw_object_inspector()
                         localization_.text("inspector.vertical_fov"), "camera_vertical_fov");
                     bool changed = ImGui::DragFloat(fov_label.c_str(), &camera.vertical_fov_degrees,
                                                     0.5F, 0.1F, 179.9F);
-                    apply_continuous_edit(document_session_.history(), changed, [&]
-                                          { state_.set_perspective_camera(object->id, camera); });
+                    apply_continuous_edit(
+                        document_session_.history(), changed,
+                        [&] { state_.operations().set_perspective_camera(object->id, camera); });
                     float near_display = length_from_meters(
                         camera.near_plane_meters, state_.workspace().display_length_unit());
                     float far_display = length_from_meters(
@@ -935,8 +905,9 @@ void EditorUi::draw_object_inspector()
                         length_to_meters(near_display, state_.workspace().display_length_unit()));
                     camera.far_plane_meters =
                         std::max(camera.near_plane_meters + 0.001F, camera.far_plane_meters);
-                    apply_continuous_edit(document_session_.history(), changed, [&]
-                                          { state_.set_perspective_camera(object->id, camera); });
+                    apply_continuous_edit(
+                        document_session_.history(), changed,
+                        [&] { state_.operations().set_perspective_camera(object->id, camera); });
                     camera = state_.find_object(object->id)->perspective_camera;
                     near_display = length_from_meters(camera.near_plane_meters,
                                                       state_.workspace().display_length_unit());
@@ -947,8 +918,9 @@ void EditorUi::draw_object_inspector()
                     camera.far_plane_meters = std::max(
                         camera.near_plane_meters + 0.001F,
                         length_to_meters(far_display, state_.workspace().display_length_unit()));
-                    apply_continuous_edit(document_session_.history(), changed, [&]
-                                          { state_.set_perspective_camera(object->id, camera); });
+                    apply_continuous_edit(
+                        document_session_.history(), changed,
+                        [&] { state_.operations().set_perspective_camera(object->id, camera); });
                 }
             }
             if (object->light_kind == LightKind::directional)
@@ -969,14 +941,16 @@ void EditorUi::draw_object_inspector()
                                           [&]
                                           {
                                               light.color = srgb_to_linear(color_srgb);
-                                              state_.set_directional_light(object->id, light);
+                                              state_.operations().set_directional_light(object->id,
+                                                                                        light);
                                           });
                     light = state_.find_object(object->id)->directional_light;
                     changed =
                         ImGui::DragFloat(intensity_label.c_str(), &light.intensity, 0.05F, 0.0F);
                     light.intensity = std::max(0.0F, light.intensity);
-                    apply_continuous_edit(document_session_.history(), changed,
-                                          [&] { state_.set_directional_light(object->id, light); });
+                    apply_continuous_edit(
+                        document_session_.history(), changed,
+                        [&] { state_.operations().set_directional_light(object->id, light); });
                 }
             }
             const std::string transform_label =
@@ -1015,8 +989,9 @@ void EditorUi::draw_object_inspector()
                                          state_.workspace().display_length_unit())};
                     transform_changed = true;
                 }
-                apply_continuous_edit(document_session_.history(), transform_changed,
-                                      [&] { state_.set_local_transform(object->id, transform); });
+                apply_continuous_edit(
+                    document_session_.history(), transform_changed,
+                    [&] { state_.operations().set_local_transform(object->id, transform); });
                 transform = state_.find_object(object->id)->transform;
                 transform_changed = false;
                 glm::vec3 displayed_rotation =
@@ -1027,13 +1002,15 @@ void EditorUi::draw_object_inspector()
                     transform.orientation = orientation_from_euler_degrees(displayed_rotation);
                     transform_changed = true;
                 }
-                apply_continuous_edit(document_session_.history(), transform_changed,
-                                      [&] { state_.set_local_transform(object->id, transform); });
+                apply_continuous_edit(
+                    document_session_.history(), transform_changed,
+                    [&] { state_.operations().set_local_transform(object->id, transform); });
                 transform = state_.find_object(object->id)->transform;
                 transform_changed = ImGui::DragFloat3(
                     scale_label.c_str(), glm::value_ptr(transform.scale), 0.05F, 0.01F, 100.0F);
-                apply_continuous_edit(document_session_.history(), transform_changed,
-                                      [&] { state_.set_local_transform(object->id, transform); });
+                apply_continuous_edit(
+                    document_session_.history(), transform_changed,
+                    [&] { state_.operations().set_local_transform(object->id, transform); });
             }
         }
         ImGui::End();
@@ -1053,7 +1030,7 @@ void EditorUi::draw_material_editor()
         ImGui::End();
         return;
     }
-    EditorHistory& history = document_session_.history();
+    EditHistory& history = document_session_.history();
     if (state_.find_material(state_.workspace().active_material()) == nullptr &&
         !state_.materials().empty())
         state_.workspace().set_active_material(state_.materials().front().id);
@@ -1078,12 +1055,8 @@ void EditorUi::draw_material_editor()
     }
     ImGui::SameLine();
     if (ImGui::Button(localization_.text("material.new").c_str()))
-        apply_discrete_edit(history,
-                            [&]
-                            {
-                                state_.workspace().set_active_material(state_.create_material(
-                                    localization_.text("material.default_name")));
-                            });
+        state_.workspace().set_active_material(
+            state_.operations().create_material(localization_.text("material.default_name")));
     if (state_.materials().empty())
     {
         ImGui::End();
@@ -1096,7 +1069,7 @@ void EditorUi::draw_material_editor()
         stable_imgui_label(localization_.text("material.name"), "material_name").c_str(), name,
         sizeof(name));
     apply_continuous_edit(history, name_changed,
-                          [&] { state_.rename_material(material.id, name); });
+                          [&] { state_.operations().rename_material(material.id, name); });
     material = *state_.find_material(state_.workspace().active_material());
     const char* shading =
         material.shading == MaterialShading::lambert ? "material.lambert" : "material.phong";
@@ -1109,12 +1082,10 @@ void EditorUi::draw_material_editor()
             const char* key =
                 value == MaterialShading::lambert ? "material.lambert" : "material.phong";
             if (ImGui::Selectable(localization_.text(key).c_str(), material.shading == value))
-                apply_discrete_edit(history,
-                                    [&]
-                                    {
-                                        material.shading = value;
-                                        state_.set_material(material.id, material);
-                                    });
+            {
+                material.shading = value;
+                state_.operations().set_material(material.id, material);
+            }
         }
         ImGui::EndCombo();
     }
@@ -1130,8 +1101,8 @@ void EditorUi::draw_material_editor()
                                   Material changed_material =
                                       *state_.find_material(state_.workspace().active_material());
                                   changed_material.*field = srgb_to_linear(srgb);
-                                  state_.set_material(state_.workspace().active_material(),
-                                                      changed_material);
+                                  state_.operations().set_material(
+                                      state_.workspace().active_material(), changed_material);
                               });
     };
     color_control("material.ambient", "material_ambient", &Material::ambient_color);
@@ -1145,7 +1116,7 @@ void EditorUi::draw_material_editor()
                 .c_str(),
             &material.specular_power, 1.0F, 1.0F, 1024.0F);
         apply_continuous_edit(history, changed,
-                              [&] { state_.set_material(material.id, material); });
+                              [&] { state_.operations().set_material(material.id, material); });
     }
     const SceneObject* selected = state_.find_object(state_.selection());
     const bool assignable =
@@ -1153,9 +1124,7 @@ void EditorUi::draw_material_editor()
                                 selected->primitive_kind == PrimitiveKind::box);
     ImGui::BeginDisabled(!assignable);
     if (ImGui::Button(localization_.text("material.assign_selected").c_str()))
-        apply_discrete_edit(
-            history,
-            [&] { state_.assign_material(selected->id, state_.workspace().active_material()); });
+        state_.operations().assign_material(selected->id, state_.workspace().active_material());
     ImGui::EndDisabled();
     ImGui::End();
 }
@@ -1289,7 +1258,7 @@ void EditorUi::draw_viewport()
                     const std::optional<glm::vec3> desired =
                         constrained_axis_position(gesture.constraint, ray);
                     if (desired.has_value() &&
-                        !state_.set_world_position(gesture.object_id, *desired))
+                        !state_.operations().set_world_position(gesture.object_id, *desired))
                         cancel_translation_gesture();
                 }
                 else

@@ -45,6 +45,21 @@ TEST_CASE("document session tracks clean baselines and paths")
     CHECK_FALSE(session.dirty());
 }
 
+TEST_CASE("constructing a session preserves Core history authority")
+{
+    ai3::EditorState state;
+    const ai3::ObjectId sphere = state.create_sphere("Sphere");
+    REQUIRE(state.history().can_undo());
+    const ai3::HistoryStateId authored_state = state.history().current_state_id();
+
+    ai3::DocumentSession session(state);
+    CHECK(session.history().current_state_id() == authored_state);
+    CHECK(session.history().can_undo());
+    CHECK_FALSE(session.dirty());
+    REQUIRE(session.history().undo());
+    CHECK(state.find_object(sphere) == nullptr);
+}
+
 TEST_CASE("saved history checkpoints drive dirty state through undo redo and branching")
 {
     ai3::EditorState state;
@@ -175,6 +190,7 @@ TEST_CASE("workspace-only changes remain outside history and dirty state")
     ai3::DocumentSession session(state);
     const ai3::ObjectId sphere = state.create_sphere("Sphere");
     session.mark_saved();
+    const ai3::HistoryStateId authored_state = session.history().current_state_id();
     REQUIRE(state.select(sphere));
     REQUIRE(state.set_bounds_display(sphere, {true, false, true}));
     state.workspace().set_active_material(91);
@@ -183,7 +199,8 @@ TEST_CASE("workspace-only changes remain outside history and dirty state")
     state.add_console_message("diagnostic");
     state.request_layout_reset();
     CHECK_FALSE(session.dirty());
-    CHECK_FALSE(session.history().can_undo());
+    CHECK(session.history().current_state_id() == authored_state);
+    CHECK(session.history().can_undo());
 }
 
 TEST_CASE("reset scene retains association and only dirties for a real change")

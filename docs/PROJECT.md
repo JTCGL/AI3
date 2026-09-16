@@ -46,9 +46,9 @@ The current ownership split is:
   viewport state.
 - `core`: authored Scene identity, lifecycle, hierarchy, transforms, semantic object/material data, derived
   local bounds, revision/naming state, non-authored Workspace selection, bounds-display state, active material
-  selection and display unit, plus transactional Scene and Workspace Document serialization/filesystem I/O.
-- `editor`: the `EditorState` compatibility façade, frontend presentation state, undo/redo transactions, and
-  `DocumentSession` coordination.
+  selection and display unit, snapshot-backed `EditHistory`, typed `EditOperations`, plus transactional Scene
+  and Workspace Document serialization/filesystem I/O.
+- `editor`: the `EditorState` compatibility/presentation façade and `DocumentSession` coordination.
 - `scene`: display-independent transform and camera math, procedural Sphere/Box geometry, render-target
   sizing, orbit view construction, viewport-view selection/resolution and interaction mode, sphere picking,
   axis-translation projection, hit testing and drag constraints, and shared API-independent helper geometry.
@@ -61,12 +61,13 @@ The current ownership split is:
   native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
 
 This current split has known transitional dependencies. `EditorState` owns exactly one authoritative `Scene`
-and one authoritative `Workspace`, forwards retained APIs, coordinates their validation/lifecycle behavior,
-and still retains panel visibility, Console presentation data, and layout-reset intent. `EditorUi` constructs
-`DocumentSession`, chooses transaction boundaries for interactions, and explicitly invalidates renderer caches
-after document transitions. The `ViewportView` state cluster and continuous translation operations remain
-deferred compatibility interfaces scheduled for M23-M27. `ai3_scene` depends on `ai3_core`, not `ai3_editor`;
-helper geometry consumes narrow `Scene` and `Workspace` inputs.
+and one authoritative `Workspace`, composes their Core `EditHistory` and `EditOperations`, forwards retained
+compatibility APIs, and still retains panel visibility, Console presentation data, and layout-reset intent.
+Cross-domain lifecycle and Scene-dependent Workspace validation live in `EditOperations`. `EditorUi` constructs
+`DocumentSession`, retains concrete continuous-widget and translation-gesture transaction lifecycles pending
+M24, and explicitly invalidates renderer caches after document transitions pending M26. The `ViewportView`
+state cluster remains a deferred compatibility interface scheduled for M24-M27. `ai3_scene` depends on
+`ai3_core`, not `ai3_editor`; helper geometry consumes narrow `Scene` and `Workspace` inputs.
 
 ## Editor and scene model
 
@@ -76,9 +77,10 @@ scene-owned, stable, monotonically allocated, and not reused after deletion. Obj
 enabled/visible state, a local transform, and a two-level semantic tag. Current concrete object subtypes are
 Sphere and Box primitives, Perspective Camera, and Directional Light; their payloads are plain tagged data rather
 than polymorphic objects or components. Default-name counters are monotonic per category/subtype. Ordinary
-persistent mutations use `Scene` operations, currently reached through `EditorState` in the frontend; public
-object lookup is read-only. Normal editor
-mutations participate in `EditorHistory` transactions whose boundaries represent one intentional edit. A
+persistent frontend mutations use typed Core `EditOperations`; retained `EditorState` mutation APIs forward to
+that boundary, while public object lookup is read-only. Discrete operations are self-transactional and join an
+already active transaction so continuous interactions can group repeated mutations. Normal editor mutations
+participate in `EditHistory` transactions whose boundaries represent one intentional edit. A
 monotonic document revision advances for each real serialized-state change and authoritative history
 restoration, never rewinds on Undo, and ignores no-op assignments and workspace interaction.
 
@@ -127,12 +129,13 @@ selection, display units, and viewport state are not persisted. Workspace state 
 Documents, revision, dirty state, and ordinary history edits; deletion history retains only the removed
 object's switches for object-lifecycle restoration.
 
-`EditorHistory` uses internal authoritative before/after snapshots and exposes representation-independent
-begin/commit/cancel/undo/redo operations. Snapshots contain exact document state but exclude selection,
-viewport/session state, derived geometry, renderer caches, and GPU state. A deletion entry retains only the
-removed object's bounds-display state so Undo can restore it and Redo can remove it; ordinary workspace edits
-remain outside history. `DocumentSession` owns the active
-document's associated path, saved history checkpoint, dirty determination, filesystem workflow, and pending
+Core `EditHistory` uses internal authoritative before/after Scene snapshots and exposes
+representation-independent begin/commit/cancel/undo/redo operations. Snapshots contain exact document state
+but exclude selection, viewport/session state, derived geometry, renderer caches, and GPU state. A deletion
+entry retains only the removed object's bounds-display state so Undo can restore it and Redo can remove it;
+ordinary workspace edits remain outside history. `DocumentSession` references the Core history authority owned
+alongside the current Scene and Workspace and owns the active document's associated path, saved history
+checkpoint, dirty determination, filesystem workflow, and pending
 New/Open/Quit transition. New and successful Open rebaseline history; failed Open preserves it. Reset Scene is
 one undoable edit that retains the path. New, Open, Quit, and window close share
 Save/Discard/Cancel protection. The graphical UI presents that policy and uses SDL3 asynchronous native file
@@ -224,7 +227,7 @@ length is frozen for a gesture even while its pivot changes depth; a future edit
 fixed logical size. A material change to the frozen viewport rectangle safely cancels the gesture rather
 than mixing coordinate frames. Dragging normally uses a closest-point ray/axis solve; a near-parallel axis chooses
 once at acquisition a view-derived plane containing that axis, intersects subsequent pointer rays with that
-plane, and projects displacement back onto the axis. One gesture owns one existing `EditorHistory` transaction:
+plane, and projects displacement back onto the axis. One gesture owns one existing `EditHistory` transaction:
 live changes participate in dirty protection, release commits, Escape or unsafe mutation cancels/restores, and
 semantic no-ops create no entry.
 Gizmo hit testing remains screen-based and independent of the always-on-top GLES presentation.
