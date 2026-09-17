@@ -6,34 +6,34 @@ Move document/session lifecycle authority from the transitional editor layer int
 established single-document workflow, authored dirty semantics, persistence formats, frontend presentation, and
 renderer behavior.
 
-## Approved scope
+## Implemented scope
 
-- Move `DocumentSession` into `ai3_core`. It non-owningly references `Scene`, `Workspace`, and `EditHistory`, which
+- Moved `DocumentSession` into `ai3_core`. It non-owningly references `Scene`, `Workspace`, and `EditHistory`, which
   outlive the session, and owns only document/session metadata such as path, clean checkpoints, and pending
   destructive transition state. Construction does not implicitly rebaseline the supplied Core authorities.
-- Keep semantic editing separate from document lifecycle. `EditOperations` remains the authority for authored and
+- Kept semantic editing separate from document lifecycle. `EditOperations` remains the authority for authored and
   Workspace semantic edits; Reset Scene and interactive bounds-display changes do not become `DocumentSession`
   operations. `DocumentSession` does not depend on `EditOperations` or `EditorState`.
-- Preserve authored dirty semantics: history/checkpoint differences and real changes in an active authoritative
+- Preserved authored dirty semantics: history/checkpoint differences and real changes in an active authoritative
   transaction determine dirty state; Workspace-only changes and Workspace-sidecar failures do not.
-- Preserve New/Open/Save/Save As and Save/Discard/Cancel behavior while moving their session authority into Core.
+- Preserved New/Open/Save/Save As and Save/Discard/Cancel behavior while moving their session authority into Core.
   Failed Scene Open is transactional and leaves the existing Scene, Workspace, history, path, checkpoints, and
   dirty relationship unchanged. Failed Save As does not adopt the requested path.
-- Treat Scene persistence as authoritative and Workspace persistence as ancillary. A successful Scene Save/Open is
+- Treated Scene persistence as authoritative and Workspace persistence as ancillary. A successful Scene Save/Open is
   not rolled back by Workspace-sidecar failure. Missing Workspace sidecars are normal; failed sidecar reads/writes
   are separately reportable.
-- Replace session-to-Console coupling with narrow operation-specific Core persistence results. Diagnostics are
+- Replaced session-to-Console coupling with narrow operation-specific Core persistence results. Diagnostics are
   technical/nonlocalized; localization, Console messages, dialogs, and other presentation remain frontend-owned.
-- Add a Workspace-owned document-transition operation. On successful New/Open it clears selection, per-object
+- Added a Workspace-owned document-transition operation. On successful New/Open it clears selection, per-object
   bounds-display state, active material identity, and scene-camera identity; forces Editor View with
   `scene_camera_id == no_object`; and preserves Editor View pose, display-length unit, interaction mode, transform
   tool, and reference space.
-- Keep Workspace Document at version 1 with its existing serialized bounds-display scope. After successful Open,
+- Kept Workspace Document at version 1 with its existing serialized bounds-display scope. After successful Open,
   apply the document-transition policy and then overlay only valid v1 sidecar fields. Discard persisted object-keyed
   entries for objects absent from the loaded Scene.
-- Migrate document-session tests to exercise Core directly and add focused regression coverage for the approved
+- Migrated document-session tests to exercise Core directly and added focused regression coverage for the approved
   transition, persistence-result, sidecar, stale-ID, and failed-Save-As semantics.
-- Update `EditorUi`, CMake target ownership, and repository documentation as required while preserving the existing
+- Updated `EditorUi`, CMake target ownership, and repository documentation as required while preserving the existing
   graphical document workflow and post-transition renderer-cache behavior.
 
 ## Persistence and preference boundary

@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "editor/document_session.h"
+#include "core/document_session.h"
+#include "editor/editor_state.h"
 #include "scene/scene_math.h"
 #include "scene/viewport_view.h"
 #include "scene/world_coordinates.h"
@@ -59,7 +60,7 @@ TEST_CASE("viewport interaction mode is workspace state")
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene);
     REQUIRE(scene.select(camera));
-    ai3::DocumentSession session(scene);
+    ai3::DocumentSession session(scene.scene(), scene.workspace(), scene.history());
     ai3::ViewportView viewport(scene.workspace());
     REQUIRE(viewport.use_scene_camera(scene.scene(), camera));
     const ai3::DocumentRevision revision = scene.document_revision();
@@ -219,7 +220,7 @@ TEST_CASE("Editor View navigation preserves document and retained workspace stat
     ai3::EditorState scene;
     const ai3::ObjectId selected = scene.create_sphere("Selected");
     REQUIRE(scene.select(selected));
-    ai3::DocumentSession session(scene);
+    ai3::DocumentSession session(scene.scene(), scene.workspace(), scene.history());
     ai3::ViewportView viewport(scene.workspace());
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::selection);
     viewport.set_reference_space(ai3::CoordinateSpace::view);

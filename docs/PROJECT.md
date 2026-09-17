@@ -36,7 +36,8 @@ discovering EGL/GLES, or defining the graphical executable and smoke test.
 
 AI3 Core is the central, display-independent architectural framework described by
 [ADR 0009](decisions/0009-core-architecture-boundaries.md). `src/core` and the non-empty `ai3_core` target own
-authored `Scene`, non-authored `Workspace`, their document codecs, and display-length conversion; no
+authored `Scene`, non-authored `Workspace`, their document codecs, document/session lifecycle, and
+display-length conversion; no
 `ai3::Core` façade exists. Core depends only on display-independent GLM and nlohmann/json and remains
 independent of SDL, Dear ImGui, EGL/GLES, and displays.
 
@@ -47,9 +48,9 @@ The current ownership split is:
 - `core`: authored Scene identity, lifecycle, hierarchy, transforms, semantic object/material data, derived
   local bounds, revision/naming state, non-authored Workspace selection, bounds-display state, active material
   selection and display unit, authoritative viewport/editor-view state, snapshot-backed `EditHistory`, typed
-  `EditOperations`, move-only continuous-edit lifetime, plus transactional Scene and Workspace Document
-  serialization/filesystem I/O.
-- `editor`: the `EditorState` compatibility/presentation façade and `DocumentSession` coordination.
+  `EditOperations`, move-only continuous-edit lifetime, Core `DocumentSession`, plus transactional Scene and
+  Workspace Document serialization/filesystem I/O.
+- `editor`: the `EditorState` compatibility/presentation façade.
 - `scene`: display-independent transform and camera math, procedural Sphere/Box geometry, render-target
   sizing, Workspace-backed viewport view resolution and navigation, sphere picking, axis-translation projection,
   hit testing and drag constraints, the concrete translation interaction controller, and shared
@@ -65,8 +66,9 @@ The current ownership split is:
 This current split has known transitional dependencies. `EditorState` owns exactly one authoritative `Scene`
 and one authoritative `Workspace`, composes their Core `EditHistory` and `EditOperations`, forwards retained
 compatibility APIs, and still retains panel visibility, Console presentation data, and layout-reset intent.
-Cross-domain lifecycle and Scene-dependent Workspace validation live in `EditOperations`. `EditorUi` constructs
-`DocumentSession`, retains Core continuous-edit handles across concrete ImGui widget frames, delegates
+Cross-domain semantic-edit lifecycle and Scene-dependent Workspace validation live in `EditOperations`.
+`EditorUi` constructs the Core `DocumentSession` over the existing Scene, Workspace, and EditHistory
+authorities, retains Core continuous-edit handles across concrete ImGui widget frames, delegates
 translation semantics to the scene-layer controller, and explicitly invalidates renderer caches after document
 transitions pending M26. `ViewportView` references authoritative Core Workspace state rather than owning a
 second copy. `ai3_scene` depends on `ai3_core`, not `ai3_editor`; helper geometry consumes narrow `Scene` and
@@ -117,14 +119,14 @@ through pinned nlohmann/json. A narrowly friended Scene codec reconstructs a com
 identity and local hierarchy data; normal object creation still uses the lifecycle allocator. Load validates
 the entire candidate
 before replacing scene-owned state, and failure leaves the destination unchanged. The codec operates only on
-`Scene`; `DocumentSession` clears selection after successful load while preserving other editor presentation.
+`Scene`; `DocumentSession` applies the Workspace document-transition policy only after a successful load.
 
 The Core-owned Workspace Document codec writes an associated `.ai3workspace` sidecar containing only each
 bounded object's default-off bounding-box, bounding-sphere,
 and hover-feedback switches by stable object ID. Missing data defaults off. Version-1 sidecars may contain the
 obsolete string-valued `helperRenderingMode` field, which is accepted and ignored; new writes omit it.
-Malformed data
-cannot invalidate an already loaded scene and is reported through the Console. Save and Save As atomically
+Malformed data cannot invalidate an already loaded scene and is reported through a technical Core result for
+frontend Console presentation. Missing sidecars are a distinct normal outcome. Save and Save As atomically
 replace the associated sidecar only when Save or Save As is invoked; inspector changes remain in memory until
 then, and untitled workspace state remains in memory. A successful scene write marks the document clean and
 permits a pending transition even if the separately reported workspace write fails. Selection, active material
@@ -138,12 +140,20 @@ but exclude selection, viewport/session state, derived geometry, renderer caches
 entry retains only the removed object's bounds-display state so Undo can restore it and Redo can remove it;
 ordinary workspace edits remain outside history. `DocumentSession` references the Core history authority owned
 alongside the current Scene and Workspace and owns the active document's associated path, saved history
-checkpoint, dirty determination, filesystem workflow, and pending
-New/Open/Quit transition. New and successful Open rebaseline history; failed Open preserves it. Reset Scene is
-one undoable edit that retains the path. New, Open, Quit, and window close share
+checkpoint, dirty determination, filesystem workflow, and pending New/Open/Quit transition. It depends directly
+only on those three Core authorities and returns operation-specific Scene/Workspace persistence results rather
+than presenting diagnostics. New and successful Open rebaseline history; failed Open preserves Scene,
+Workspace, history, path, checkpoints, and dirty relationships. Reset Scene remains one `EditOperations`
+semantic edit that retains the path. New, Open, Quit, and window close share
 Save/Discard/Cancel protection. The graphical UI presents that policy and uses SDL3 asynchronous native file
-dialogs for Open and Save As. After successful Open, the UI resets the viewport to default Editor View and clears
-renderer geometry caches before subsequent rendering. See
+dialogs for Open and Save As.
+
+Successful New/Open asks Workspace to clear selection, per-object bounds switches, active material, and
+scene-camera identity and to force Editor View. It preserves the Editor View pose, display unit, interaction
+mode, transform tool, and reference space. Successful Open then overlays only valid v1 sidecar bounds entries
+whose object IDs exist in the loaded Scene. Scene persistence is authoritative: sidecar read/write failure is
+reported separately and does not roll back successful Scene Open/Save. The frontend continues to clear renderer
+geometry caches after successful document transitions pending M26. See
 [ADR 0006](decisions/0006-scene-document-format.md) and
 [ADR 0007](decisions/0007-document-revision-and-session.md).
 

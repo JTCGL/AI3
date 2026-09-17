@@ -82,6 +82,8 @@ class Workspace
     ViewportState& viewport();
     const ViewportState& viewport() const;
 
+    void transition_document();
+
     private:
     ObjectId selection_ = no_object;
     std::map<ObjectId, BoundsDisplayState> bounds_display_;

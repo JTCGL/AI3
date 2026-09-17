@@ -1,5 +1,5 @@
 #pragma once
-#include "editor/document_session.h"
+#include "core/document_session.h"
 #include "editor/editor_state.h"
 #include "localization/localization.h"
 #include "render/viewport_renderer.h"

@@ -44,4 +44,13 @@ void Workspace::set_display_length_unit(LengthUnit unit) { display_length_unit_ 
 
 ViewportState& Workspace::viewport() { return viewport_; }
 const ViewportState& Workspace::viewport() const { return viewport_; }
+
+void Workspace::transition_document()
+{
+    clear_selection();
+    replace_bounds_display({});
+    clear_active_material();
+    viewport_.source = ViewSource::editor_view;
+    viewport_.scene_camera_id = no_object;
+}
 } // namespace ai3

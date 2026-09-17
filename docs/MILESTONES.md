@@ -217,3 +217,14 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 - Added a display-independent concrete translation interaction controller owning acquisition, frozen gesture
   state, semantic world-position updates, commit/cancel, and continuous history lifetime. Preserved navigation,
   picking, helper geometry, renderer boundaries, snapshot history, and Workspace Document v1 persistence.
+
+## Milestone 25 — Core document/session and persistence boundary
+
+- Moved `DocumentSession` into `ai3_core` over non-owning Scene, Workspace, and EditHistory references while
+  preserving history checkpoints, authored dirty state, destructive-transition policy, and the single-document
+  New/Open/Save/Save As workflow.
+- Added operation-specific Core persistence results that distinguish missing and failed Workspace sidecars while
+  keeping Scene persistence authoritative, failed Open transactional, and failed Save As path-safe.
+- Added the Workspace-owned New/Open transition policy and valid-object filtering for restored v1 bounds state;
+  preserved viewport/editor preferences outside the unchanged Workspace Document v1 format and retained
+  frontend-owned dialogs, Console presentation, and transitional renderer-cache invalidation.

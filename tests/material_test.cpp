@@ -1,8 +1,9 @@
 #include <doctest/doctest.h>
 
+#include "core/document_session.h"
 #include "core/edit_history.h"
 #include "core/scene_document.h"
-#include "editor/document_session.h"
+#include "editor/editor_state.h"
 #include "scene/color_space.h"
 
 #include <limits>
@@ -130,7 +131,7 @@ TEST_CASE("history restores material creation edits assignments and cancellation
 TEST_CASE("active material edits participate in document dirty checkpoints")
 {
     ai3::EditorState state;
-    ai3::DocumentSession session{state};
+    ai3::DocumentSession session{state.scene(), state.workspace(), state.history()};
     CHECK_FALSE(session.dirty());
     REQUIRE(session.history().begin_transaction());
     state.create_material("Material");

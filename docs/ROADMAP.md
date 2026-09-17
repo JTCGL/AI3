@@ -9,8 +9,8 @@ requirements and demonstrated dependencies become clearer.
 [ADR 0009](decisions/0009-core-architecture-boundaries.md) establishes AI3 Core as the display-independent
 architectural center. M20 recorded the contract, M21 extracted authored Scene/Document ownership, M22
 extracted non-authored Workspace/Workspace Document ownership, M23 extracted snapshot history and typed
-semantic edit operations, and M24 moved continuous-edit lifetime and authoritative viewport state inward.
-Remaining
+semantic edit operations, M24 moved continuous-edit lifetime and authoritative viewport state inward, and M25
+moved document/session lifecycle and persistence coordination into Core. Remaining
 responsibilities will migrate deliberately. The planned sequence is:
 
 - M20 — Core architecture contract: document terminology, ownership, dependencies, and migration discipline.
@@ -18,7 +18,7 @@ responsibilities will migrate deliberately. The planned sequence is:
 - M22 — Core Workspace extraction (completed).
 - M23 — Core semantic operations and undo boundary (completed).
 - M24 — Continuous operations and viewport/tools boundary (completed).
-- M25 — Core document/session and persistence boundary.
+- M25 — Core document/session and persistence boundary (completed).
 - M26 — Renderer boundary.
 - M27 — Dependency enforcement and graphics-free headless proof.
 
@@ -37,7 +37,7 @@ explicit non-goals in ADR 0009.
 - If configurable internal/document units are introduced, make them authoritative Scene Document data whose
   changes dirty the document, with an explicit format and conversion policy decision first.
 
-Version 3 Scene Documents (including Box), strict v1/v2 migration, and revision-based single-document New/Open/Save/Save As with
+Version 3 Scene Documents (including Box), strict v1/v2 migration, and history-checkpoint-based single-document New/Open/Save/Save As with
 unsaved-change protection are established. Scene files intentionally do not include viewport, layout, locale,
 display-unit, console, diagnostics, renderer, or other workspace/session state.
 
@@ -45,8 +45,10 @@ The version-1 `.ai3workspace` sidecar currently persists only per-object bounds-
 assigns selection, bounds-display state, active material/editor selection where applicable, display units, and
 appropriate viewport/editor preferences to Core Workspace. M22 extracted selection, bounds-display,
 active-material, and display-unit state, and M24 added authoritative in-memory viewport/editor-view state,
-without expanding v1 persistence; M25 will define the persistence boundary. Per-document Workspace state and
-application-wide preferences must not be conflated
+without expanding v1 persistence. M25 established that New/Open preserves the in-memory Editor View pose,
+display unit, interaction mode, transform tool, and reference space while clearing document-relative identities;
+this transition policy does not make preserved fields application-wide persisted preferences. Per-document
+Workspace state and application-wide preferences must not be conflated
 merely because both are non-scene data.
 
 ## Transform tools and editing workflow

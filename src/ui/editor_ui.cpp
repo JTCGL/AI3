@@ -155,7 +155,8 @@ void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
 
 EditorUi::EditorUi(EditorState& state, ViewportView& viewport_view, Localization& localization,
                    SDL_Window* window, float content_scale, float ui_scale, float font_size)
-    : state_(state), document_session_(state), viewport_view_(viewport_view),
+    : state_(state), document_session_(state.scene(), state.workspace(), state.history()),
+      viewport_view_(viewport_view),
       translation_controller_(state.scene(), state.workspace(), state.operations()),
       localization_(localization), window_(window),
       dialog_state_(std::make_shared<SceneDialogState>()), content_scale_(content_scale),
@@ -226,21 +227,19 @@ void EditorUi::save_document()
         request_save_as_dialog();
         return;
     }
-    std::string scene_error;
-    std::string workspace_error;
-    const DocumentSaveResult result = document_session_.save(&scene_error, &workspace_error);
+    const DocumentSaveResult result = document_session_.save();
     if (result.scene_saved)
     {
         report_document_result("console.document_saved",
                                document_session_.document_path().string());
-        if (!result.workspace_saved)
-            report_document_result("console.workspace_error", workspace_error);
+        if (result.workspace.status == WorkspacePersistenceStatus::failed)
+            report_document_result("console.workspace_error", result.workspace.diagnostic);
         if (document_session_.pending_transition() != DocumentTransition::none)
             ready_transition_ = document_session_.saved_and_take_pending_transition();
     }
     else
     {
-        report_document_result("console.document_save_failed", scene_error);
+        report_document_result("console.document_save_failed", result.scene_diagnostic);
         document_session_.save_failed();
     }
 }
@@ -275,34 +274,32 @@ void EditorUi::process_dialog_result()
     std::filesystem::path path = std::filesystem::u8path(result->path);
     if (result->kind == SceneDialogKind::open)
     {
-        std::string error;
-        if (!document_session_.open(path, &error))
+        const DocumentOpenResult open_result = document_session_.open(path);
+        if (!open_result.scene_opened)
         {
-            report_document_result("console.document_open_failed", error);
+            report_document_result("console.document_open_failed", open_result.scene_diagnostic);
             return;
         }
-        viewport_view_.reset();
         viewport_renderer_.clear_geometry_cache();
         report_document_result("console.document_opened",
                                document_session_.document_path().string());
+        if (open_result.workspace.status == WorkspacePersistenceStatus::failed)
+            report_document_result("console.workspace_error", open_result.workspace.diagnostic);
         return;
     }
 
     if (path.extension().empty())
         path += scene_document_extension;
-    std::string scene_error;
-    std::string workspace_error;
-    const DocumentSaveResult save_result =
-        document_session_.save_as(path, &scene_error, &workspace_error);
+    const DocumentSaveResult save_result = document_session_.save_as(path);
     if (!save_result.scene_saved)
     {
-        report_document_result("console.document_save_failed", scene_error);
+        report_document_result("console.document_save_failed", save_result.scene_diagnostic);
         document_session_.save_failed();
         return;
     }
     report_document_result("console.document_saved", document_session_.document_path().string());
-    if (!save_result.workspace_saved)
-        report_document_result("console.workspace_error", workspace_error);
+    if (save_result.workspace.status == WorkspacePersistenceStatus::failed)
+        report_document_result("console.workspace_error", save_result.workspace.diagnostic);
     if (document_session_.pending_transition() != DocumentTransition::none)
         ready_transition_ = document_session_.saved_and_take_pending_transition();
 }
@@ -313,7 +310,6 @@ void EditorUi::perform_transition(DocumentTransition transition, bool& running)
     {
     case DocumentTransition::new_document:
         document_session_.new_document();
-        viewport_view_.reset();
         viewport_renderer_.clear_geometry_cache();
         break;
     case DocumentTransition::open_document:
@@ -397,7 +393,7 @@ void EditorUi::draw_main_menu(bool& running)
             if (ImGui::MenuItem(localization_.text("action.reset_scene").c_str()))
             {
                 finish_translation_gesture();
-                document_session_.reset_scene();
+                state_.operations().reset_scene();
                 viewport_renderer_.clear_geometry_cache();
                 viewport_view_.reset();
             }
@@ -752,7 +748,7 @@ void EditorUi::draw_object_inspector()
                         .c_str(),
                     &bounds_display.hover_feedback);
                 if (workspace_changed)
-                    document_session_.set_bounds_display(object->id, bounds_display);
+                    state_.operations().set_bounds_display(object->id, bounds_display);
                 float displayed_radius = length_from_meters(
                     object->sphere.radius_meters, state_.workspace().display_length_unit());
                 const std::string radius_text = localization_.format(
@@ -812,7 +808,7 @@ void EditorUi::draw_object_inspector()
                         .c_str(),
                     &display.hover_feedback);
                 if (workspace_changed)
-                    document_session_.set_bounds_display(object->id, display);
+                    state_.operations().set_bounds_display(object->id, display);
                 BoxPrimitive box = object->box;
                 const auto dimension = [&](const char* key, const char* stable, float& value)
                 {
