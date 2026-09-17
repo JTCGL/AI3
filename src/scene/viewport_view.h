@@ -1,53 +1,40 @@
 #pragma once
 
-#include "core/scene.h"
+#include "core/workspace.h"
 #include "scene/orbit_camera.h"
 #include "scene/resolved_view.h"
 #include "scene/scene_math.h"
 
 namespace ai3
 {
-enum class ViewSource
-{
-    editor_view,
-    scene_camera
-};
-
 enum class TransientNavigationOperation
 {
     pan,
     orbit
 };
 
-enum class ViewportInteractionMode
-{
-    selection,
-    navigation
-};
-
-enum class ViewportTransformTool
-{
-    translation
-};
-
-// Display-independent state for one editor viewport. Scene-camera matrices are always derived
-// from current scene data; only the selected camera identity is retained.
+// Display-independent Scene-dependent behavior for one editor viewport. Authoritative retained
+// state lives in Workspace; scene-camera matrices are derived from current Scene data.
 class ViewportView
 {
     public:
-    ViewSource source() const { return source_; }
-    ViewportInteractionMode interaction_mode() const { return interaction_mode_; }
-    ViewportTransformTool transform_tool() const { return transform_tool_; }
-    CoordinateSpace reference_space() const { return reference_space_; }
-    ObjectId scene_camera_id() const { return scene_camera_id_; }
+    explicit ViewportView(Workspace& workspace)
+        : state_(workspace.viewport()), orbit_(state_.editor_view)
+    {
+    }
+    ViewSource source() const { return state_.source; }
+    ViewportInteractionMode interaction_mode() const { return state_.interaction_mode; }
+    ViewportTransformTool transform_tool() const { return state_.transform_tool; }
+    CoordinateSpace reference_space() const { return state_.reference_space; }
+    ObjectId scene_camera_id() const { return state_.scene_camera_id; }
     OrbitCamera& orbit() { return orbit_; }
     const OrbitCamera& orbit() const { return orbit_; }
 
     void use_editor_view();
     bool use_scene_camera(const Scene& scene, ObjectId camera_id);
     void set_interaction_mode(ViewportInteractionMode mode);
-    void set_transform_tool(ViewportTransformTool tool) { transform_tool_ = tool; }
-    void set_reference_space(CoordinateSpace space) { reference_space_ = space; }
+    void set_transform_tool(ViewportTransformTool tool) { state_.transform_tool = tool; }
+    void set_reference_space(CoordinateSpace space) { state_.reference_space = space; }
     ObjectId helper_hover_object(ObjectId picked_object) const;
     bool navigate(float yaw_delta_degrees, float pitch_delta_degrees);
     bool transient_navigate(TransientNavigationOperation operation, glm::vec2 pointer_delta,
@@ -57,11 +44,7 @@ class ViewportView
     void reset();
 
     private:
-    ViewSource source_ = ViewSource::editor_view;
-    ViewportInteractionMode interaction_mode_ = ViewportInteractionMode::selection;
-    ViewportTransformTool transform_tool_ = ViewportTransformTool::translation;
-    CoordinateSpace reference_space_ = CoordinateSpace::world;
-    ObjectId scene_camera_id_ = no_object;
+    ViewportState& state_;
     OrbitCamera orbit_;
 };
 

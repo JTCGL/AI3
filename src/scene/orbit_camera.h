@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/workspace.h"
+
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -9,6 +11,7 @@ namespace ai3
 class OrbitCamera
 {
     public:
+    explicit OrbitCamera(EditorViewState& state) : state_(state) {}
     glm::mat4 view_matrix() const;
     glm::mat4 projection_matrix(float aspect_ratio) const;
     glm::vec3 position() const;
@@ -17,16 +20,13 @@ class OrbitCamera
     bool zoom(float wheel_delta);
     void reset();
 
-    float yaw_degrees() const { return yaw_degrees_; }
-    float pitch_degrees() const { return pitch_degrees_; }
-    float distance() const { return distance_; }
-    const glm::vec3& target() const { return target_; }
+    float yaw_degrees() const { return state_.yaw_degrees; }
+    float pitch_degrees() const { return state_.pitch_degrees; }
+    float distance() const { return state_.distance; }
+    const glm::vec3& target() const { return state_.target; }
 
     private:
     static constexpr float vertical_fov_degrees_ = 50.0F;
-    glm::vec3 target_{};
-    float yaw_degrees_ = 35.0F;
-    float pitch_degrees_ = 20.0F;
-    float distance_ = 6.0F;
+    EditorViewState& state_;
 };
 } // namespace ai3

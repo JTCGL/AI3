@@ -39,7 +39,8 @@ void check_direction(const glm::vec3& actual, const glm::vec3& expected)
 TEST_CASE("viewport coordinates construct center and off-center world rays")
 {
     ai3::Scene scene;
-    ai3::ViewportView viewport;
+    ai3::Workspace workspace;
+    ai3::ViewportView viewport(workspace);
     const ai3::ResolvedViewportView view = viewport.resolve(scene, 1.0F);
     const ai3::WorldRay center = ai3::viewport_world_ray({0.5F, 0.5F}, view);
     check_direction(center.direction,
@@ -53,7 +54,8 @@ TEST_CASE("picking works through orbit and scene-camera resolved views")
 {
     ai3::Scene orbit_scene;
     const ai3::ObjectId orbit_sphere = create_sphere(orbit_scene);
-    ai3::ViewportView orbit_viewport;
+    ai3::Workspace orbit_workspace;
+    ai3::ViewportView orbit_viewport(orbit_workspace);
     const ai3::WorldRay orbit_ray =
         ai3::viewport_world_ray({0.5F, 0.5F}, orbit_viewport.resolve(orbit_scene, 1.0F));
     CHECK(ai3::pick_sphere(orbit_scene, orbit_ray) == orbit_sphere);
@@ -63,7 +65,8 @@ TEST_CASE("picking works through orbit and scene-camera resolved views")
     ai3::Transform sphere_transform;
     sphere_transform.position = {0.0F, 0.0F, -5.0F};
     const ai3::ObjectId camera_sphere = create_sphere(camera_scene, sphere_transform);
-    ai3::ViewportView camera_viewport;
+    ai3::Workspace camera_workspace;
+    ai3::ViewportView camera_viewport(camera_workspace);
     REQUIRE(camera_viewport.use_scene_camera(camera_scene, camera));
     const ai3::WorldRay camera_ray =
         ai3::viewport_world_ray({0.5F, 0.5F}, camera_viewport.resolve(camera_scene, 1.0F));
@@ -190,7 +193,8 @@ TEST_CASE("resolved ray excludes spheres beyond the projection far plane")
     ai3::Transform beyond_far;
     beyond_far.position = {0.0F, 0.0F, -150.0F};
     create_sphere(scene, beyond_far);
-    ai3::ViewportView viewport;
+    ai3::Workspace workspace;
+    ai3::ViewportView viewport(workspace);
     REQUIRE(viewport.use_scene_camera(scene, camera));
     const ai3::WorldRay ray = ai3::viewport_world_ray({0.5F, 0.5F}, viewport.resolve(scene, 1.0F));
     CHECK(ai3::pick_sphere(scene, ray) == ai3::no_object);

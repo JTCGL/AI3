@@ -4,6 +4,13 @@
 
 Accepted.
 
+## M24 amendment
+
+Core `Workspace` now owns the authoritative retained state described by this decision. `ViewportView` remains a
+display-independent `ai3_scene` controller for Scene-dependent resolution and navigation, referencing that
+Workspace state rather than owning a second copy. Concrete transient navigation and translation gestures remain
+ephemeral and are not persisted. Workspace Document v1 persistence is unchanged.
+
 ## Decision
 
 Each editor viewport has display-independent `ViewportView` state owned outside Dear ImGui. Its source is

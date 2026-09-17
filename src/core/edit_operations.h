@@ -7,12 +7,35 @@
 
 namespace ai3
 {
+class ContinuousEdit
+{
+    public:
+    ContinuousEdit() = default;
+    ContinuousEdit(const ContinuousEdit&) = delete;
+    ContinuousEdit& operator=(const ContinuousEdit&) = delete;
+    ContinuousEdit(ContinuousEdit&& other) noexcept;
+    ContinuousEdit& operator=(ContinuousEdit&& other) noexcept;
+    ~ContinuousEdit();
+
+    bool active() const;
+    bool commit();
+    bool cancel();
+
+    private:
+    explicit ContinuousEdit(EditHistory& history);
+    friend class EditOperations;
+
+    EditHistory* history_ = nullptr;
+};
+
 class EditOperations
 {
     public:
     EditOperations(Scene& scene, Workspace& workspace, EditHistory& history);
     EditOperations(const EditOperations&) = delete;
     EditOperations& operator=(const EditOperations&) = delete;
+
+    ContinuousEdit begin_continuous_edit();
 
     ObjectId create_object(CreateObject object);
     ObjectId create_sphere(std::string localized_base_name, SpherePrimitive sphere = {});

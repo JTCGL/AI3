@@ -109,18 +109,24 @@ std::string decimal(float value, int precision)
 }
 
 template <typename Mutation>
-void apply_continuous_edit(EditHistory& history, bool changed, Mutation&& mutation)
+void apply_continuous_edit(EditOperations& operations, std::optional<ContinuousEdit>& edit,
+                           bool changed, Mutation&& mutation)
 {
     if (ImGui::IsItemActivated())
-        history.begin_transaction();
+    {
+        edit.emplace(operations.begin_continuous_edit());
+        if (!edit->active())
+            edit.reset();
+    }
     if (changed)
         std::forward<Mutation>(mutation)();
     if (ImGui::IsItemDeactivated())
     {
-        if (ImGui::IsItemDeactivatedAfterEdit())
-            history.commit_transaction();
-        else
-            history.cancel_transaction();
+        if (edit.has_value() && ImGui::IsItemDeactivatedAfterEdit())
+            edit->commit();
+        else if (edit.has_value())
+            edit->cancel();
+        edit.reset();
     }
 }
 
@@ -150,6 +156,7 @@ void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
 EditorUi::EditorUi(EditorState& state, ViewportView& viewport_view, Localization& localization,
                    SDL_Window* window, float content_scale, float ui_scale, float font_size)
     : state_(state), document_session_(state), viewport_view_(viewport_view),
+      translation_controller_(state.scene(), state.workspace(), state.operations()),
       localization_(localization), window_(window),
       dialog_state_(std::make_shared<SceneDialogState>()), content_scale_(content_scale),
       ui_scale_(ui_scale), font_size_(font_size)
@@ -701,7 +708,7 @@ void EditorUi::draw_object_inspector()
             const std::string name_label =
                 stable_imgui_label(localization_.text("inspector.name"), "inspector_name");
             const bool name_changed = ImGui::InputText(name_label.c_str(), name, sizeof(name));
-            apply_continuous_edit(document_session_.history(), name_changed,
+            apply_continuous_edit(state_.operations(), continuous_edit_, name_changed,
                                   [&] { state_.operations().rename_object(object->id, name); });
             const char* type_key = "type.object";
             if (object->primitive_kind == PrimitiveKind::sphere)
@@ -760,7 +767,7 @@ void EditorUi::draw_object_inspector()
                 const bool changed =
                     ImGui::DragFloat(radius_label.c_str(), &displayed_radius, speed, minimum);
                 apply_continuous_edit(
-                    document_session_.history(), changed,
+                    state_.operations(), continuous_edit_, changed,
                     [&]
                     {
                         SpherePrimitive sphere = object->sphere;
@@ -780,7 +787,7 @@ void EditorUi::draw_object_inspector()
                                        "sphere_fallback_color")
                         .c_str(),
                     glm::value_ptr(fallback_srgb));
-                apply_continuous_edit(document_session_.history(), fallback_changed,
+                apply_continuous_edit(state_.operations(), continuous_edit_, fallback_changed,
                                       [&]
                                       {
                                           state_.operations().set_sphere_fallback_color(
@@ -849,7 +856,7 @@ void EditorUi::draw_object_inspector()
                         .c_str(),
                     &box.height_segments, 1, 1, 999);
                 box.height_segments = std::clamp(box.height_segments, 1, 999);
-                apply_continuous_edit(document_session_.history(), changed,
+                apply_continuous_edit(state_.operations(), continuous_edit_, changed,
                                       [&] { state_.operations().set_box(object->id, box); });
                 const Material* assigned = state_.find_material(box.material_id);
                 ImGui::Text("%s: %s", localization_.text("inspector.material").c_str(),
@@ -861,7 +868,7 @@ void EditorUi::draw_object_inspector()
                                        "box_fallback_color")
                         .c_str(),
                     glm::value_ptr(fallback_srgb));
-                apply_continuous_edit(document_session_.history(), fallback_changed,
+                apply_continuous_edit(state_.operations(), continuous_edit_, fallback_changed,
                                       [&]
                                       {
                                           BoxPrimitive changed_box = object->box;
@@ -882,7 +889,7 @@ void EditorUi::draw_object_inspector()
                     bool changed = ImGui::DragFloat(fov_label.c_str(), &camera.vertical_fov_degrees,
                                                     0.5F, 0.1F, 179.9F);
                     apply_continuous_edit(
-                        document_session_.history(), changed,
+                        state_.operations(), continuous_edit_, changed,
                         [&] { state_.operations().set_perspective_camera(object->id, camera); });
                     float near_display = length_from_meters(
                         camera.near_plane_meters, state_.workspace().display_length_unit());
@@ -906,7 +913,7 @@ void EditorUi::draw_object_inspector()
                     camera.far_plane_meters =
                         std::max(camera.near_plane_meters + 0.001F, camera.far_plane_meters);
                     apply_continuous_edit(
-                        document_session_.history(), changed,
+                        state_.operations(), continuous_edit_, changed,
                         [&] { state_.operations().set_perspective_camera(object->id, camera); });
                     camera = state_.find_object(object->id)->perspective_camera;
                     near_display = length_from_meters(camera.near_plane_meters,
@@ -919,7 +926,7 @@ void EditorUi::draw_object_inspector()
                         camera.near_plane_meters + 0.001F,
                         length_to_meters(far_display, state_.workspace().display_length_unit()));
                     apply_continuous_edit(
-                        document_session_.history(), changed,
+                        state_.operations(), continuous_edit_, changed,
                         [&] { state_.operations().set_perspective_camera(object->id, camera); });
                 }
             }
@@ -937,7 +944,7 @@ void EditorUi::draw_object_inspector()
                     glm::vec3 color_srgb = linear_to_srgb(light.color);
                     bool changed =
                         ImGui::ColorEdit3(color_label.c_str(), glm::value_ptr(color_srgb));
-                    apply_continuous_edit(document_session_.history(), changed,
+                    apply_continuous_edit(state_.operations(), continuous_edit_, changed,
                                           [&]
                                           {
                                               light.color = srgb_to_linear(color_srgb);
@@ -949,7 +956,7 @@ void EditorUi::draw_object_inspector()
                         ImGui::DragFloat(intensity_label.c_str(), &light.intensity, 0.05F, 0.0F);
                     light.intensity = std::max(0.0F, light.intensity);
                     apply_continuous_edit(
-                        document_session_.history(), changed,
+                        state_.operations(), continuous_edit_, changed,
                         [&] { state_.operations().set_directional_light(object->id, light); });
                 }
             }
@@ -990,7 +997,7 @@ void EditorUi::draw_object_inspector()
                     transform_changed = true;
                 }
                 apply_continuous_edit(
-                    document_session_.history(), transform_changed,
+                    state_.operations(), continuous_edit_, transform_changed,
                     [&] { state_.operations().set_local_transform(object->id, transform); });
                 transform = state_.find_object(object->id)->transform;
                 transform_changed = false;
@@ -1003,13 +1010,13 @@ void EditorUi::draw_object_inspector()
                     transform_changed = true;
                 }
                 apply_continuous_edit(
-                    document_session_.history(), transform_changed,
+                    state_.operations(), continuous_edit_, transform_changed,
                     [&] { state_.operations().set_local_transform(object->id, transform); });
                 transform = state_.find_object(object->id)->transform;
                 transform_changed = ImGui::DragFloat3(
                     scale_label.c_str(), glm::value_ptr(transform.scale), 0.05F, 0.01F, 100.0F);
                 apply_continuous_edit(
-                    document_session_.history(), transform_changed,
+                    state_.operations(), continuous_edit_, transform_changed,
                     [&] { state_.operations().set_local_transform(object->id, transform); });
             }
         }
@@ -1030,7 +1037,7 @@ void EditorUi::draw_material_editor()
         ImGui::End();
         return;
     }
-    EditHistory& history = document_session_.history();
+    EditOperations& operations = state_.operations();
     if (state_.find_material(state_.workspace().active_material()) == nullptr &&
         !state_.materials().empty())
         state_.workspace().set_active_material(state_.materials().front().id);
@@ -1068,7 +1075,7 @@ void EditorUi::draw_material_editor()
     const bool name_changed = ImGui::InputText(
         stable_imgui_label(localization_.text("material.name"), "material_name").c_str(), name,
         sizeof(name));
-    apply_continuous_edit(history, name_changed,
+    apply_continuous_edit(operations, continuous_edit_, name_changed,
                           [&] { state_.operations().rename_material(material.id, name); });
     material = *state_.find_material(state_.workspace().active_material());
     const char* shading =
@@ -1095,7 +1102,7 @@ void EditorUi::draw_material_editor()
         glm::vec3 srgb = linear_to_srgb(material.*field);
         const bool changed = ImGui::ColorEdit3(
             stable_imgui_label(localization_.text(key), stable).c_str(), glm::value_ptr(srgb));
-        apply_continuous_edit(history, changed,
+        apply_continuous_edit(operations, continuous_edit_, changed,
                               [&]
                               {
                                   Material changed_material =
@@ -1115,7 +1122,7 @@ void EditorUi::draw_material_editor()
             stable_imgui_label(localization_.text("material.shininess"), "material_shininess")
                 .c_str(),
             &material.specular_power, 1.0F, 1.0F, 1024.0F);
-        apply_continuous_edit(history, changed,
+        apply_continuous_edit(operations, continuous_edit_, changed,
                               [&] { state_.operations().set_material(material.id, material); });
     }
     const SceneObject* selected = state_.find_object(state_.selection());
@@ -1172,9 +1179,9 @@ void EditorUi::draw_viewport()
                 viewport_view_.resolve(state_.scene(), aspect_ratio);
             if (viewport_view_.source() != ViewSource::editor_view)
                 transient_navigation_gesture_.release();
-            const ObjectId helper_object_id = translation_gesture_.has_value()
-                                                  ? translation_gesture_->object_id
-                                                  : state_.selection();
+            const AxisTranslationGesture* gesture = translation_controller_.gesture();
+            const ObjectId helper_object_id =
+                gesture != nullptr ? gesture->object_id : state_.selection();
             const SceneObject* helper_object = state_.find_object(helper_object_id);
             glm::vec3 helper_pivot{};
             glm::mat3 helper_basis{1.0F};
@@ -1182,8 +1189,8 @@ void EditorUi::draw_viewport()
             {
                 helper_pivot = state_.world_position(helper_object->id);
                 helper_basis =
-                    translation_gesture_.has_value()
-                        ? translation_gesture_->frozen_basis
+                    gesture != nullptr
+                        ? gesture->frozen_basis
                         : coordinate_space_basis(state_.scene(), helper_object->id,
                                                  viewport_view_.reference_space(), resolved.view);
             }
@@ -1201,28 +1208,21 @@ void EditorUi::draw_viewport()
             }
             else
                 hovered_object_ = no_object;
-            int highlighted = translation_gesture_.has_value()
-                                  ? static_cast<int>(translation_gesture_->selected_axis)
-                                  : -1;
-            if (helper_object != nullptr && !translation_gesture_.has_value() &&
+            int highlighted = gesture != nullptr ? static_cast<int>(gesture->selected_axis) : -1;
+            if (helper_object != nullptr && gesture == nullptr &&
                 !transient_navigation_gesture_.active() &&
                 viewport_view_.interaction_mode() == ViewportInteractionMode::selection)
             {
-                const auto projected = project_translation_gizmo(
-                    helper_pivot, helper_basis, resolved, {region.x, region.y}, 72.0F * ui_scale_);
-                if (projected)
-                    highlighted = static_cast<int>(pick_translation_axis(
-                        {mouse.x - future_minimum.x, mouse.y - future_minimum.y}, *projected,
-                        10.0F * ui_scale_));
+                highlighted = static_cast<int>(translation_controller_.hover_axis(
+                    {mouse.x - future_minimum.x, mouse.y - future_minimum.y}, {region.x, region.y},
+                    resolved, 72.0F * ui_scale_, 10.0F * ui_scale_));
             }
             const ResolvedViewportView& helper_gizmo_view =
-                translation_gesture_.has_value() ? translation_gesture_->frozen_view : resolved;
-            const glm::vec2 helper_gizmo_viewport = translation_gesture_.has_value()
-                                                        ? translation_gesture_->frozen_viewport_size
-                                                        : glm::vec2{region.x, region.y};
-            const float helper_gizmo_length = translation_gesture_.has_value()
-                                                  ? translation_gesture_->frozen_screen_axis_length
-                                                  : 72.0F * ui_scale_;
+                gesture != nullptr ? gesture->frozen_view : resolved;
+            const glm::vec2 helper_gizmo_viewport =
+                gesture != nullptr ? gesture->frozen_viewport_size : glm::vec2{region.x, region.y};
+            const float helper_gizmo_length =
+                gesture != nullptr ? gesture->frozen_screen_axis_length : 72.0F * ui_scale_;
             const ObjectId helper_id = helper_object == nullptr ? no_object : helper_object->id;
             const HelperGeometry bounds_helpers = resolve_bounds_helper_geometry(
                 state_.scene(), state_.workspace(), helper_id, hovered_object_);
@@ -1237,35 +1237,20 @@ void EditorUi::draw_viewport()
             const glm::vec2 viewport_origin{minimum.x, minimum.y};
             const glm::vec2 viewport_size{region.x, region.y};
             ImGuiIO& io = ImGui::GetIO();
-            const bool translation_owned_input = translation_gesture_.has_value();
+            const bool translation_owned_input = translation_controller_.active();
 
-            if (translation_gesture_.has_value())
+            if (translation_controller_.active())
             {
-                AxisTranslationGesture& gesture = *translation_gesture_;
-                if (!viewport_geometry_matches(gesture.frozen_viewport_origin,
-                                               gesture.frozen_viewport_size, viewport_origin,
-                                               viewport_size) ||
-                    ImGui::IsKeyPressed(ImGuiKey_Escape) ||
-                    state_.find_object(gesture.object_id) == nullptr)
+                if (ImGui::IsKeyPressed(ImGuiKey_Escape))
                     cancel_translation_gesture();
                 else if (ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                {
-                    const glm::vec2 coordinates{(io.MousePos.x - gesture.frozen_viewport_origin.x) /
-                                                    gesture.frozen_viewport_size.x,
-                                                (io.MousePos.y - gesture.frozen_viewport_origin.y) /
-                                                    gesture.frozen_viewport_size.y};
-                    const WorldRay ray = viewport_world_ray(coordinates, gesture.frozen_view);
-                    const std::optional<glm::vec3> desired =
-                        constrained_axis_position(gesture.constraint, ray);
-                    if (desired.has_value() &&
-                        !state_.operations().set_world_position(gesture.object_id, *desired))
-                        cancel_translation_gesture();
-                }
+                    translation_controller_.update({io.MousePos.x, io.MousePos.y}, viewport_origin,
+                                                   viewport_size);
                 else
                     finish_translation_gesture();
             }
 
-            if (!translation_owned_input && !translation_gesture_.has_value())
+            if (!translation_owned_input && !translation_controller_.active())
             {
                 if (!transient_navigation_gesture_.active() && ImGui::IsItemHovered() &&
                     ImGui::IsMouseClicked(ImGuiMouseButton_Middle) &&
@@ -1282,9 +1267,9 @@ void EditorUi::draw_viewport()
                 }
             }
 
-            const ObjectId gizmo_object = translation_gesture_.has_value()
-                                              ? translation_gesture_->object_id
-                                              : state_.selection();
+            gesture = translation_controller_.gesture();
+            const ObjectId gizmo_object =
+                gesture != nullptr ? gesture->object_id : state_.selection();
             const SceneObject* selected = state_.find_object(gizmo_object);
             std::optional<ProjectedTranslationGizmo> projected_gizmo;
             glm::vec3 pivot{};
@@ -1293,60 +1278,32 @@ void EditorUi::draw_viewport()
             {
                 pivot = state_.world_position(selected->id);
                 basis =
-                    translation_gesture_.has_value()
-                        ? translation_gesture_->frozen_basis
+                    gesture != nullptr
+                        ? gesture->frozen_basis
                         : coordinate_space_basis(state_.scene(), selected->id,
                                                  viewport_view_.reference_space(), resolved.view);
                 const float screen_axis_length =
-                    translation_gesture_.has_value()
-                        ? translation_gesture_->frozen_screen_axis_length
-                        : 72.0F * ui_scale_;
+                    gesture != nullptr ? gesture->frozen_screen_axis_length : 72.0F * ui_scale_;
                 const ResolvedViewportView& presentation_view =
-                    translation_gesture_.has_value() ? translation_gesture_->frozen_view : resolved;
+                    gesture != nullptr ? gesture->frozen_view : resolved;
                 projected_gizmo = project_translation_gizmo(pivot, basis, presentation_view,
                                                             viewport_size, screen_axis_length);
             }
 
             bool acquired_gizmo = false;
-            TranslationAxis hovered_axis = TranslationAxis::none;
-            if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
-                !transient_navigation_gesture_.active() && ImGui::IsItemHovered())
-            {
-                const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
-                hovered_axis = pick_translation_axis(pointer, *projected_gizmo, 10.0F * ui_scale_);
-            }
-            if (projected_gizmo.has_value() && !translation_gesture_.has_value() &&
+            if (projected_gizmo.has_value() && !translation_controller_.active() &&
                 !transient_navigation_gesture_.active() &&
                 viewport_view_.interaction_mode() == ViewportInteractionMode::selection &&
                 ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
             {
                 const glm::vec2 pointer{io.MousePos.x - minimum.x, io.MousePos.y - minimum.y};
-                const float hit_tolerance = 10.0F * ui_scale_;
-                const TranslationAxis axis = hovered_axis;
-                if (axis != TranslationAxis::none)
-                {
-                    const std::size_t index = static_cast<std::size_t>(axis);
-                    const glm::vec2 coordinates{pointer.x / region.x, pointer.y / region.y};
-                    const WorldRay ray = viewport_world_ray(coordinates, resolved);
-                    const glm::vec3 direction = glm::normalize(basis[index]);
-                    const AxisDragConstraint constraint =
-                        begin_axis_drag_constraint(ray, pivot, direction, resolved);
-                    if (constraint.valid && document_session_.history().begin_transaction())
-                    {
-                        translation_gesture_ =
-                            AxisTranslationGesture{selected->id,  axis,
-                                                   pivot,         direction,
-                                                   basis,         72.0F * ui_scale_,
-                                                   hit_tolerance, viewport_origin,
-                                                   viewport_size, resolved,
-                                                   constraint};
-                        acquired_gizmo = true;
-                    }
-                }
+                acquired_gizmo =
+                    translation_controller_.acquire(pointer, viewport_origin, viewport_size,
+                                                    resolved, 72.0F * ui_scale_, 10.0F * ui_scale_);
             }
 
             if (!translation_owned_input && ImGui::IsItemHovered() &&
-                !translation_gesture_.has_value() && !transient_navigation_gesture_.active())
+                !translation_controller_.active() && !transient_navigation_gesture_.active())
             {
                 if (io.MouseWheel != 0.0F)
                     viewport_view_.zoom(io.MouseWheel);
@@ -1355,7 +1312,7 @@ void EditorUi::draw_viewport()
                     if (ImGui::IsMouseDragging(ImGuiMouseButton_Left))
                         viewport_view_.navigate(io.MouseDelta.x * 0.25F, -io.MouseDelta.y * 0.25F);
                 }
-                else if (!acquired_gizmo && !translation_gesture_.has_value() &&
+                else if (!acquired_gizmo && !translation_controller_.active() &&
                          ImGui::IsMouseClicked(ImGuiMouseButton_Left))
                 {
                     const ImVec2 maximum = ImGui::GetItemRectMax();
@@ -1382,21 +1339,9 @@ void EditorUi::draw_viewport()
     state_.set_panel_visible(EditorPanel::viewport, visible);
 }
 
-void EditorUi::cancel_translation_gesture()
-{
-    if (!translation_gesture_.has_value())
-        return;
-    document_session_.history().cancel_transaction();
-    translation_gesture_.reset();
-}
+void EditorUi::cancel_translation_gesture() { translation_controller_.cancel(); }
 
-void EditorUi::finish_translation_gesture()
-{
-    if (!translation_gesture_.has_value())
-        return;
-    document_session_.history().commit_transaction();
-    translation_gesture_.reset();
-}
+void EditorUi::finish_translation_gesture() { translation_controller_.commit(); }
 
 void EditorUi::draw_console()
 {

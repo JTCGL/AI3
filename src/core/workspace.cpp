@@ -41,4 +41,7 @@ void Workspace::clear_active_material() { active_material_ = no_material; }
 
 LengthUnit Workspace::display_length_unit() const { return display_length_unit_; }
 void Workspace::set_display_length_unit(LengthUnit unit) { display_length_unit_ = unit; }
+
+ViewportState& Workspace::viewport() { return viewport_; }
+const ViewportState& Workspace::viewport() const { return viewport_; }
 } // namespace ai3

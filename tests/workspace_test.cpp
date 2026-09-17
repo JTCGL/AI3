@@ -15,6 +15,11 @@ TEST_CASE("Core Workspace defaults are display independent")
     CHECK_FALSE(workspace.bounds_display(42).hover_feedback);
     CHECK(workspace.active_material() == ai3::no_material);
     CHECK(workspace.display_length_unit() == ai3::default_display_length_unit);
+    CHECK(workspace.viewport().source == ai3::ViewSource::editor_view);
+    CHECK(workspace.viewport().scene_camera_id == ai3::no_object);
+    CHECK(workspace.viewport().interaction_mode == ai3::ViewportInteractionMode::selection);
+    CHECK(workspace.viewport().transform_tool == ai3::ViewportTransformTool::translation);
+    CHECK(workspace.viewport().reference_space == ai3::CoordinateSpace::world);
 }
 
 TEST_CASE("Core Workspace stores and clears selection")

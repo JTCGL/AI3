@@ -1,5 +1,7 @@
 #include "scene/translation_gizmo.h"
 
+#include "scene/scene_math.h"
+
 #include <glm/geometric.hpp>
 #include <glm/vec4.hpp>
 
@@ -188,5 +190,112 @@ bool viewport_geometry_matches(glm::vec2 frozen_origin, glm::vec2 frozen_size,
                                        glm::vec2{geometry_tolerance})) &&
            glm::all(glm::lessThanEqual(glm::abs(frozen_size - current_size),
                                        glm::vec2{geometry_tolerance}));
+}
+
+const AxisTranslationGesture* TranslationInteractionController::gesture() const
+{
+    return gesture_ ? &*gesture_ : nullptr;
+}
+
+TranslationAxis TranslationInteractionController::hover_axis(glm::vec2 pointer,
+                                                             glm::vec2 viewport_size,
+                                                             const ResolvedViewportView& view,
+                                                             float screen_axis_length,
+                                                             float hit_tolerance) const
+{
+    if (workspace_.viewport().interaction_mode != ViewportInteractionMode::selection ||
+        workspace_.viewport().transform_tool != ViewportTransformTool::translation)
+        return TranslationAxis::none;
+    const SceneObject* object = scene_.find_object(workspace_.selection());
+    if (object == nullptr)
+        return TranslationAxis::none;
+    const glm::vec3 pivot = scene_.world_position(object->id);
+    const glm::mat3 basis = coordinate_space_basis(
+        scene_, object->id, workspace_.viewport().reference_space, view.view);
+    const auto projected =
+        project_translation_gizmo(pivot, basis, view, viewport_size, screen_axis_length);
+    return projected ? pick_translation_axis(pointer, *projected, hit_tolerance)
+                     : TranslationAxis::none;
+}
+
+bool TranslationInteractionController::acquire(glm::vec2 pointer, glm::vec2 viewport_origin,
+                                               glm::vec2 viewport_size,
+                                               const ResolvedViewportView& view,
+                                               float screen_axis_length, float hit_tolerance)
+{
+    if (active())
+        return false;
+    const SceneObject* object = scene_.find_object(workspace_.selection());
+    if (object == nullptr)
+        return false;
+    const TranslationAxis axis =
+        hover_axis(pointer, viewport_size, view, screen_axis_length, hit_tolerance);
+    if (axis == TranslationAxis::none)
+        return false;
+    const glm::vec3 pivot = scene_.world_position(object->id);
+    const glm::mat3 basis = coordinate_space_basis(
+        scene_, object->id, workspace_.viewport().reference_space, view.view);
+    const glm::vec3 world_axis = glm::normalize(basis[static_cast<std::size_t>(axis)]);
+    const glm::vec2 coordinates{pointer.x / viewport_size.x, pointer.y / viewport_size.y};
+    const AxisDragConstraint constraint =
+        begin_axis_drag_constraint(viewport_world_ray(coordinates, view), pivot, world_axis, view);
+    if (!constraint.valid)
+        return false;
+    edit_.emplace(operations_.begin_continuous_edit());
+    if (!edit_->active())
+    {
+        edit_.reset();
+        return false;
+    }
+    gesture_ = AxisTranslationGesture{
+        object->id,      axis,          pivot, world_axis, basis, screen_axis_length, hit_tolerance,
+        viewport_origin, viewport_size, view,  constraint};
+    return true;
+}
+
+bool TranslationInteractionController::update(glm::vec2 pointer, glm::vec2 viewport_origin,
+                                              glm::vec2 viewport_size)
+{
+    if (!gesture_)
+        return false;
+    const AxisTranslationGesture& gesture = *gesture_;
+    if (!viewport_geometry_matches(gesture.frozen_viewport_origin, gesture.frozen_viewport_size,
+                                   viewport_origin, viewport_size) ||
+        scene_.find_object(gesture.object_id) == nullptr)
+    {
+        cancel();
+        return false;
+    }
+    const glm::vec2 coordinates{
+        (pointer.x - gesture.frozen_viewport_origin.x) / gesture.frozen_viewport_size.x,
+        (pointer.y - gesture.frozen_viewport_origin.y) / gesture.frozen_viewport_size.y};
+    const auto desired = constrained_axis_position(
+        gesture.constraint, viewport_world_ray(coordinates, gesture.frozen_view));
+    if (desired && !operations_.set_world_position(gesture.object_id, *desired))
+    {
+        cancel();
+        return false;
+    }
+    return true;
+}
+
+bool TranslationInteractionController::commit()
+{
+    if (!gesture_)
+        return false;
+    gesture_.reset();
+    const bool changed = edit_->commit();
+    edit_.reset();
+    return changed;
+}
+
+bool TranslationInteractionController::cancel()
+{
+    if (!gesture_)
+        return false;
+    gesture_.reset();
+    const bool cancelled = edit_->cancel();
+    edit_.reset();
+    return cancelled;
 }
 } // namespace ai3

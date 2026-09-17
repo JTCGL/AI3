@@ -307,7 +307,7 @@ TEST_CASE("scene save success remains distinct from workspace failure")
 TEST_CASE("world gizmo geometry projects to the requested apparent size")
 {
     ai3::EditorState scene;
-    ai3::ViewportView orbit;
+    ai3::ViewportView orbit(scene.workspace());
     const glm::mat3 rotated = glm::mat3{glm::rotate(glm::mat4{1.0F}, glm::radians(31.0F),
                                                     glm::normalize(glm::vec3{1.0F, 2.0F, 3.0F}))};
     for (float zoom : {0.0F, 4.0F, -4.0F})
@@ -321,7 +321,8 @@ TEST_CASE("world gizmo geometry projects to the requested apparent size")
     }
 
     const auto camera = scene.create_perspective_camera("Camera", {60.0F, 0.1F, 200.0F});
-    ai3::ViewportView scene_camera;
+    ai3::Workspace camera_workspace;
+    ai3::ViewportView scene_camera(camera_workspace);
     REQUIRE(scene_camera.use_scene_camera(scene.scene(), camera));
     for (float depth : {-3.0F, -12.0F, -40.0F})
         check_gizmo_apparent_length(scene_camera.resolve(scene.scene(), 16.0F / 9.0F),
@@ -360,7 +361,7 @@ TEST_CASE("helper bounds are deterministic and apply the complete world transfor
     auto selected = ai3::resolve_bounds_helper_geometry(scene.scene(), scene.workspace(), id, id);
     REQUIRE_FALSE(selected.lines.empty());
     CHECK(selected.lines[0].color == glm::vec3{1.0F});
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::navigation);
     CHECK(viewport.helper_hover_object(id) == ai3::no_object);
     const auto navigation_bounds = ai3::resolve_bounds_helper_geometry(
@@ -403,7 +404,7 @@ TEST_CASE("frozen gizmo inputs remain separate from current bounds and camera vi
 {
     ai3::EditorState scene;
     const auto camera = scene.create_perspective_camera("Camera", {55.0F, 0.1F, 200.0F});
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     REQUIRE(viewport.use_scene_camera(scene.scene(), camera));
     const glm::vec2 frozen_size{960.0F, 540.0F};
     const ai3::ResolvedViewportView frozen_view = viewport.resolve(scene.scene(), 16.0F / 9.0F);

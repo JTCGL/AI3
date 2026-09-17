@@ -8,15 +8,16 @@ requirements and demonstrated dependencies become clearer.
 
 [ADR 0009](decisions/0009-core-architecture-boundaries.md) establishes AI3 Core as the display-independent
 architectural center. M20 recorded the contract, M21 extracted authored Scene/Document ownership, M22
-extracted non-authored Workspace/Workspace Document ownership, and M23 extracted snapshot history and typed
-semantic edit operations into the real `ai3_core` target. Remaining
+extracted non-authored Workspace/Workspace Document ownership, M23 extracted snapshot history and typed
+semantic edit operations, and M24 moved continuous-edit lifetime and authoritative viewport state inward.
+Remaining
 responsibilities will migrate deliberately. The planned sequence is:
 
 - M20 — Core architecture contract: document terminology, ownership, dependencies, and migration discipline.
 - M21 — Core Scene/Document extraction (completed).
 - M22 — Core Workspace extraction (completed).
 - M23 — Core semantic operations and undo boundary (completed).
-- M24 — Continuous operations and viewport/tools boundary.
+- M24 — Continuous operations and viewport/tools boundary (completed).
 - M25 — Core document/session and persistence boundary.
 - M26 — Renderer boundary.
 - M27 — Dependency enforcement and graphics-free headless proof.
@@ -40,11 +41,12 @@ Version 3 Scene Documents (including Box), strict v1/v2 migration, and revision-
 unsaved-change protection are established. Scene files intentionally do not include viewport, layout, locale,
 display-unit, console, diagnostics, renderer, or other workspace/session state.
 
-The version-1 `.ai3workspace` sidecar currently persists only per-object bounds-display switches. ADR 0009 now
+The version-1 `.ai3workspace` sidecar currently persists only per-object bounds-display switches. ADR 0009
 assigns selection, bounds-display state, active material/editor selection where applicable, display units, and
-appropriate viewport/editor preferences to Core Workspace. M22 extracted the currently existing selection,
-bounds-display, active-material, and display-unit state without expanding v1 persistence; M25 will define the
-persistence boundary. Per-document Workspace state and application-wide preferences must not be conflated
+appropriate viewport/editor preferences to Core Workspace. M22 extracted selection, bounds-display,
+active-material, and display-unit state, and M24 added authoritative in-memory viewport/editor-view state,
+without expanding v1 persistence; M25 will define the persistence boundary. Per-document Workspace state and
+application-wide preferences must not be conflated
 merely because both are non-scene data.
 
 ## Transform tools and editing workflow

@@ -99,6 +99,117 @@ TEST_CASE("Core operation transactions group repeated edits and cancellation res
     CHECK(core.scene.find_object(sphere)->name == "Sphere 1");
 }
 
+TEST_CASE("Core continuous edits own grouped commit cancel and abandonment semantics")
+{
+    CoreEditingStack core;
+    const ai3::ObjectId sphere = core.operations.create_sphere("Sphere");
+    core.history.rebaseline();
+    const ai3::HistoryStateId baseline = core.history.current_state_id();
+
+    {
+        ai3::ContinuousEdit edit = core.operations.begin_continuous_edit();
+        REQUIRE(edit.active());
+        REQUIRE(core.operations.set_world_position(sphere, {1.0F, 0.0F, 0.0F}));
+        REQUIRE(core.operations.set_world_position(sphere, {2.0F, 0.0F, 0.0F}));
+        REQUIRE(edit.commit());
+        CHECK_FALSE(edit.active());
+    }
+    CHECK(core.history.current_state_id() != baseline);
+    REQUIRE(core.history.undo());
+    CHECK(core.scene.world_position(sphere) == glm::vec3{0.0F});
+    CHECK_FALSE(core.history.can_undo());
+    REQUIRE(core.history.redo());
+    CHECK(core.scene.world_position(sphere) == glm::vec3{2.0F, 0.0F, 0.0F});
+
+    const ai3::HistoryStateId committed = core.history.current_state_id();
+    {
+        ai3::ContinuousEdit edit = core.operations.begin_continuous_edit();
+        REQUIRE(core.operations.set_world_position(sphere, {5.0F, 0.0F, 0.0F}));
+        REQUIRE(edit.cancel());
+    }
+    CHECK(core.scene.world_position(sphere) == glm::vec3{2.0F, 0.0F, 0.0F});
+    CHECK(core.history.current_state_id() == committed);
+
+    {
+        ai3::ContinuousEdit edit = core.operations.begin_continuous_edit();
+        CHECK_FALSE(edit.commit());
+    }
+    CHECK(core.history.current_state_id() == committed);
+
+    {
+        ai3::ContinuousEdit edit = core.operations.begin_continuous_edit();
+        REQUIRE(core.operations.set_world_position(sphere, {7.0F, 0.0F, 0.0F}));
+        REQUIRE(core.operations.set_world_position(sphere, {2.0F, 0.0F, 0.0F}));
+        CHECK_FALSE(edit.commit());
+    }
+    CHECK(core.history.current_state_id() == committed);
+
+    {
+        ai3::ContinuousEdit edit = core.operations.begin_continuous_edit();
+        REQUIRE(core.operations.set_world_position(sphere, {9.0F, 0.0F, 0.0F}));
+    }
+    CHECK(core.scene.world_position(sphere) == glm::vec3{2.0F, 0.0F, 0.0F});
+    CHECK_FALSE(core.history.transaction_active());
+
+    CHECK_THROWS_AS(
+        [&]
+        {
+            ai3::ContinuousEdit edit = core.operations.begin_continuous_edit();
+            core.operations.set_sphere(sphere, {-1.0F});
+        }(),
+        std::invalid_argument);
+    CHECK_FALSE(core.history.transaction_active());
+    CHECK(core.scene.find_object(sphere)->sphere.radius_meters == doctest::Approx(1.0F));
+}
+
+TEST_CASE("typed operations participate in an active Core continuous edit")
+{
+    CoreEditingStack core;
+    const ai3::ObjectId sphere = core.operations.create_sphere("Sphere");
+    core.history.rebaseline();
+
+    ai3::ContinuousEdit edit = core.operations.begin_continuous_edit();
+    REQUIRE(core.operations.rename_object(sphere, "Edited"));
+    REQUIRE(core.operations.set_sphere(sphere, {3.0F}));
+    REQUIRE(edit.commit());
+    REQUIRE(core.history.undo());
+    CHECK(core.scene.find_object(sphere)->name == "Sphere 1");
+    CHECK(core.scene.find_object(sphere)->sphere.radius_meters == doctest::Approx(1.0F));
+    REQUIRE(core.history.redo());
+    CHECK(core.scene.find_object(sphere)->name == "Edited");
+    CHECK(core.scene.find_object(sphere)->sphere.radius_meters == doctest::Approx(3.0F));
+}
+
+TEST_CASE("Core Workspace viewport state is non-authored and outside history")
+{
+    CoreEditingStack core;
+    const ai3::ObjectId camera = core.operations.create_perspective_camera("Camera");
+    core.history.rebaseline();
+    const ai3::DocumentRevision revision = core.scene.document_revision();
+    const ai3::HistoryStateId history = core.history.current_state_id();
+
+    ai3::ViewportState& viewport = core.workspace.viewport();
+    viewport.source = ai3::ViewSource::scene_camera;
+    viewport.scene_camera_id = camera;
+    viewport.editor_view.target = {1.0F, 2.0F, 3.0F};
+    viewport.editor_view.yaw_degrees = 12.0F;
+    viewport.editor_view.pitch_degrees = -8.0F;
+    viewport.editor_view.distance = 9.0F;
+    viewport.interaction_mode = ai3::ViewportInteractionMode::navigation;
+    viewport.transform_tool = ai3::ViewportTransformTool::translation;
+    viewport.reference_space = ai3::CoordinateSpace::view;
+
+    CHECK(core.workspace.viewport().source == ai3::ViewSource::scene_camera);
+    CHECK(core.workspace.viewport().scene_camera_id == camera);
+    CHECK(core.workspace.viewport().editor_view.target == glm::vec3{1.0F, 2.0F, 3.0F});
+    CHECK(core.workspace.viewport().interaction_mode == ai3::ViewportInteractionMode::navigation);
+    CHECK(core.workspace.viewport().reference_space == ai3::CoordinateSpace::view);
+    CHECK(core.scene.document_revision() == revision);
+    CHECK(core.history.current_state_id() == history);
+    CHECK_FALSE(core.history.has_uncommitted_changes());
+    CHECK_FALSE(core.history.can_undo());
+}
+
 TEST_CASE("deletion coordinates Workspace lifecycle state without making Workspace undoable")
 {
     CoreEditingStack core;

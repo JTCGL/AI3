@@ -42,7 +42,7 @@ ai3::ObjectId create_camera(ai3::EditorState& scene, const ai3::Transform& trans
 TEST_CASE("Editor View resolves its view and aspect-dependent projection")
 {
     ai3::EditorState scene;
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     CHECK(viewport.source() == ai3::ViewSource::editor_view);
     const ai3::ResolvedViewportView wide = viewport.resolve(scene.scene(), 16.0F / 9.0F);
     const ai3::ResolvedViewportView square = viewport.resolve(scene.scene(), 1.0F);
@@ -60,7 +60,7 @@ TEST_CASE("viewport interaction mode is workspace state")
     const ai3::ObjectId camera = create_camera(scene);
     REQUIRE(scene.select(camera));
     ai3::DocumentSession session(scene);
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     REQUIRE(viewport.use_scene_camera(scene.scene(), camera));
     const ai3::DocumentRevision revision = scene.document_revision();
     const ai3::HistoryStateId history_state = session.history().current_state_id();
@@ -84,7 +84,7 @@ TEST_CASE("retained orbit requires Navigation mode while wheel zoom works in bot
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene);
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     const float initial_yaw = viewport.orbit().yaw_degrees();
     const float initial_pitch = viewport.orbit().pitch_degrees();
     const float initial_distance = viewport.orbit().distance();
@@ -141,7 +141,8 @@ TEST_CASE("retained orbit requires Navigation mode while wheel zoom works in bot
 
 TEST_CASE("Editor View pan follows the resolved view plane and scales predictably")
 {
-    ai3::ViewportView viewport;
+    ai3::Workspace workspace;
+    ai3::ViewportView viewport(workspace);
     const glm::vec3 initial = viewport.orbit().target();
     const glm::vec3 initial_position = viewport.orbit().position();
     REQUIRE(viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {100.0F, 0.0F},
@@ -152,8 +153,10 @@ TEST_CASE("Editor View pan follows the resolved view plane and scales predictabl
     CHECK(glm::dot(horizontal, forward) == doctest::Approx(0.0F).epsilon(0.0001));
     CHECK(glm::dot(glm::normalize(horizontal), -right) == doctest::Approx(1.0F).epsilon(0.0001));
 
-    ai3::ViewportView half_height;
-    ai3::ViewportView double_distance;
+    ai3::Workspace half_height_workspace;
+    ai3::Workspace double_distance_workspace;
+    ai3::ViewportView half_height(half_height_workspace);
+    ai3::ViewportView double_distance(double_distance_workspace);
     double_distance.orbit().zoom(-std::log(2.0F) / 0.12F);
     REQUIRE(half_height.transient_navigate(ai3::TransientNavigationOperation::pan, {0.0F, 20.0F},
                                            500.0F));
@@ -171,7 +174,8 @@ TEST_CASE("Editor View pan follows the resolved view plane and scales predictabl
 
 TEST_CASE("invalid Editor View navigation inputs preserve state")
 {
-    ai3::ViewportView viewport;
+    ai3::Workspace workspace;
+    ai3::ViewportView viewport(workspace);
     const float nan = std::numeric_limits<float>::quiet_NaN();
     const glm::vec3 target = viewport.orbit().target();
     const float yaw = viewport.orbit().yaw_degrees();
@@ -191,7 +195,8 @@ TEST_CASE("invalid Editor View navigation inputs preserve state")
 
 TEST_CASE("transient Shift gesture freezes its acquisition-time operation")
 {
-    ai3::ViewportView viewport;
+    ai3::Workspace workspace;
+    ai3::ViewportView viewport(workspace);
     ai3::TransientNavigationGesture pan;
     REQUIRE(pan.acquire(false)); // MMB without Shift acquires pan.
     CHECK(pan.operation() == ai3::TransientNavigationOperation::pan);
@@ -215,7 +220,7 @@ TEST_CASE("Editor View navigation preserves document and retained workspace stat
     const ai3::ObjectId selected = scene.create_sphere("Selected");
     REQUIRE(scene.select(selected));
     ai3::DocumentSession session(scene);
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     viewport.set_interaction_mode(ai3::ViewportInteractionMode::selection);
     viewport.set_reference_space(ai3::CoordinateSpace::view);
     const ai3::DocumentRevision revision = scene.document_revision();
@@ -241,7 +246,7 @@ TEST_CASE("Editor View pose and pivot survive scene-camera selection")
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene);
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     viewport.orbit().orbit(17.0F, -9.0F);
     viewport.orbit().zoom(2.0F);
     REQUIRE(viewport.transient_navigate(ai3::TransientNavigationOperation::pan, {24.0F, -12.0F},
@@ -268,7 +273,7 @@ TEST_CASE("scene-camera view uses current authoritative world transform")
     camera_transform.position = {3.0F, 4.0F, 5.0F};
     camera_transform.orientation = ai3::orientation_from_euler_degrees({20.0F, -15.0F, 35.0F});
     const ai3::ObjectId camera = create_camera(scene, camera_transform);
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     REQUIRE(viewport.use_scene_camera(scene.scene(), camera));
 
     ai3::ResolvedViewportView resolved = viewport.resolve(scene.scene(), 1.0F);
@@ -299,7 +304,7 @@ TEST_CASE("parented scene-camera view uses resolved parent transform")
     local.position = {2.0F, 0.0F, 1.0F};
     local.orientation = ai3::orientation_from_euler_degrees({25.0F, 0.0F, 0.0F});
     const ai3::ObjectId camera = create_camera(scene, local, {}, parent);
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     REQUIRE(viewport.use_scene_camera(scene.scene(), camera));
 
     const ai3::ResolvedViewportView first = viewport.resolve(scene.scene(), 1.0F);
@@ -320,7 +325,7 @@ TEST_CASE("generic scene-camera source dispatches the current perspective subtyp
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene, {}, {60.0F, 0.25F, 250.0F});
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     REQUIRE(viewport.use_scene_camera(scene.scene(), camera));
     CHECK(viewport.source() == ai3::ViewSource::scene_camera);
     const glm::mat4 square = viewport.resolve(scene.scene(), 1.0F).projection;
@@ -341,7 +346,7 @@ TEST_CASE("invalid view sources are rejected and deleted camera falls back to Ed
     const ai3::ObjectId object = scene.create_object(ai3::CreateObject{"Object"});
     const ai3::ObjectId sphere = scene.create_sphere("Sphere");
     const ai3::ObjectId camera = create_camera(scene);
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     CHECK_FALSE(viewport.use_scene_camera(scene.scene(), ai3::no_object));
     CHECK_FALSE(viewport.use_scene_camera(scene.scene(), object));
     CHECK_FALSE(viewport.use_scene_camera(scene.scene(), sphere));
@@ -360,7 +365,7 @@ TEST_CASE("scene and viewport reset produce deterministic default Editor View st
 {
     ai3::EditorState scene;
     const ai3::ObjectId camera = create_camera(scene);
-    ai3::ViewportView viewport;
+    ai3::ViewportView viewport(scene.workspace());
     viewport.orbit().orbit(10.0F, 20.0F);
     viewport.orbit().zoom(3.0F);
     REQUIRE(viewport.use_scene_camera(scene.scene(), camera));

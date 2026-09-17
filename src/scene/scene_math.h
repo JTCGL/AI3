@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/scene.h"
+#include "core/workspace.h"
 
 #include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
@@ -14,14 +14,6 @@ namespace ai3
 glm::quat orientation_from_euler_degrees(glm::vec3 euler_degrees);
 glm::vec3 euler_degrees_from_orientation(const glm::quat& orientation);
 glm::vec3 local_forward_from_orientation(const glm::quat& orientation);
-
-enum class CoordinateSpace
-{
-    local,
-    parent,
-    world,
-    view
-};
 
 // Returns an orthonormal reference-space basis expressed in world coordinates. Reference space
 // selects manipulation axes and is intentionally separate from local-to-parent transform storage.
