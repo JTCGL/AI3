@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "editor/document_session.h"
+#include "core/document_session.h"
+#include "editor/editor_state.h"
 #include "scene/scene_math.h"
 #include "scene/translation_gizmo.h"
 #include "scene/viewport_view.h"
@@ -167,7 +168,7 @@ TEST_CASE("frozen viewport geometry rejects material coordinate frame changes")
 TEST_CASE("translation gesture is one history transaction with checkpoint semantics")
 {
     ai3::EditorState state;
-    ai3::DocumentSession session(state);
+    ai3::DocumentSession session(state.scene(), state.workspace(), state.history());
     REQUIRE(session.history().begin_transaction());
     const ai3::ObjectId object = state.create_object(ai3::CreateObject{"Object"});
     REQUIRE(session.history().commit_transaction());
@@ -197,7 +198,7 @@ TEST_CASE("translation gesture is one history transaction with checkpoint semant
 TEST_CASE("reference space and transform tool choices remain workspace state")
 {
     ai3::EditorState state;
-    ai3::DocumentSession session(state);
+    ai3::DocumentSession session(state.scene(), state.workspace(), state.history());
     ai3::ViewportView viewport(state.workspace());
     const ai3::DocumentRevision revision = state.document_revision();
     const ai3::HistoryStateId history = session.history().current_state_id();

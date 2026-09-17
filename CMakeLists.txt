@@ -47,6 +47,7 @@ target_include_directories(ai3_options PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_library(ai3_core STATIC
     src/scene/color_space.cpp
+    src/core/document_session.cpp
     src/core/edit_history.cpp
     src/core/edit_operations.cpp
     src/core/length_units.cpp
@@ -59,7 +60,6 @@ target_include_directories(ai3_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(ai3_core PUBLIC glm::glm nlohmann_json::nlohmann_json)
 
 add_library(ai3_editor STATIC
-    src/editor/document_session.cpp
     src/editor/editor_state.cpp
 )
 target_include_directories(ai3_editor PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -179,7 +179,6 @@ if(AI3_BUILD_TESTS)
     enable_testing()
     add_executable(ai3_tests
         tests/command_line_test.cpp
-        tests/document_session_test.cpp
         tests/editor_state_test.cpp
         tests/hierarchy_test.cpp
         tests/localization_test.cpp
@@ -199,6 +198,7 @@ if(AI3_BUILD_TESTS)
     add_test(NAME ai3_unit_tests COMMAND ai3_tests)
     add_executable(ai3_core_tests
         tests/core_test_main.cpp
+        tests/document_session_test.cpp
         tests/edit_operations_test.cpp
         tests/editor_history_test.cpp
     )

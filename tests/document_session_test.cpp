@@ -1,6 +1,8 @@
-#include <doctest/doctest.h>
+#include "core/document_session.h"
+#include "core/edit_operations.h"
+#include "core/workspace_document.h"
 
-#include "editor/document_session.h"
+#include <doctest/doctest.h>
 
 #include <chrono>
 #include <filesystem>
@@ -8,247 +10,268 @@
 
 namespace
 {
-template <typename Edit> void edit(ai3::DocumentSession& session, Edit&& operation)
+struct CoreFixture
 {
-    REQUIRE(session.history().begin_transaction());
+    ai3::Scene scene;
+    ai3::Workspace workspace;
+    ai3::EditHistory history{scene, workspace};
+    ai3::EditOperations operations{scene, workspace, history};
+    ai3::DocumentSession session{scene, workspace, history};
+};
+
+std::filesystem::path temporary_scene(const char* label)
+{
+    const auto nonce = std::chrono::steady_clock::now().time_since_epoch().count();
+    return std::filesystem::temp_directory_path() /
+           (std::string{"ai3-m25-"} + label + '-' + std::to_string(nonce) + ".ai3scene");
+}
+
+template <typename Edit> void edit(CoreFixture& fixture, Edit&& operation)
+{
+    REQUIRE(fixture.history.begin_transaction());
     operation();
-    session.history().commit_transaction();
+    fixture.history.commit_transaction();
 }
 } // namespace
 
-TEST_CASE("document session tracks clean baselines and paths")
+TEST_CASE("Core document session observes authority without rebaselining it")
 {
-    ai3::EditorState state;
-    ai3::DocumentSession session(state);
-    CHECK_FALSE(session.dirty());
-    CHECK(session.document_path().empty());
+    ai3::Scene scene;
+    ai3::Workspace workspace;
+    ai3::EditHistory history{scene, workspace};
+    ai3::EditOperations operations{scene, workspace, history};
+    const ai3::ObjectId sphere = operations.create_sphere("Sphere");
+    REQUIRE(history.can_undo());
+    const ai3::HistoryStateId authored_state = history.current_state_id();
 
-    edit(session, [&] { state.create_sphere("Sphere"); });
-    CHECK(session.dirty());
-    session.mark_saved_as("first.ai3scene");
-    CHECK_FALSE(session.dirty());
-    CHECK(session.document_path() == "first.ai3scene");
-
-    edit(session, [&] { state.rename_object(1, "Changed"); });
-    CHECK(session.dirty());
-    session.mark_saved();
-    CHECK_FALSE(session.dirty());
-    edit(session, [&] { state.set_object_visible(1, false); });
-    CHECK(session.dirty());
-
-    session.mark_opened("opened.ai3scene");
-    CHECK_FALSE(session.dirty());
-    CHECK(session.document_path() == "opened.ai3scene");
-    session.new_document();
-    CHECK(state.objects().empty());
-    CHECK(session.document_path().empty());
-    CHECK_FALSE(session.dirty());
-}
-
-TEST_CASE("constructing a session preserves Core history authority")
-{
-    ai3::EditorState state;
-    const ai3::ObjectId sphere = state.create_sphere("Sphere");
-    REQUIRE(state.history().can_undo());
-    const ai3::HistoryStateId authored_state = state.history().current_state_id();
-
-    ai3::DocumentSession session(state);
+    ai3::DocumentSession session{scene, workspace, history};
     CHECK(session.history().current_state_id() == authored_state);
     CHECK(session.history().can_undo());
     CHECK_FALSE(session.dirty());
     REQUIRE(session.history().undo());
-    CHECK(state.find_object(sphere) == nullptr);
+    CHECK(scene.find_object(sphere) == nullptr);
 }
 
-TEST_CASE("saved history checkpoints drive dirty state through undo redo and branching")
+TEST_CASE("Core document checkpoints track undo redo branching and active changes")
 {
-    ai3::EditorState state;
-    ai3::DocumentSession session(state);
-    edit(session, [&] { state.create_sphere("Sphere"); });
-    session.mark_saved_as("saved.ai3scene");
-    CHECK_FALSE(session.dirty());
-    edit(session, [&] { state.rename_object(1, "Edited"); });
-    CHECK(session.dirty());
-    REQUIRE(session.history().undo());
-    CHECK_FALSE(session.dirty());
-    REQUIRE(session.history().redo());
-    CHECK(session.dirty());
-    REQUIRE(session.history().undo());
-    edit(session, [&] { state.set_object_visible(1, false); });
-    CHECK(session.dirty());
-    CHECK_FALSE(session.history().can_redo());
-    session.mark_saved();
-    CHECK_FALSE(session.dirty());
-}
+    CoreFixture fixture;
+    edit(fixture, [&] { fixture.operations.create_sphere("Sphere"); });
+    fixture.session.mark_saved();
+    CHECK_FALSE(fixture.session.dirty());
 
-TEST_CASE("active authoritative transaction changes participate in unsaved protection")
-{
-    ai3::EditorState state;
-    ai3::DocumentSession session(state);
-    edit(session, [&] { state.create_sphere("Sphere"); });
-    session.mark_saved_as("saved.ai3scene");
-    CHECK_FALSE(session.dirty());
-
-    ai3::ContinuousEdit continuous = state.operations().begin_continuous_edit();
+    ai3::ContinuousEdit continuous = fixture.operations.begin_continuous_edit();
     REQUIRE(continuous.active());
-    REQUIRE(state.rename_object(1, "Live edit"));
-    CHECK(session.history().has_uncommitted_changes());
-    CHECK(session.dirty());
-    for (ai3::DocumentTransition transition :
+    REQUIRE(fixture.operations.rename_object(1, "Live"));
+    CHECK(fixture.session.dirty());
+    REQUIRE(continuous.cancel());
+    CHECK_FALSE(fixture.session.dirty());
+
+    edit(fixture, [&] { fixture.operations.rename_object(1, "Edited"); });
+    CHECK(fixture.session.dirty());
+    REQUIRE(fixture.history.undo());
+    CHECK_FALSE(fixture.session.dirty());
+    REQUIRE(fixture.history.redo());
+    CHECK(fixture.session.dirty());
+    REQUIRE(fixture.history.undo());
+    edit(fixture, [&] { fixture.operations.set_object_visible(1, false); });
+    CHECK(fixture.session.dirty());
+    CHECK_FALSE(fixture.history.can_redo());
+}
+
+TEST_CASE("Core document pending transitions preserve save discard cancel semantics")
+{
+    CoreFixture fixture;
+    for (const ai3::DocumentTransition transition :
          {ai3::DocumentTransition::new_document, ai3::DocumentTransition::open_document,
           ai3::DocumentTransition::quit})
-    {
-        CHECK(session.request_transition(transition) ==
-              ai3::TransitionRequestResult::needs_unsaved_resolution);
-        CHECK(session.pending_transition() == transition);
-        session.cancel_pending_transition();
-    }
+        CHECK(fixture.session.request_transition(transition) ==
+              ai3::TransitionRequestResult::proceed);
 
-    REQUIRE(continuous.cancel());
-    CHECK(state.find_object(1)->name == "Sphere 1");
-    CHECK_FALSE(session.history().has_uncommitted_changes());
-    CHECK_FALSE(session.dirty());
-
-    REQUIRE(session.history().begin_transaction());
-    CHECK_FALSE(session.history().has_uncommitted_changes());
-    CHECK_FALSE(session.dirty());
-    CHECK(session.request_transition(ai3::DocumentTransition::quit) ==
-          ai3::TransitionRequestResult::proceed);
-    CHECK_FALSE(session.history().commit_transaction());
-
-    REQUIRE(session.history().begin_transaction());
-    REQUIRE(state.set_sphere(1, {2.0F}));
-    CHECK(session.dirty());
-    REQUIRE(session.history().commit_transaction());
-    CHECK(session.dirty());
-    REQUIRE(session.history().undo());
-    CHECK(state.find_object(1)->sphere.radius_meters == doctest::Approx(1.0F));
-    CHECK_FALSE(session.dirty());
+    edit(fixture, [&] { fixture.operations.create_object(ai3::CreateObject{"Dirty"}); });
+    CHECK(fixture.session.request_transition(ai3::DocumentTransition::open_document) ==
+          ai3::TransitionRequestResult::needs_unsaved_resolution);
+    fixture.session.cancel_pending_transition();
+    CHECK(fixture.session.pending_transition() == ai3::DocumentTransition::none);
+    fixture.session.request_transition(ai3::DocumentTransition::new_document);
+    CHECK(fixture.session.discard_and_take_pending_transition() ==
+          ai3::DocumentTransition::new_document);
+    CHECK(fixture.session.dirty());
+    fixture.session.request_transition(ai3::DocumentTransition::quit);
+    fixture.session.save_failed();
+    CHECK(fixture.session.pending_transition() == ai3::DocumentTransition::none);
+    fixture.session.request_transition(ai3::DocumentTransition::open_document);
+    CHECK(fixture.session.saved_and_take_pending_transition() ==
+          ai3::DocumentTransition::open_document);
+    CHECK_FALSE(fixture.session.dirty());
 }
 
-TEST_CASE("session file open is transactional and successful open is clean")
+TEST_CASE("New document applies the Workspace transition policy")
 {
-    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
-    const std::filesystem::path valid = std::filesystem::temp_directory_path() /
-                                        ("ai3-session-" + std::to_string(unique) + ".ai3scene");
-    const std::filesystem::path invalid = valid.string() + ".invalid";
-    ai3::EditorState source;
-    source.create_sphere("Loaded");
-    ai3::DocumentSession source_session(source);
-    REQUIRE(source_session.save_as(valid).scene_saved);
+    CoreFixture fixture;
+    const ai3::ObjectId camera = fixture.operations.create_perspective_camera("Camera");
+    const ai3::ObjectId sphere = fixture.operations.create_sphere("Sphere");
+    const ai3::MaterialId material = fixture.operations.create_material("Material");
+    fixture.operations.select(camera);
+    REQUIRE(fixture.operations.set_bounds_display(sphere, {true, true, true}));
+    fixture.workspace.set_active_material(material);
+    fixture.workspace.set_display_length_unit(ai3::LengthUnit::centimeter);
+    auto& viewport = fixture.workspace.viewport();
+    viewport.source = ai3::ViewSource::scene_camera;
+    viewport.scene_camera_id = camera;
+    viewport.editor_view = {{1.0F, 2.0F, 3.0F}, 12.0F, -8.0F, 17.0F};
+    viewport.interaction_mode = ai3::ViewportInteractionMode::navigation;
+    viewport.reference_space = ai3::CoordinateSpace::view;
+    const ai3::EditorViewState editor_view = viewport.editor_view;
+    const ai3::ViewportTransformTool transform_tool = viewport.transform_tool;
 
-    ai3::EditorState state;
-    const ai3::ObjectId existing = state.create_object(ai3::CreateObject{"Existing"});
-    ai3::DocumentSession session(state);
-    REQUIRE(state.select(existing));
-    session.mark_saved_as("original.ai3scene");
-    edit(session, [&] { state.rename_object(existing, "Dirty existing"); });
-    REQUIRE(session.history().can_undo());
-    const auto path_before_failure = session.document_path();
-    const bool dirty_before_failure = session.dirty();
+    fixture.session.new_document();
+    CHECK(fixture.scene.objects().empty());
+    CHECK(fixture.scene.materials().empty());
+    CHECK(fixture.workspace.selection() == ai3::no_object);
+    CHECK(fixture.workspace.bounds_display_states().empty());
+    CHECK(fixture.workspace.active_material() == ai3::no_material);
+    CHECK(viewport.source == ai3::ViewSource::editor_view);
+    CHECK(viewport.scene_camera_id == ai3::no_object);
+    CHECK(viewport.editor_view.target == editor_view.target);
+    CHECK(viewport.editor_view.yaw_degrees == editor_view.yaw_degrees);
+    CHECK(viewport.editor_view.pitch_degrees == editor_view.pitch_degrees);
+    CHECK(viewport.editor_view.distance == editor_view.distance);
+    CHECK(fixture.workspace.display_length_unit() == ai3::LengthUnit::centimeter);
+    CHECK(viewport.interaction_mode == ai3::ViewportInteractionMode::navigation);
+    CHECK(viewport.transform_tool == transform_tool);
+    CHECK(viewport.reference_space == ai3::CoordinateSpace::view);
+    CHECK_FALSE(fixture.session.dirty());
+    CHECK_FALSE(fixture.history.can_undo());
+}
+
+TEST_CASE("Open is transactional and distinguishes missing Workspace sidecars")
+{
+    const auto valid = temporary_scene("open");
+    const auto invalid = temporary_scene("invalid");
+    const auto original = temporary_scene("original");
+    CoreFixture source;
+    source.operations.create_sphere("Loaded");
+    REQUIRE(source.session.save_as(valid).scene_saved);
+    std::filesystem::remove(ai3::workspace_path_for_scene(valid));
+
+    CoreFixture fixture;
+    const ai3::ObjectId existing = fixture.operations.create_sphere("Existing");
+    fixture.operations.select(existing);
+    fixture.operations.set_bounds_display(existing, {true, false, true});
+    fixture.workspace.set_active_material(42);
+    fixture.workspace.set_display_length_unit(ai3::LengthUnit::millimeter);
+    fixture.workspace.viewport().editor_view = {{8.0F, 5.0F, 3.0F}, 19.0F, -4.0F, 11.0F};
+    fixture.workspace.viewport().interaction_mode = ai3::ViewportInteractionMode::navigation;
+    const ai3::EditorViewState editor_view = fixture.workspace.viewport().editor_view;
+    REQUIRE(fixture.session.save_as(original).scene_saved);
+    edit(fixture, [&] { fixture.operations.rename_object(existing, "Dirty existing"); });
+    const auto path_before = fixture.session.document_path();
+    const auto history_before = fixture.history.current_state_id();
     {
         std::ofstream stream(invalid);
         stream << "invalid";
     }
-    CHECK_FALSE(session.open(invalid));
-    REQUIRE(state.find_object(existing) != nullptr);
-    CHECK(session.document_path() == path_before_failure);
-    CHECK(session.dirty() == dirty_before_failure);
-    CHECK(session.history().can_undo());
-    CHECK(state.selection() == existing);
 
-    REQUIRE(session.open(valid));
-    CHECK(state.objects().size() == 1);
-    CHECK(state.objects()[0].name == "Loaded 1");
-    CHECK(state.selection() == ai3::no_object);
-    CHECK(session.document_path() == valid);
-    CHECK_FALSE(session.dirty());
-    CHECK_FALSE(session.history().can_undo());
-    CHECK_FALSE(session.history().can_redo());
+    const ai3::DocumentOpenResult failed = fixture.session.open(invalid);
+    CHECK_FALSE(failed.scene_opened);
+    CHECK_FALSE(failed.scene_diagnostic.empty());
+    CHECK(failed.workspace.status == ai3::WorkspacePersistenceStatus::not_attempted);
+    CHECK(fixture.scene.find_object(existing) != nullptr);
+    CHECK(fixture.workspace.selection() == existing);
+    CHECK(fixture.workspace.bounds_display(existing).show_bounding_box);
+    CHECK(fixture.workspace.active_material() == 42);
+    CHECK(fixture.session.document_path() == path_before);
+    CHECK(fixture.history.current_state_id() == history_before);
+    CHECK(fixture.session.dirty());
+
+    const ai3::DocumentOpenResult opened = fixture.session.open(valid);
+    CHECK(opened.scene_opened);
+    CHECK(opened.workspace.status == ai3::WorkspacePersistenceStatus::missing);
+    CHECK(fixture.scene.objects().size() == 1);
+    CHECK(fixture.workspace.selection() == ai3::no_object);
+    CHECK(fixture.workspace.bounds_display_states().empty());
+    CHECK(fixture.workspace.active_material() == ai3::no_material);
+    CHECK(fixture.workspace.display_length_unit() == ai3::LengthUnit::millimeter);
+    CHECK(fixture.workspace.viewport().editor_view.target == editor_view.target);
+    CHECK(fixture.workspace.viewport().editor_view.yaw_degrees == editor_view.yaw_degrees);
+    CHECK(fixture.workspace.viewport().editor_view.pitch_degrees == editor_view.pitch_degrees);
+    CHECK(fixture.workspace.viewport().editor_view.distance == editor_view.distance);
+    CHECK(fixture.workspace.viewport().interaction_mode ==
+          ai3::ViewportInteractionMode::navigation);
+    CHECK_FALSE(fixture.session.dirty());
+    CHECK_FALSE(fixture.history.can_undo());
     std::filesystem::remove(valid);
     std::filesystem::remove(invalid);
+    std::filesystem::remove(original);
+    std::filesystem::remove(ai3::workspace_path_for_scene(original));
 }
 
-TEST_CASE("new document clears history and establishes an untitled clean baseline")
+TEST_CASE("Open overlays valid Workspace v1 object state and drops stale identities")
 {
-    ai3::EditorState state;
-    ai3::DocumentSession session(state);
-    edit(session, [&] { state.create_sphere("Sphere"); });
-    session.mark_saved_as("old.ai3scene");
-    edit(session, [&] { state.rename_object(1, "Changed"); });
-    REQUIRE(session.history().can_undo());
-    session.new_document();
-    CHECK(state.objects().empty());
-    CHECK(session.document_path().empty());
-    CHECK_FALSE(session.dirty());
-    CHECK_FALSE(session.history().can_undo());
-    CHECK_FALSE(session.history().can_redo());
+    const auto scene_path = temporary_scene("stale");
+    CoreFixture source;
+    const ai3::ObjectId object = source.operations.create_sphere("Sphere");
+    REQUIRE(source.session.save_as(scene_path).scene_saved);
+    const ai3::WorkspaceDocument sidecar{
+        {{object, {true, false, true}}, {object + 99, {false, true, true}}}};
+    REQUIRE(ai3::save_workspace_file(sidecar, ai3::workspace_path_for_scene(scene_path)));
+
+    CoreFixture fixture;
+    fixture.workspace.set_bounds_display(700, {true, true, true});
+    const ai3::DocumentOpenResult result = fixture.session.open(scene_path);
+    REQUIRE(result.scene_opened);
+    CHECK(result.workspace.status == ai3::WorkspacePersistenceStatus::succeeded);
+    CHECK(fixture.workspace.bounds_display_states().size() == 1);
+    CHECK(fixture.workspace.bounds_display(object).show_bounding_box);
+    CHECK(fixture.workspace.bounds_display(object).hover_feedback);
+    CHECK_FALSE(fixture.workspace.bounds_display(object + 99).show_bounding_sphere);
+    std::filesystem::remove(scene_path);
+    std::filesystem::remove(ai3::workspace_path_for_scene(scene_path));
 }
 
-TEST_CASE("workspace-only changes remain outside history and dirty state")
+TEST_CASE("Workspace failures are ancillary to authoritative Scene persistence")
 {
-    ai3::EditorState state;
-    ai3::DocumentSession session(state);
-    const ai3::ObjectId sphere = state.create_sphere("Sphere");
-    session.mark_saved();
-    const ai3::HistoryStateId authored_state = session.history().current_state_id();
-    REQUIRE(state.select(sphere));
-    REQUIRE(state.set_bounds_display(sphere, {true, false, true}));
-    state.workspace().set_active_material(91);
-    state.workspace().set_display_length_unit(ai3::LengthUnit::kilometer);
-    state.set_panel_visible(ai3::EditorPanel::console, false);
-    state.add_console_message("diagnostic");
-    state.request_layout_reset();
-    CHECK_FALSE(session.dirty());
-    CHECK(session.history().current_state_id() == authored_state);
-    CHECK(session.history().can_undo());
+    auto root = temporary_scene("partial-root");
+    root.replace_extension();
+    std::filesystem::create_directory(root);
+    const auto scene_path = root / "partial.ai3scene";
+    std::filesystem::create_directory(ai3::workspace_path_for_scene(scene_path));
+    CoreFixture fixture;
+    edit(fixture, [&] { fixture.operations.create_sphere("Sphere"); });
+    const ai3::DocumentSaveResult result = fixture.session.save_as(scene_path);
+    CHECK(result.scene_saved);
+    CHECK(result.workspace.status == ai3::WorkspacePersistenceStatus::failed);
+    CHECK_FALSE(result.workspace.diagnostic.empty());
+    CHECK(std::filesystem::is_regular_file(scene_path));
+    CHECK_FALSE(fixture.session.dirty());
+
+    edit(fixture, [&] { fixture.operations.rename_object(1, "Dirty again"); });
+    const auto adopted_path = fixture.session.document_path();
+    const ai3::DocumentSaveResult failed_as = fixture.session.save_as(root);
+    CHECK_FALSE(failed_as.scene_saved);
+    CHECK(failed_as.workspace.status == ai3::WorkspacePersistenceStatus::not_attempted);
+    CHECK(fixture.session.document_path() == adopted_path);
+    CHECK(fixture.session.dirty());
+    std::filesystem::remove_all(root);
 }
 
-TEST_CASE("reset scene retains association and only dirties for a real change")
+TEST_CASE("Failed Workspace read remains ancillary to successful Open")
 {
-    ai3::EditorState state;
-    ai3::DocumentSession session(state);
-    session.mark_saved_as("scene.ai3scene");
-    CHECK_FALSE(session.reset_scene());
-    CHECK_FALSE(session.dirty());
-    edit(session, [&] { state.create_object(ai3::CreateObject{"Object"}); });
-    session.mark_saved();
-    REQUIRE(session.reset_scene());
-    CHECK(session.dirty());
-    CHECK(session.document_path() == "scene.ai3scene");
-    REQUIRE(session.history().undo());
-    CHECK_FALSE(session.dirty());
-    CHECK(session.document_path() == "scene.ai3scene");
-    REQUIRE(session.history().redo());
-    CHECK(session.dirty());
-}
-
-TEST_CASE("pending destructive transitions enforce save discard and cancel")
-{
-    ai3::EditorState state;
-    ai3::DocumentSession session(state);
-    for (ai3::DocumentTransition transition :
-         {ai3::DocumentTransition::new_document, ai3::DocumentTransition::open_document,
-          ai3::DocumentTransition::quit})
-        CHECK(session.request_transition(transition) == ai3::TransitionRequestResult::proceed);
-
-    edit(session, [&] { state.create_object(ai3::CreateObject{"Dirty"}); });
-    CHECK(session.request_transition(ai3::DocumentTransition::open_document) ==
-          ai3::TransitionRequestResult::needs_unsaved_resolution);
-    CHECK(session.pending_transition() == ai3::DocumentTransition::open_document);
-    session.cancel_pending_transition();
-    CHECK(session.pending_transition() == ai3::DocumentTransition::none);
-
-    session.request_transition(ai3::DocumentTransition::new_document);
-    CHECK(session.discard_and_take_pending_transition() == ai3::DocumentTransition::new_document);
-    CHECK(session.dirty());
-
-    session.request_transition(ai3::DocumentTransition::quit);
-    session.save_failed();
-    CHECK(session.pending_transition() == ai3::DocumentTransition::none);
-    CHECK(session.dirty());
-
-    session.request_transition(ai3::DocumentTransition::open_document);
-    CHECK(session.saved_and_take_pending_transition() == ai3::DocumentTransition::open_document);
-    CHECK_FALSE(session.dirty());
+    const auto scene_path = temporary_scene("bad-sidecar");
+    CoreFixture source;
+    source.operations.create_sphere("Sphere");
+    REQUIRE(source.session.save_as(scene_path).scene_saved);
+    {
+        std::ofstream stream(ai3::workspace_path_for_scene(scene_path), std::ios::trunc);
+        stream << "invalid";
+    }
+    CoreFixture fixture;
+    const ai3::DocumentOpenResult result = fixture.session.open(scene_path);
+    CHECK(result.scene_opened);
+    CHECK(result.workspace.status == ai3::WorkspacePersistenceStatus::failed);
+    CHECK_FALSE(result.workspace.diagnostic.empty());
+    CHECK(fixture.scene.objects().size() == 1);
+    CHECK_FALSE(fixture.session.dirty());
+    std::filesystem::remove(scene_path);
+    std::filesystem::remove(ai3::workspace_path_for_scene(scene_path));
 }

@@ -1,6 +1,7 @@
+#include "core/document_session.h"
 #include "core/scene_document.h"
 #include "core/workspace_document.h"
-#include "editor/document_session.h"
+#include "editor/editor_state.h"
 #include "render/viewport_renderer.h"
 #include "scene/helper_geometry.h"
 #include "scene/translation_gizmo.h"
@@ -81,7 +82,7 @@ TEST_CASE("sphere bounds are cached locally and only radius changes their values
 TEST_CASE("bounds and workspace follow undo deletion and reset lifecycles")
 {
     ai3::EditorState scene;
-    ai3::DocumentSession session(scene);
+    ai3::DocumentSession session(scene.scene(), scene.workspace(), scene.history());
     REQUIRE(session.history().begin_transaction());
     const auto id = scene.create_sphere("Sphere", {1.0F});
     REQUIRE(session.history().commit_transaction());
@@ -208,12 +209,12 @@ TEST_CASE("workspace sidecars follow document session lifecycle without dirtying
     std::filesystem::remove(ai3::workspace_path_for_scene(second), ignored);
     CHECK(ai3::workspace_path_for_scene(first).filename() == "ai3-m17-first.ai3workspace");
     ai3::EditorState state;
-    ai3::DocumentSession session(state);
+    ai3::DocumentSession session(state.scene(), state.workspace(), state.history());
     const auto id = state.create_sphere("Sphere");
     session.history().rebaseline();
     session.mark_saved();
     const auto revision = state.document_revision();
-    REQUIRE(session.set_bounds_display(id, {true, true, true}));
+    REQUIRE(state.operations().set_bounds_display(id, {true, true, true}));
     CHECK(state.document_revision() == revision);
     CHECK_FALSE(session.dirty());
     REQUIRE(session.save_as(first).scene_saved);
@@ -221,7 +222,7 @@ TEST_CASE("workspace sidecars follow document session lifecycle without dirtying
     REQUIRE(session.save_as(second).scene_saved);
     REQUIRE(std::filesystem::exists(ai3::workspace_path_for_scene(second)));
     state.replace_bounds_workspace({});
-    REQUIRE(session.open(second));
+    REQUIRE(session.open(second).scene_opened);
     CHECK(state.bounds_display(id).show_bounding_sphere);
     session.new_document();
     CHECK(state.bounds_workspace().empty());
@@ -239,24 +240,24 @@ TEST_CASE("workspace mutation waits for Save and missing sidecars use object def
     std::filesystem::remove(scene_path, ignored);
     std::filesystem::remove(workspace_path, ignored);
     ai3::EditorState state;
-    ai3::DocumentSession session(state);
+    ai3::DocumentSession session(state.scene(), state.workspace(), state.history());
     const auto id = state.create_sphere("Sphere");
     REQUIRE(session.save_as(scene_path).scene_saved);
     std::filesystem::remove(workspace_path, ignored);
-    REQUIRE(session.set_bounds_display(id, {true, false, true}));
+    REQUIRE(state.operations().set_bounds_display(id, {true, false, true}));
     CHECK_FALSE(std::filesystem::exists(workspace_path));
     CHECK_FALSE(session.dirty());
     const ai3::DocumentSaveResult saved = session.save();
     CHECK(saved.scene_saved);
-    CHECK(saved.workspace_saved);
-    REQUIRE(session.open(scene_path));
+    CHECK(saved.workspace.status == ai3::WorkspacePersistenceStatus::succeeded);
+    REQUIRE(session.open(scene_path).scene_opened);
     CHECK(state.bounds_display(id).show_bounding_box);
     std::filesystem::remove(workspace_path, ignored);
-    REQUIRE(session.open(scene_path));
+    REQUIRE(session.open(scene_path).scene_opened);
     CHECK_FALSE(state.bounds_display(id).show_bounding_box);
     CHECK_FALSE(state.bounds_display(id).show_bounding_sphere);
     CHECK_FALSE(state.bounds_display(id).hover_feedback);
-    REQUIRE(session.reset_scene());
+    REQUIRE(state.operations().reset_scene());
     session.new_document();
     std::filesystem::remove(scene_path, ignored);
     std::filesystem::remove(workspace_path, ignored);
@@ -271,21 +272,18 @@ TEST_CASE("scene save success remains distinct from workspace failure")
     const auto workspace_path = ai3::workspace_path_for_scene(scene_path);
     std::filesystem::create_directory(workspace_path);
     ai3::EditorState state;
-    ai3::DocumentSession session(state);
+    ai3::DocumentSession session(state.scene(), state.workspace(), state.history());
     session.history().begin_transaction();
     state.create_sphere("Sphere");
     session.history().commit_transaction();
     REQUIRE(session.request_transition(ai3::DocumentTransition::quit) ==
             ai3::TransitionRequestResult::needs_unsaved_resolution);
     const std::size_t messages_before = state.console_messages().size();
-    std::string scene_error;
-    std::string workspace_error;
-    const ai3::DocumentSaveResult partial =
-        session.save_as(scene_path, &scene_error, &workspace_error);
+    const ai3::DocumentSaveResult partial = session.save_as(scene_path);
     CHECK(partial.scene_saved);
-    CHECK_FALSE(partial.workspace_saved);
-    CHECK(scene_error.empty());
-    CHECK_FALSE(workspace_error.empty());
+    CHECK(partial.workspace.status == ai3::WorkspacePersistenceStatus::failed);
+    CHECK(partial.scene_diagnostic.empty());
+    CHECK_FALSE(partial.workspace.diagnostic.empty());
     CHECK(std::filesystem::is_regular_file(scene_path));
     CHECK(session.document_path() == scene_path);
     CHECK_FALSE(session.dirty());
@@ -296,9 +294,9 @@ TEST_CASE("scene save success remains distinct from workspace failure")
     state.rename_object(1, "Dirty again");
     session.history().commit_transaction();
     const auto old_path = session.document_path();
-    const ai3::DocumentSaveResult failed = session.save_as(root, &scene_error, &workspace_error);
+    const ai3::DocumentSaveResult failed = session.save_as(root);
     CHECK_FALSE(failed.scene_saved);
-    CHECK_FALSE(failed.workspace_saved);
+    CHECK(failed.workspace.status == ai3::WorkspacePersistenceStatus::not_attempted);
     CHECK(session.dirty());
     CHECK(session.document_path() == old_path);
     std::filesystem::remove_all(root);
