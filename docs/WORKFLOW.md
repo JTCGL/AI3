@@ -48,7 +48,8 @@ synchronization. Repository verification and CI requirements remain unchanged.
 
 - Inspects the actual repository before milestone planning and review.
 - Reassesses roadmap priorities with the user rather than assuming the next milestone.
-- Produces the complete Codex implementation prompt only after scope/design approval.
+- Reconciles the approved milestone design into the milestone brief, then provides a concise Codex implementation
+  handoff that points to repository-owned specifications.
 - Reviews the actual feature branch/PR, distinguishing blockers from optional improvements.
 - Coordinates focused physical verification and final documentation reconciliation.
 - After explicit user approval to merge, performs the GitHub merge directly and reports the resulting known-good
@@ -73,7 +74,7 @@ synchronization. Repository verification and CI requirements remain unchanged.
 3. Reassess and discuss candidate milestone scope.
 4. Resolve architectural choices with the user.
 5. User approves the milestone design.
-6. ChatGPT provides the Codex implementation prompt.
+6. Reconcile the approved design into a concise milestone brief and give Codex a concise implementation handoff.
 7. Codex implements, verifies, documents, pushes, and opens/updates a PR.
 8. ChatGPT reviews the actual PR/repository changes.
 9. User performs appropriate physical/runtime testing.
@@ -87,6 +88,30 @@ synchronization. Repository verification and CI requirements remain unchanged.
 
 Green CI alone is not sufficient for merge. Appropriate code review, runtime verification, and documentation
 reconciliation remain explicit merge criteria.
+
+## Codex implementation handoff policy
+
+The approved milestone brief is the durable implementation specification. Detailed architecture and planning
+happen before implementation; once the design is approved, reconcile the frozen decisions into that brief before
+handing implementation to Codex.
+
+Interactive Codex prompts should be deliberately small. A normal handoff should identify the current baseline
+and active milestone brief, tell Codex to follow applicable `AGENTS.md` files and this workflow, state only
+constraints or decisions that are not already represented in the repository, and request implementation,
+verification, commit/push/PR, and a concise completion report.
+
+Do not reproduce architecture summaries, historical milestone narratives, exhaustive file lists, or detailed
+acceptance-test inventories in an interactive prompt when repository documentation or tests already contain that
+information. Codex should inspect additional implementation and test files as the task requires rather than being
+instructed to perform an indiscriminate repository-wide discovery pass.
+
+Stable recurring instructions belong in `AGENTS.md` or this workflow; current architecture belongs in
+`PROJECT.md`; durable rationale belongs in ADRs; future/deferred scope belongs in `ROADMAP.md`; milestone-specific
+frozen scope, boundaries, non-goals, and acceptance criteria belong in the active milestone brief. Milestone
+briefs should record those decisions concisely rather than narrating the planning discussion that produced them.
+
+A normal Codex implementation handoff should usually be only a few paragraphs. Add detail only when it conveys
+new task-specific information that Codex cannot obtain from the repository.
 
 ## Continuous documentation maintenance
 
