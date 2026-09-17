@@ -102,7 +102,8 @@ TEST_CASE("transform composition applies scale rotation and translation")
 
 TEST_CASE("orbit camera clamps interaction and produces finite matrices")
 {
-    ai3::OrbitCamera camera;
+    ai3::EditorViewState editor_view;
+    ai3::OrbitCamera camera(editor_view);
     camera.orbit(15.0F, 200.0F);
     CHECK(camera.yaw_degrees() == doctest::Approx(50.0F));
     CHECK(camera.pitch_degrees() == doctest::Approx(85.0F));
@@ -123,7 +124,8 @@ TEST_CASE("orbit camera clamps interaction and produces finite matrices")
 
 TEST_CASE("orbit camera uses Z as its stable up axis")
 {
-    ai3::OrbitCamera camera;
+    ai3::EditorViewState editor_view;
+    ai3::OrbitCamera camera(editor_view);
     CHECK(camera.position().z > 0.0F);
     camera.orbit(0.0F, 1000.0F);
     const glm::mat4 view = camera.view_matrix();
@@ -134,7 +136,8 @@ TEST_CASE("orbit camera uses Z as its stable up axis")
 
 TEST_CASE("orbit camera reset restores its default view")
 {
-    ai3::OrbitCamera camera;
+    ai3::EditorViewState editor_view;
+    ai3::OrbitCamera camera(editor_view);
     const glm::vec3 default_target = camera.target();
     camera.orbit(40.0F, -30.0F);
     camera.zoom(4.0F);

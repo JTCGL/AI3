@@ -205,3 +205,15 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 - Routed frontend semantic mutations and `DocumentSession` checkpoints through the Core authorities, retained
   the M23 continuous ImGui/gizmo transaction lifecycle for M24, and added direct graphics-free Core editing
   coverage without changing persistence formats or renderer behavior.
+
+## Milestone 24 — Continuous operations and viewport/tools boundary
+
+- Added Core-owned move-only continuous-edit lifetime with grouped snapshot-history commit, exact cancellation,
+  no-op suppression, and safe abandonment; ordinary ImGui continuous edits now retain that lifetime across
+  frames while continuing to call typed `EditOperations`.
+- Moved authoritative view source, scene-camera identity, Editor View state, interaction mode, translation tool,
+  and reference space into Core Workspace. `ViewportView` now operates on that state from `ai3_scene` without
+  duplicating authority.
+- Added a display-independent concrete translation interaction controller owning acquisition, frozen gesture
+  state, semantic world-position updates, commit/cancel, and continuous history lifetime. Preserved navigation,
+  picking, helper geometry, renderer boundaries, snapshot history, and Workspace Document v1 persistence.

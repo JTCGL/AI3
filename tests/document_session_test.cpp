@@ -89,7 +89,8 @@ TEST_CASE("active authoritative transaction changes participate in unsaved prote
     session.mark_saved_as("saved.ai3scene");
     CHECK_FALSE(session.dirty());
 
-    REQUIRE(session.history().begin_transaction());
+    ai3::ContinuousEdit continuous = state.operations().begin_continuous_edit();
+    REQUIRE(continuous.active());
     REQUIRE(state.rename_object(1, "Live edit"));
     CHECK(session.history().has_uncommitted_changes());
     CHECK(session.dirty());
@@ -103,7 +104,7 @@ TEST_CASE("active authoritative transaction changes participate in unsaved prote
         session.cancel_pending_transition();
     }
 
-    REQUIRE(session.history().cancel_transaction());
+    REQUIRE(continuous.cancel());
     CHECK(state.find_object(1)->name == "Sphere 1");
     CHECK_FALSE(session.history().has_uncommitted_changes());
     CHECK_FALSE(session.dirty());

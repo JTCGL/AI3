@@ -52,8 +52,8 @@ ResolvedViewportView resolve_scene_camera(const Scene& scene, const SceneObject&
 
 void ViewportView::use_editor_view()
 {
-    source_ = ViewSource::editor_view;
-    scene_camera_id_ = no_object;
+    state_.source = ViewSource::editor_view;
+    state_.scene_camera_id = no_object;
 }
 
 bool ViewportView::use_scene_camera(const Scene& scene, ObjectId camera_id)
@@ -61,22 +61,26 @@ bool ViewportView::use_scene_camera(const Scene& scene, ObjectId camera_id)
     const SceneObject* camera = scene.find_object(camera_id);
     if (camera == nullptr || !is_supported_scene_camera(*camera))
         return false;
-    source_ = ViewSource::scene_camera;
-    scene_camera_id_ = camera_id;
+    state_.source = ViewSource::scene_camera;
+    state_.scene_camera_id = camera_id;
     return true;
 }
 
-void ViewportView::set_interaction_mode(ViewportInteractionMode mode) { interaction_mode_ = mode; }
+void ViewportView::set_interaction_mode(ViewportInteractionMode mode)
+{
+    state_.interaction_mode = mode;
+}
 
 ObjectId ViewportView::helper_hover_object(ObjectId picked_object) const
 {
-    return interaction_mode_ == ViewportInteractionMode::selection ? picked_object : no_object;
+    return state_.interaction_mode == ViewportInteractionMode::selection ? picked_object
+                                                                         : no_object;
 }
 
 bool ViewportView::navigate(float yaw_delta_degrees, float pitch_delta_degrees)
 {
-    if (interaction_mode_ != ViewportInteractionMode::navigation ||
-        source_ != ViewSource::editor_view)
+    if (state_.interaction_mode != ViewportInteractionMode::navigation ||
+        state_.source != ViewSource::editor_view)
         return false;
     return orbit_.orbit(yaw_delta_degrees, pitch_delta_degrees);
 }
@@ -84,7 +88,7 @@ bool ViewportView::navigate(float yaw_delta_degrees, float pitch_delta_degrees)
 bool ViewportView::transient_navigate(TransientNavigationOperation operation,
                                       glm::vec2 pointer_delta, float logical_viewport_height)
 {
-    if (source_ != ViewSource::editor_view)
+    if (state_.source != ViewSource::editor_view)
         return false;
     if (operation == TransientNavigationOperation::pan)
         return orbit_.pan(pointer_delta, logical_viewport_height);
@@ -93,7 +97,7 @@ bool ViewportView::transient_navigate(TransientNavigationOperation operation,
 
 bool ViewportView::zoom(float wheel_delta)
 {
-    if (source_ != ViewSource::editor_view)
+    if (state_.source != ViewSource::editor_view)
         return false;
     return orbit_.zoom(wheel_delta);
 }
@@ -103,9 +107,9 @@ ResolvedViewportView ViewportView::resolve(const Scene& scene, float aspect_rati
     if (!std::isfinite(aspect_ratio) || aspect_ratio <= 0.0F)
         throw std::invalid_argument("Viewport aspect ratio must be positive");
 
-    if (source_ == ViewSource::scene_camera)
+    if (state_.source == ViewSource::scene_camera)
     {
-        const SceneObject* camera = scene.find_object(scene_camera_id_);
+        const SceneObject* camera = scene.find_object(state_.scene_camera_id);
         if (camera == nullptr || !is_supported_scene_camera(*camera))
             use_editor_view();
         else
@@ -117,8 +121,8 @@ ResolvedViewportView ViewportView::resolve(const Scene& scene, float aspect_rati
 
 void ViewportView::reset()
 {
-    source_ = ViewSource::editor_view;
-    scene_camera_id_ = no_object;
+    state_.source = ViewSource::editor_view;
+    state_.scene_camera_id = no_object;
     orbit_.reset();
 }
 

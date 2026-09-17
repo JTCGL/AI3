@@ -54,6 +54,7 @@ class EditorUi
     EditorState& state_;
     DocumentSession document_session_;
     ViewportView& viewport_view_;
+    TranslationInteractionController translation_controller_;
     ViewportRenderer viewport_renderer_;
     Localization& localization_;
     SDL_Window* window_ = nullptr;
@@ -70,7 +71,7 @@ class EditorUi
     bool show_ai3_diagnostics_ = false;
     bool show_material_editor_ = false;
     std::pair<ObjectId, ObjectId> pending_reparent_ = {no_object, no_object};
-    std::optional<AxisTranslationGesture> translation_gesture_;
+    std::optional<ContinuousEdit> continuous_edit_;
     TransientNavigationGesture transient_navigation_gesture_;
     ObjectId hovered_object_ = no_object;
 };

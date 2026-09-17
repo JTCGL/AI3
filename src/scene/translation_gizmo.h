@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/scene.h"
+#include "core/edit_operations.h"
 #include "scene/resolved_view.h"
 #include "scene/viewport_picking.h"
 
@@ -50,6 +50,33 @@ struct AxisTranslationGesture
     glm::vec2 frozen_viewport_size{1.0F};
     ResolvedViewportView frozen_view;
     AxisDragConstraint constraint;
+};
+
+class TranslationInteractionController
+{
+    public:
+    TranslationInteractionController(Scene& scene, Workspace& workspace, EditOperations& operations)
+        : scene_(scene), workspace_(workspace), operations_(operations)
+    {
+    }
+
+    bool active() const { return gesture_.has_value(); }
+    const AxisTranslationGesture* gesture() const;
+    TranslationAxis hover_axis(glm::vec2 pointer, glm::vec2 viewport_size,
+                               const ResolvedViewportView& view, float screen_axis_length,
+                               float hit_tolerance) const;
+    bool acquire(glm::vec2 pointer, glm::vec2 viewport_origin, glm::vec2 viewport_size,
+                 const ResolvedViewportView& view, float screen_axis_length, float hit_tolerance);
+    bool update(glm::vec2 pointer, glm::vec2 viewport_origin, glm::vec2 viewport_size);
+    bool commit();
+    bool cancel();
+
+    private:
+    Scene& scene_;
+    Workspace& workspace_;
+    EditOperations& operations_;
+    std::optional<AxisTranslationGesture> gesture_;
+    std::optional<ContinuousEdit> edit_;
 };
 
 struct ProjectedTranslationGizmo

@@ -33,7 +33,7 @@ int Application::run()
         Localization localization(locate_resource_directory(executable_directory / "ai3") /
                                   "locales");
         EditorState editor_state;
-        ViewportView viewport_view;
+        ViewportView viewport_view(editor_state.workspace());
         EditorUi editor_ui(editor_state, viewport_view, localization, platform.window(),
                            initial_scale, imgui.ui_scale(), imgui.font_size());
         bool running = true;

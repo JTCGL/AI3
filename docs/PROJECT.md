@@ -42,16 +42,18 @@ independent of SDL, Dear ImGui, EGL/GLES, and displays.
 
 The current ownership split is:
 
-- `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and
-  viewport state.
+- `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and a
+  viewport controller referencing its Core Workspace state.
 - `core`: authored Scene identity, lifecycle, hierarchy, transforms, semantic object/material data, derived
   local bounds, revision/naming state, non-authored Workspace selection, bounds-display state, active material
-  selection and display unit, snapshot-backed `EditHistory`, typed `EditOperations`, plus transactional Scene
-  and Workspace Document serialization/filesystem I/O.
+  selection and display unit, authoritative viewport/editor-view state, snapshot-backed `EditHistory`, typed
+  `EditOperations`, move-only continuous-edit lifetime, plus transactional Scene and Workspace Document
+  serialization/filesystem I/O.
 - `editor`: the `EditorState` compatibility/presentation façade and `DocumentSession` coordination.
 - `scene`: display-independent transform and camera math, procedural Sphere/Box geometry, render-target
-  sizing, orbit view construction, viewport-view selection/resolution and interaction mode, sphere picking,
-  axis-translation projection, hit testing and drag constraints, and shared API-independent helper geometry.
+  sizing, Workspace-backed viewport view resolution and navigation, sphere picking, axis-translation projection,
+  hit testing and drag constraints, the concrete translation interaction controller, and shared
+  API-independent helper geometry.
 - `localization`: external resource discovery and UTF-8 string lookup.
 - `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
 - `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, primitive geometry caches, the
@@ -64,10 +66,11 @@ This current split has known transitional dependencies. `EditorState` owns exact
 and one authoritative `Workspace`, composes their Core `EditHistory` and `EditOperations`, forwards retained
 compatibility APIs, and still retains panel visibility, Console presentation data, and layout-reset intent.
 Cross-domain lifecycle and Scene-dependent Workspace validation live in `EditOperations`. `EditorUi` constructs
-`DocumentSession`, retains concrete continuous-widget and translation-gesture transaction lifecycles pending
-M24, and explicitly invalidates renderer caches after document transitions pending M26. The `ViewportView`
-state cluster remains a deferred compatibility interface scheduled for M24-M27. `ai3_scene` depends on
-`ai3_core`, not `ai3_editor`; helper geometry consumes narrow `Scene` and `Workspace` inputs.
+`DocumentSession`, retains Core continuous-edit handles across concrete ImGui widget frames, delegates
+translation semantics to the scene-layer controller, and explicitly invalidates renderer caches after document
+transitions pending M26. `ViewportView` references authoritative Core Workspace state rather than owning a
+second copy. `ai3_scene` depends on `ai3_core`, not `ai3_editor`; helper geometry consumes narrow `Scene` and
+`Workspace` inputs.
 
 ## Editor and scene model
 
@@ -174,19 +177,20 @@ transform storage semantics. See [ADR 0004](decisions/0004-hierarchy-world-trans
 
 ## Viewport and rendering
 
-The application has one viewport with display-independent `ViewportView` state outside Dear ImGui. Its source
-is Editor View or Scene Camera. Editor View state remains independent of scene hierarchy. Scene-camera
-selection belongs to the viewport, not to a global active-camera concept, and currently accepts
-perspective-camera objects only.
-Its independent interaction mode is Selection or Navigation and is workspace state excluded from document
-revision, dirty state, history, and persistence.
+The application has one viewport whose authoritative retained state belongs to Core `Workspace`. This includes
+Editor View/orbit state, Editor View or Scene Camera source, selected scene-camera identity, Selection or
+Navigation interaction mode, translation tool, and reference space. `ViewportView` is a display-independent
+`ai3_scene` controller over that state. Editor View remains independent of scene hierarchy. Scene-camera
+selection belongs to the viewport, not to a global active-camera concept, and currently accepts perspective
+cameras only. All of this viewport state is excluded from Scene revision, dirty state, authored history, and
+Workspace Document v1 persistence.
 
 The X/Y/Z translation gizmo is visible for the selected object in both modes but interactive only in Selection.
-`ViewportView` retains the
-translation-tool and Local/Parent/World/View reference-space choices as workspace state. A handle receives
-pointer-down before sphere picking; an acquired gesture freezes its object, axis basis, resolved view,
-constraint policy, viewport dimensions, and DPI-derived size. Retained left-drag orbit remains restricted to
-Navigation mode with Editor View source.
+A handle receives pointer-down before sphere picking. The display-independent translation controller owns the
+acquired target, axis, frozen basis and view, constraint policy, viewport geometry, DPI-derived sizing, and Core
+continuous-edit lifetime. Dear ImGui supplies concrete pointer/button/Escape and viewport facts rather than
+semantic world-position or transaction policy. Retained left-drag orbit remains restricted to Navigation mode
+with Editor View source.
 
 Views are resolved on demand from current state. Scene-camera resolution uses the authoritative resolved world
 position/orientation, current projection parameters, and current viewport aspect ratio. Deleting the selected
@@ -227,9 +231,10 @@ length is frozen for a gesture even while its pivot changes depth; a future edit
 fixed logical size. A material change to the frozen viewport rectangle safely cancels the gesture rather
 than mixing coordinate frames. Dragging normally uses a closest-point ray/axis solve; a near-parallel axis chooses
 once at acquisition a view-derived plane containing that axis, intersects subsequent pointer rays with that
-plane, and projects displacement back onto the axis. One gesture owns one existing `EditHistory` transaction:
-live changes participate in dirty protection, release commits, Escape or unsafe mutation cancels/restores, and
-semantic no-ops create no entry.
+plane, and projects displacement back onto the axis. One gesture owns a Core `ContinuousEdit`; typed
+`EditOperations::set_world_position` updates participate in its snapshot transaction. Live changes participate
+in dirty protection, release commits, Escape or unsafe mutation cancels/restores, abandoned lifetime cancels,
+and semantic no-ops create no entry.
 Gizmo hit testing remains screen-based and independent of the always-on-top GLES presentation.
 
 All currently transformable scene objects receive the translation gizmo. Consequently, translating a
@@ -260,7 +265,8 @@ drive the viewport interaction mode and leave a narrow contextual region for lat
 controls. In Selection mode that concrete context exposes Translate as its own fixed-width status/control,
 followed by a separate localized Reference Space label and Local/Parent/World/View combo; it remains neither a
 dockable panel nor a generalized toolbar/tool framework. Current
-name, numeric, color, and transform controls group one ImGui interaction into one transaction. The docked shell
+name, numeric, color, and transform controls retain one Core `ContinuousEdit` across an ImGui interaction and
+continue to update through typed `EditOperations`, producing one authored history entry. The docked shell
 contains Scene Graph, Viewport, Object Inspector, and Console panels. Normal Dear ImGui `.ini` persistence owns
 user layout after first-use construction; its `imgui.ini` is stored beside the running executable rather than
 relative to the shell working directory. Smoke mode disables settings persistence. A future packaged/read-only

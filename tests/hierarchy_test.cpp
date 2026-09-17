@@ -331,7 +331,8 @@ TEST_CASE("coordinate-space bases distinguish local parent world and editor view
         ai3::coordinate_space_basis(scene.scene(), child, ai3::CoordinateSpace::parent);
     const glm::mat3 world =
         ai3::coordinate_space_basis(scene.scene(), child, ai3::CoordinateSpace::world);
-    ai3::OrbitCamera editor_camera;
+    ai3::EditorViewState editor_view;
+    ai3::OrbitCamera editor_camera(editor_view);
     const glm::mat3 view = ai3::coordinate_space_basis(
         scene.scene(), child, ai3::CoordinateSpace::view, editor_camera.view_matrix());
 

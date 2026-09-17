@@ -27,10 +27,61 @@ template <typename Mutation> auto apply_authored(EditHistory& history, Mutation&
 }
 } // namespace
 
+ContinuousEdit::ContinuousEdit(EditHistory& history) : history_(&history)
+{
+    if (!history_->begin_transaction())
+        history_ = nullptr;
+}
+
+ContinuousEdit::ContinuousEdit(ContinuousEdit&& other) noexcept : history_(other.history_)
+{
+    other.history_ = nullptr;
+}
+
+ContinuousEdit& ContinuousEdit::operator=(ContinuousEdit&& other) noexcept
+{
+    if (this == &other)
+        return *this;
+    cancel();
+    history_ = other.history_;
+    other.history_ = nullptr;
+    return *this;
+}
+
+ContinuousEdit::~ContinuousEdit() { cancel(); }
+
+bool ContinuousEdit::active() const
+{
+    return history_ != nullptr && history_->transaction_active();
+}
+
+bool ContinuousEdit::commit()
+{
+    if (!active())
+        return false;
+    EditHistory* history = history_;
+    history_ = nullptr;
+    return history->commit_transaction();
+}
+
+bool ContinuousEdit::cancel()
+{
+    if (!active())
+    {
+        history_ = nullptr;
+        return false;
+    }
+    EditHistory* history = history_;
+    history_ = nullptr;
+    return history->cancel_transaction();
+}
+
 EditOperations::EditOperations(Scene& scene, Workspace& workspace, EditHistory& history)
     : scene_(scene), workspace_(workspace), history_(history)
 {
 }
+
+ContinuousEdit EditOperations::begin_continuous_edit() { return ContinuousEdit{history_}; }
 
 ObjectId EditOperations::create_object(CreateObject object)
 {
