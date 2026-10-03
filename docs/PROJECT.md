@@ -43,11 +43,11 @@ independent of SDL, Dear ImGui, EGL/GLES, and displays.
 
 The current ownership split is:
 
-- `app`: command-line and run-loop policy; `Application::run` creates the application-lifetime editor and a
-  viewport controller referencing its Core Workspace state.
-- `core`: authored Scene identity, lifecycle, hierarchy, transforms, semantic object/material data, derived
-  local bounds, revision/naming state, non-authored Workspace selection, bounds-display state, active material
-  selection and display unit, authoritative viewport/editor-view state, snapshot-backed `EditHistory`, typed
+- `app`: command-line and run-loop policy; `Application::run` composes the application-lifetime editor,
+  Workspace-backed viewport controller, and concrete renderer after the GLES context exists.
+- `core`: authored Scene object identity, lifecycle, hierarchy, transforms, semantic object/material data,
+  derived local bounds, revision/naming state, runtime Scene identity, non-authored Workspace selection,
+  bounds-display state, active material selection and display unit, authoritative viewport/editor-view state, snapshot-backed `EditHistory`, typed
   `EditOperations`, move-only continuous-edit lifetime, Core `DocumentSession`, plus transactional Scene and
   Workspace Document serialization/filesystem I/O.
 - `editor`: the `EditorState` compatibility/presentation façade.
@@ -57,11 +57,12 @@ The current ownership split is:
   API-independent helper geometry.
 - `localization`: external resource discovery and UTF-8 string lookup.
 - `platform`: SDL window, event, GLES-context, swap, and display-scale ownership.
-- `render`: the single concrete GLES3 `ViewportRenderer`, including shaders, primitive geometry caches, the
-  offscreen viewport framebuffer, and the depth-tested helper pass.
+- `render`: the independent `ai3_render` target containing the single concrete GLES3 `ViewportRenderer`, its
+  shaders, primitive geometry caches, offscreen viewport framebuffer, and depth-tested helper pass.
 - `ui`: Dear ImGui lifecycle and editor presentation/control. `EditorUi` receives references to authoritative
-  `EditorState` and `ViewportView`, presents the display-independent document-session policy and SDL
-  native-dialog result handoff, and currently owns the concrete `ViewportRenderer` and its GLES resources.
+  `EditorState`, `ViewportView`, and `ViewportRenderer`, presents the display-independent document-session
+  policy and SDL native-dialog result handoff, and converts renderer-owned viewport output for the concrete
+  ImGui GLES presentation path without owning it.
 
 This current split has known transitional dependencies. `EditorState` owns exactly one authoritative `Scene`
 and one authoritative `Workspace`, composes their Core `EditHistory` and `EditOperations`, forwards retained
@@ -69,9 +70,9 @@ compatibility APIs, and still retains panel visibility, Console presentation dat
 Cross-domain semantic-edit lifecycle and Scene-dependent Workspace validation live in `EditOperations`.
 `EditorUi` constructs the Core `DocumentSession` over the existing Scene, Workspace, and EditHistory
 authorities, retains Core continuous-edit handles across concrete ImGui widget frames, delegates
-translation semantics to the scene-layer controller, and explicitly invalidates renderer caches after document
-transitions pending M26. `ViewportView` references authoritative Core Workspace state rather than owning a
-second copy. `ai3_scene` depends on `ai3_core`, not `ai3_editor`; helper geometry consumes narrow `Scene` and
+translation semantics to the scene-layer controller, and invokes the non-owning renderer reference without
+managing its cache synchronization. `ViewportView` references authoritative Core Workspace state rather than
+owning a second copy. `ai3_scene` depends on `ai3_core`, not `ai3_editor`; helper geometry consumes narrow `Scene` and
 `Workspace` inputs.
 
 ## Editor and scene model
@@ -88,6 +89,9 @@ already active transaction so continuous interactions can group repeated mutatio
 participate in `EditHistory` transactions whose boundaries represent one intentional edit. A
 monotonic document revision advances for each real serialized-state change and authoritative history
 restoration, never rewinds on Undo, and ignores no-op assignments and workspace interaction.
+Each authoritative Scene also has a non-persisted runtime identity distinct from document revision and object
+IDs. Ordinary edits and history restoration preserve it; successful New and Open replace it so derived
+consumers can distinguish whole-document replacement even when persisted IDs and content match.
 
 Deleting an object deletes only that object. Its direct children become scene roots with preserved world-space
 poses; deeper descendants retain their existing parents. Deletion is transactional if any direct child cannot
@@ -116,9 +120,10 @@ workspace/session state are outside the format.
 
 The headless Core target owns Scene and Workspace serialization, validation, and ordinary-filesystem helpers
 through pinned nlohmann/json. A narrowly friended Scene codec reconstructs a complete candidate with explicit
-identity and local hierarchy data; normal object creation still uses the lifecycle allocator. Load validates
+persisted object identities and local hierarchy data; normal object creation still uses the lifecycle allocator. Load validates
 the entire candidate
-before replacing scene-owned state, and failure leaves the destination unchanged. The codec operates only on
+before replacing scene-owned state and establishing a new runtime Scene identity; failure leaves the
+destination and its identity unchanged. The codec operates only on
 `Scene`; `DocumentSession` applies the Workspace document-transition policy only after a successful load.
 
 The Core-owned Workspace Document codec writes an associated `.ai3workspace` sidecar containing only each
@@ -152,8 +157,7 @@ Successful New/Open asks Workspace to clear selection, per-object bounds switche
 scene-camera identity and to force Editor View. It preserves the Editor View pose, display unit, interaction
 mode, transform tool, and reference space. Successful Open then overlays only valid v1 sidecar bounds entries
 whose object IDs exist in the loaded Scene. Scene persistence is authoritative: sidecar read/write failure is
-reported separately and does not roll back successful Scene Open/Save. The frontend continues to clear renderer
-geometry caches after successful document transitions pending M26. See
+reported separately and does not roll back successful Scene Open/Save. See
 [ADR 0006](decisions/0006-scene-document-format.md) and
 [ADR 0007](decisions/0007-document-revision-and-session.md).
 
@@ -210,9 +214,12 @@ constructed them. See [ADR 0005](decisions/0005-viewport-view-ownership.md).
 
 Resolved views include derived world-space eye position for view-dependent shading in both Editor View and
 scene-camera paths. The renderer draws the scene into its GLES color/depth target, sized from the ImGui viewport
-content region after framebuffer scaling. Dear ImGui presents that texture in the visible editor window. Display-independent
-view semantics are already separated from UI ownership, but construction and lifetime of `ViewportRenderer`
-and its GLES resources remain inside `EditorUi`.
+content region after framebuffer scaling. Application composition owns `ViewportRenderer` inside the valid
+GLES-context lifetime, while `EditorUi` uses a non-owning reference. The renderer exposes a renderer-owned
+viewport-output resource; a narrow concrete presenter performs the backend-native ImGui texture conversion.
+Renderer cache synchronization is internal: a runtime Scene-identity change discards prior-document geometry,
+while stable identities retain unchanged per-object geometry and remove or rebuild entries from current Scene
+inputs.
 
 Navigation intent is dispatched through `ViewportView`. MMB pan, Shift+MMB orbit, and wheel zoom affect Editor
 View in either retained mode without changing that mode; retained left-drag orbit remains Navigation-only.

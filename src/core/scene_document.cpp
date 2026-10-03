@@ -548,6 +548,7 @@ class SceneDocumentCodec
         destination.default_name_counts_ = std::move(candidate.default_name_counts_);
         if (changed)
             destination.advance_document_revision();
+        destination.establish_new_identity();
     }
 };
 

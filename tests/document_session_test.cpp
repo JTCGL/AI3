@@ -123,8 +123,10 @@ TEST_CASE("New document applies the Workspace transition policy")
     viewport.reference_space = ai3::CoordinateSpace::view;
     const ai3::EditorViewState editor_view = viewport.editor_view;
     const ai3::ViewportTransformTool transform_tool = viewport.transform_tool;
+    const ai3::SceneIdentity original_identity = fixture.scene.identity();
 
     fixture.session.new_document();
+    CHECK(fixture.scene.identity() != original_identity);
     CHECK(fixture.scene.objects().empty());
     CHECK(fixture.scene.materials().empty());
     CHECK(fixture.workspace.selection() == ai3::no_object);
@@ -167,6 +169,7 @@ TEST_CASE("Open is transactional and distinguishes missing Workspace sidecars")
     edit(fixture, [&] { fixture.operations.rename_object(existing, "Dirty existing"); });
     const auto path_before = fixture.session.document_path();
     const auto history_before = fixture.history.current_state_id();
+    const ai3::SceneIdentity identity_before = fixture.scene.identity();
     {
         std::ofstream stream(invalid);
         stream << "invalid";
@@ -182,10 +185,12 @@ TEST_CASE("Open is transactional and distinguishes missing Workspace sidecars")
     CHECK(fixture.workspace.active_material() == 42);
     CHECK(fixture.session.document_path() == path_before);
     CHECK(fixture.history.current_state_id() == history_before);
+    CHECK(fixture.scene.identity() == identity_before);
     CHECK(fixture.session.dirty());
 
     const ai3::DocumentOpenResult opened = fixture.session.open(valid);
     CHECK(opened.scene_opened);
+    CHECK(fixture.scene.identity() != identity_before);
     CHECK(opened.workspace.status == ai3::WorkspacePersistenceStatus::missing);
     CHECK(fixture.scene.objects().size() == 1);
     CHECK(fixture.workspace.selection() == ai3::no_object);

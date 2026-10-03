@@ -228,3 +228,12 @@ source of current architectural truth; see [`PROJECT.md`](PROJECT.md) for the cu
 - Added the Workspace-owned New/Open transition policy and valid-object filtering for restored v1 bounds state;
   preserved viewport/editor preferences outside the unchanged Workspace Document v1 format and retained
   frontend-owned dialogs, Console presentation, and transitional renderer-cache invalidation.
+
+## Milestone 26 — Renderer boundary
+
+- Moved concrete GLES renderer ownership into application composition with context-safe lifetime, established
+  the independent `ai3_render` target, and replaced raw UI texture-handle access with a renderer-owned viewport
+  output and narrow ImGui presentation seam.
+- Added non-persisted runtime Scene identity for whole-document transitions, preserved it through ordinary edits
+  and history restoration, and moved identity-aware per-object geometry-cache synchronization fully into the
+  renderer without changing Scene/Workspace document formats or rendering semantics.

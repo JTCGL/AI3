@@ -6,6 +6,7 @@
 #include "localization/localization.h"
 #include "localization/resource_locator.h"
 #include "platform/sdl_gl_platform.h"
+#include "render/viewport_renderer.h"
 #include "scene/viewport_view.h"
 #include "ui/editor_ui.h"
 #include "ui/imgui_layer.h"
@@ -34,8 +35,9 @@ int Application::run()
                                   "locales");
         EditorState editor_state;
         ViewportView viewport_view(editor_state.workspace());
-        EditorUi editor_ui(editor_state, viewport_view, localization, platform.window(),
-                           initial_scale, imgui.ui_scale(), imgui.font_size());
+        ViewportRenderer viewport_renderer;
+        EditorUi editor_ui(editor_state, viewport_view, localization, viewport_renderer,
+                           platform.window(), initial_scale, imgui.ui_scale(), imgui.font_size());
         bool running = true;
         int rendered_frames = 0;
         while (running && (options_.frame_limit == 0 || rendered_frames < options_.frame_limit))

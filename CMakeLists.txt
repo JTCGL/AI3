@@ -143,18 +143,24 @@ if(NOT AI3_HEADLESS)
     )
     target_link_libraries(ai3_imgui PUBLIC SDL3::SDL3 ${AI3_GLES_LIBRARY})
 
+    add_library(ai3_render STATIC
+        src/render/gles_program.cpp
+        src/render/viewport_renderer.cpp
+    )
+    target_include_directories(ai3_render PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(ai3_render PUBLIC ai3_core ai3_scene PRIVATE ${AI3_GLES_LIBRARY})
+
     add_executable(ai3
         src/main.cpp
         src/app/application.cpp
         src/platform/sdl_gl_platform.cpp
-        src/render/gles_program.cpp
-        src/render/viewport_renderer.cpp
         src/ui/editor_ui.cpp
         src/ui/imgui_layer.cpp
+        src/ui/imgui_viewport_presenter.cpp
     )
     target_include_directories(ai3 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(ai3 PRIVATE ai3_imgui ${AI3_ANDROID_SHMEM_LIBRARY})
-    target_link_libraries(ai3 PRIVATE ai3_options ai3_editor ai3_scene)
+    target_link_libraries(ai3 PRIVATE ai3_options ai3_editor ai3_scene ai3_render)
     target_link_libraries(ai3 PRIVATE ai3_localization)
     add_dependencies(ai3 ai3_resources)
 endif()
@@ -167,6 +173,9 @@ endfunction()
 
 if(TARGET ai3)
     ai3_enable_warnings(ai3)
+endif()
+if(TARGET ai3_render)
+    ai3_enable_warnings(ai3_render)
 endif()
 ai3_enable_warnings(ai3_options)
 ai3_enable_warnings(ai3_core)

@@ -41,6 +41,21 @@ TEST_CASE("world axes define a right-handed Z-up basis")
     CHECK(ai3::world_up.z == doctest::Approx(1.0F));
 }
 
+TEST_CASE("Scene identity is runtime state independent of authored revision")
+{
+    ai3::Scene first;
+    ai3::Scene second;
+    CHECK(first.identity() != second.identity());
+    const ai3::SceneIdentity identity = first.identity();
+    const ai3::DocumentRevision revision = first.document_revision();
+
+    first.create_sphere("Sphere");
+    CHECK(first.identity() == identity);
+    CHECK(first.document_revision() == revision + 1);
+    first.reset_scene();
+    CHECK(first.identity() == identity);
+}
+
 TEST_CASE("metric display units convert to and from canonical meters")
 {
     CHECK(ai3::default_display_length_unit == ai3::LengthUnit::meter);

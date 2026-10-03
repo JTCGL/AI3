@@ -16,9 +16,11 @@ namespace ai3
 {
 class SceneDocumentCodec;
 class EditHistory;
+class DocumentSession;
 using ObjectId = std::uint64_t;
 using MaterialId = std::uint64_t;
 using DocumentRevision = std::uint64_t;
+using SceneIdentity = std::uint64_t;
 constexpr ObjectId no_object = 0;
 constexpr MaterialId no_material = 0;
 
@@ -189,7 +191,7 @@ struct ObjectQueryFilter
 class Scene
 {
     public:
-    Scene() = default;
+    Scene();
     ObjectId create_object(CreateObject object);
     ObjectId create_sphere(std::string localized_base_name, SpherePrimitive sphere = {});
     ObjectId create_box(std::string localized_base_name, BoxPrimitive box = {});
@@ -218,6 +220,7 @@ class Scene
     bool reparent_object(ObjectId id, ObjectId new_parent);
     bool delete_object(ObjectId id);
     bool reset_scene();
+    SceneIdentity identity() const;
     DocumentRevision document_revision() const;
     const std::vector<SceneObject>& objects() const;
     const SceneObject* find_object(ObjectId id) const;
@@ -238,6 +241,7 @@ class Scene
     private:
     friend class EditHistory;
     friend class SceneDocumentCodec;
+    friend class DocumentSession;
     struct SubtypeKey
     {
         ObjectCategory category;
@@ -256,6 +260,8 @@ class Scene
     SceneObject* find_object_mutable(ObjectId id);
     Material* find_material_mutable(MaterialId id);
     void advance_document_revision();
+    void establish_new_identity();
+    static SceneIdentity allocate_identity();
     static void rebuild_bounds(SceneObject& object);
 
     std::vector<SceneObject> objects_;
@@ -264,6 +270,7 @@ class Scene
     MaterialId next_material_id_ = 1;
     std::uint64_t default_material_name_count_ = 0;
     std::map<SubtypeKey, std::uint64_t> default_name_counts_;
+    SceneIdentity identity_ = 0;
     DocumentRevision document_revision_ = 0;
 };
 } // namespace ai3

@@ -8,6 +8,7 @@
 #include "scene/scene_math.h"
 #include "scene/translation_gizmo.h"
 #include "scene/viewport_picking.h"
+#include "ui/imgui_viewport_presenter.h"
 #include "ui/ui_identity.h"
 
 #include <SDL3/SDL_dialog.h>
@@ -154,11 +155,12 @@ void build_default_layout(ImGuiID dockspace_id, const ImGuiViewport& viewport)
 } // namespace
 
 EditorUi::EditorUi(EditorState& state, ViewportView& viewport_view, Localization& localization,
-                   SDL_Window* window, float content_scale, float ui_scale, float font_size)
+                   ViewportRenderer& viewport_renderer, SDL_Window* window, float content_scale,
+                   float ui_scale, float font_size)
     : state_(state), document_session_(state.scene(), state.workspace(), state.history()),
       viewport_view_(viewport_view),
       translation_controller_(state.scene(), state.workspace(), state.operations()),
-      localization_(localization), window_(window),
+      viewport_renderer_(viewport_renderer), localization_(localization), window_(window),
       dialog_state_(std::make_shared<SceneDialogState>()), content_scale_(content_scale),
       ui_scale_(ui_scale), font_size_(font_size)
 {
@@ -280,7 +282,6 @@ void EditorUi::process_dialog_result()
             report_document_result("console.document_open_failed", open_result.scene_diagnostic);
             return;
         }
-        viewport_renderer_.clear_geometry_cache();
         report_document_result("console.document_opened",
                                document_session_.document_path().string());
         if (open_result.workspace.status == WorkspacePersistenceStatus::failed)
@@ -310,7 +311,6 @@ void EditorUi::perform_transition(DocumentTransition transition, bool& running)
     {
     case DocumentTransition::new_document:
         document_session_.new_document();
-        viewport_renderer_.clear_geometry_cache();
         break;
     case DocumentTransition::open_document:
         request_open_dialog();
@@ -394,7 +394,6 @@ void EditorUi::draw_main_menu(bool& running)
             {
                 finish_translation_gesture();
                 state_.operations().reset_scene();
-                viewport_renderer_.clear_geometry_cache();
                 viewport_view_.reset();
             }
             ImGui::Separator();
@@ -408,31 +407,23 @@ void EditorUi::draw_main_menu(bool& running)
             if (ImGui::MenuItem(localization_.text("action.undo").c_str(),
                                 localization_.text("shortcut.undo").c_str(), false,
                                 history.can_undo()))
-            {
                 history.undo();
-                viewport_renderer_.clear_geometry_cache();
-            }
             if (ImGui::MenuItem(localization_.text("action.redo").c_str(),
                                 localization_.text("shortcut.redo").c_str(), false,
                                 history.can_redo()))
-            {
                 history.redo();
-                viewport_renderer_.clear_geometry_cache();
-            }
             ImGui::EndMenu();
         }
         if (!ImGui::GetIO().WantTextInput &&
             ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z,
                             ImGuiInputFlags_RouteGlobal))
         {
-            if (history.redo())
-                viewport_renderer_.clear_geometry_cache();
+            history.redo();
         }
         else if (!ImGui::GetIO().WantTextInput &&
                  ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Z, ImGuiInputFlags_RouteGlobal))
         {
-            if (history.undo())
-                viewport_renderer_.clear_geometry_cache();
+            history.undo();
         }
         if (ImGui::BeginMenu(localization_.text("menu.object").c_str()))
         {
@@ -1227,8 +1218,7 @@ void EditorUi::draw_viewport()
                 helper_gizmo_length, highlighted);
             const ViewportHelperInputs helpers{&bounds_helpers, &gizmo_helpers, &helper_gizmo_view};
             viewport_renderer_.render(state_.scene(), resolved, requested, helpers);
-            ImGui::Image(static_cast<ImTextureID>(viewport_renderer_.texture()), region,
-                         {0.0F, 1.0F}, {1.0F, 0.0F});
+            ImGuiViewportPresenter::present(viewport_renderer_.output(), region);
             const ImVec2 minimum = ImGui::GetItemRectMin();
             const glm::vec2 viewport_origin{minimum.x, minimum.y};
             const glm::vec2 viewport_size{region.x, region.y};

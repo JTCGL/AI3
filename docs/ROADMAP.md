@@ -10,7 +10,8 @@ requirements and demonstrated dependencies become clearer.
 architectural center. M20 recorded the contract, M21 extracted authored Scene/Document ownership, M22
 extracted non-authored Workspace/Workspace Document ownership, M23 extracted snapshot history and typed
 semantic edit operations, M24 moved continuous-edit lifetime and authoritative viewport state inward, and M25
-moved document/session lifecycle and persistence coordination into Core. Remaining
+moved document/session lifecycle and persistence coordination into Core, and M26 established the renderer
+boundary. Remaining
 responsibilities will migrate deliberately. The planned sequence is:
 
 - M20 — Core architecture contract: document terminology, ownership, dependencies, and migration discipline.
@@ -19,7 +20,7 @@ responsibilities will migrate deliberately. The planned sequence is:
 - M23 — Core semantic operations and undo boundary (completed).
 - M24 — Continuous operations and viewport/tools boundary (completed).
 - M25 — Core document/session and persistence boundary (completed).
-- M26 — Renderer boundary.
+- M26 — Renderer boundary (completed).
 - M27 — Dependency enforcement and graphics-free headless proof.
 
 Each migration milestone must preserve buildability, tests, and behavior unless separately approved behavior
@@ -128,11 +129,10 @@ that binding.
 - Add camera/frustum visualization and related scene-camera tooling; coordinate its geometry with the
   perspective-camera bounds/frustum envelope rather than maintaining conflicting calculations.
 
-`ViewportView` selection and view/projection resolution are already display-independent and outside Dear
-ImGui. Editor View navigation policy and sphere picking are also display-independent, while Scene Camera
-navigation is intentionally inert. The renderer consumes resolved view values. However, the concrete `ViewportRenderer`,
-its GLES render resources, and its offscreen target are still constructed and owned by `EditorUi`; rendering is
-not yet independent of UI lifetime/ownership.
+`ViewportView` selection and view/projection resolution are display-independent and outside Dear ImGui. Editor
+View navigation policy and sphere picking are also display-independent, while Scene Camera navigation is
+intentionally inert. The concrete renderer consumes resolved view values and application composition owns its
+GLES resources and offscreen target independently of `EditorUi` lifetime.
 
 ## Scene content
 
@@ -157,14 +157,13 @@ Enable rendering through the real GLES renderer without Dear ImGui or a visible 
 expected to require deliberately separating concerns that are currently coupled:
 
 - creation and ownership of a graphics context and offscreen surface;
-- renderer construction and rendering independent of `EditorUi` ownership;
 - pixel readback from the render target;
 - image output;
 - eventual renderer regression tests based on produced images.
 
-M26 must first establish the narrow renderer input boundary, and M27 must enforce dependencies and prove the
-graphics-free Core path. The existing `headless-debug` configuration is intentionally graphics-free and tests
-current display-independent behavior.
+M26 established the narrow renderer input boundary; M27 must enforce dependencies and prove the graphics-free
+Core path. The existing `headless-debug` configuration is intentionally graphics-free and tests current
+display-independent behavior.
 “Headless rendering” is a different future capability: it still needs a real graphics context and the concrete
 renderer, merely without Dear ImGui or a visible editor window. No context strategy, image format, comparison
 method, or new renderer abstraction is selected here.
