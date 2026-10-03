@@ -1,0 +1,84 @@
+compilation_database_dir: .
+output_directory: ../build/AI3/architecture
+
+diagrams:
+  ai3_core:
+    type: class
+    glob:
+      - src/core/*.h
+      - src/core/*.cpp
+    include:
+      paths:
+        - src/core
+
+  ai3_core_clean:
+    type: class
+    glob:
+      - src/core/*.h
+      - src/core/*.cpp
+    include:
+      namespaces:
+        - ai3
+    exclude:
+      namespaces:
+        - std
+        - glm
+
+  ai3_architecture:
+    type: class
+    glob:
+      - src/core/*.h
+      - src/core/*.cpp
+      - src/editor/*.h
+      - src/editor/*.cpp
+      - src/scene/*.h
+      - src/scene/*.cpp
+      - src/render/*.h
+      - src/render/*.cpp
+      - src/ui/*.h
+      - src/ui/*.cpp
+      - src/app/*.h
+      - src/app/*.cpp
+      - src/platform/*.h
+      - src/platform/*.cpp
+    include:
+      namespaces:
+        - ai3
+    exclude:
+      namespaces:
+        - std
+        - glm
+
+  ai3_packages:
+    type: package
+    package_type: directory
+    relative_to: .
+    glob:
+      - src/app/*.cpp
+      - src/core/*.cpp
+      - src/editor/*.cpp
+      - src/localization/*.cpp
+      - src/platform/*.cpp
+      - src/render/*.cpp
+      - src/scene/*.cpp
+      - src/ui/*.cpp
+      - src/main.cpp
+
+  ai3_includes:
+    type: include
+    relative_to: .
+    generate_packages: true
+    generate_system_headers: false
+    glob:
+      - src/app/*.cpp
+      - src/core/*.cpp
+      - src/editor/*.cpp
+      - src/localization/*.cpp
+      - src/platform/*.cpp
+      - src/render/*.cpp
+      - src/scene/*.cpp
+      - src/ui/*.cpp
+      - src/main.cpp
+    include:
+      paths:
+        - src
