@@ -12,6 +12,18 @@
 
 namespace ai3
 {
+class GlesViewportOutputAccess;
+
+class ViewportOutput
+{
+    private:
+    explicit ViewportOutput(std::uint32_t texture) : texture_(texture) {}
+
+    std::uint32_t texture_ = 0;
+    friend class ViewportRenderer;
+    friend class GlesViewportOutputAccess;
+};
+
 enum class HelperRenderRole
 {
     bounds,
@@ -51,9 +63,7 @@ class ViewportRenderer
 
     void render(const Scene& scene, const ResolvedViewportView& view, RenderTargetSize size,
                 ViewportHelperInputs helpers = {});
-    void synchronize_geometry_cache(const Scene& scene);
-    void clear_geometry_cache();
-    std::uint32_t texture() const { return color_texture_; }
+    ViewportOutput output() const { return ViewportOutput{color_texture_}; }
     RenderTargetSize size() const { return size_; }
     std::uint64_t resize_count() const { return resize_count_; }
     const std::string& gl_description() const { return gl_description_; }
@@ -61,6 +71,8 @@ class ViewportRenderer
     private:
     void resize(RenderTargetSize size);
     void destroy_render_target();
+    void synchronize_geometry_cache(const Scene& scene);
+    void clear_geometry_cache();
     void render_helpers(const HelperGeometry& helpers, const glm::mat4& view_projection,
                         HelperRenderRole role);
 
@@ -96,5 +108,6 @@ class ViewportRenderer
     std::uint64_t resize_count_ = 0;
     std::string gl_description_;
     std::unordered_map<ObjectId, PrimitiveGeometry> geometry_cache_;
+    SceneIdentity cached_scene_identity_ = 0;
 };
 } // namespace ai3

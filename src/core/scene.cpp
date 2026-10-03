@@ -6,6 +6,7 @@
 #include <glm/gtx/matrix_decompose.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -15,6 +16,8 @@ namespace ai3
 {
 namespace
 {
+std::atomic<SceneIdentity> next_scene_identity{1};
+
 bool matches_filter(const SceneObject& object, ObjectQueryFilter filter)
 {
     return (!filter.enabled_only || object.enabled) && (!filter.visible_only || object.visible);
@@ -155,6 +158,22 @@ void validate(const CreateObject& object)
     }
 }
 } // namespace
+
+Scene::Scene() : identity_(allocate_identity()) {}
+
+SceneIdentity Scene::allocate_identity()
+{
+    SceneIdentity identity = next_scene_identity.load(std::memory_order_relaxed);
+    while (identity != std::numeric_limits<SceneIdentity>::max())
+    {
+        if (next_scene_identity.compare_exchange_weak(identity, identity + 1,
+                                                      std::memory_order_relaxed))
+            return identity;
+    }
+    throw std::overflow_error("Scene identity exhausted");
+}
+
+void Scene::establish_new_identity() { identity_ = allocate_identity(); }
 
 bool valid_transform(const Transform& transform)
 {
@@ -585,6 +604,7 @@ bool Scene::reset_scene()
     advance_document_revision();
     return true;
 }
+SceneIdentity Scene::identity() const { return identity_; }
 DocumentRevision Scene::document_revision() const { return document_revision_; }
 const std::vector<SceneObject>& Scene::objects() const { return objects_; }
 const std::vector<Material>& Scene::materials() const { return materials_; }

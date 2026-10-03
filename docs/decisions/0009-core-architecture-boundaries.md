@@ -62,11 +62,14 @@ aggregate frontend/editor object merely because current code does. Filesystem/do
 to use nlohmann/json; no JSON abstraction is required. File selection and dialog presentation belong to
 frontend/platform integration, while opening or saving a selected path is a Core/document operation.
 
-The renderer will consume only renderer-relevant Core/Scene representations or queries rather than aggregate
+The renderer consumes only renderer-relevant Core/Scene representations or queries rather than aggregate
 editor/frontend state. GPU resources, GLES handles, shaders, GLSL, framebuffers, and render caches remain below
 the renderer/backend boundary. Renderer invalidation and synchronization are not frontend responsibilities.
-The final extraction representation and cache-invalidation mechanism remain deferred. AI3 retains one concrete
-GLES renderer; this decision introduces neither a generic renderer abstraction nor Vulkan-oriented design.
+The concrete renderer uses non-persisted runtime Scene identity to invalidate prior-document caches and retains
+per-object geometry based on complete geometry-defining inputs within one identity. Application composition
+owns renderer lifetime, and a narrow concrete presenter converts its renderer-owned viewport output for ImGui.
+AI3 retains one concrete GLES renderer; this decision introduces neither a generic renderer abstraction nor
+Vulkan-oriented design.
 
 SDL remains outside Core and owns concrete platform responsibilities including windowing, events, display
 scale, GLES context creation, buffer swapping, and currently used native integration. Application may eventually

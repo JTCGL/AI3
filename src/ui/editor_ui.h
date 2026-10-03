@@ -23,7 +23,8 @@ class EditorUi
 {
     public:
     EditorUi(EditorState& state, ViewportView& viewport_view, Localization& localization,
-             SDL_Window* window, float content_scale, float ui_scale, float font_size);
+             ViewportRenderer& viewport_renderer, SDL_Window* window, float content_scale,
+             float ui_scale, float font_size);
     void draw(bool& running);
     bool request_quit();
     void set_scale_diagnostics(float content_scale, float ui_scale, float font_size);
@@ -55,7 +56,7 @@ class EditorUi
     DocumentSession document_session_;
     ViewportView& viewport_view_;
     TranslationInteractionController translation_controller_;
-    ViewportRenderer viewport_renderer_;
+    ViewportRenderer& viewport_renderer_;
     Localization& localization_;
     SDL_Window* window_ = nullptr;
     std::shared_ptr<SceneDialogState> dialog_state_;

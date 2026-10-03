@@ -183,8 +183,10 @@ void EditHistory::restore(const Snapshot& snapshot)
     const Snapshot current = capture();
     if (snapshots_equal(current, snapshot))
         return;
+    const SceneIdentity identity = scene_.identity_;
     const DocumentRevision revision = scene_.document_revision_;
     scene_ = snapshot.scene;
+    scene_.identity_ = identity;
     scene_.document_revision_ = revision;
     if (workspace_.selection() != no_object &&
         scene_.find_object(workspace_.selection()) == nullptr)

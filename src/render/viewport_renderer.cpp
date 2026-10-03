@@ -279,6 +279,11 @@ void ViewportRenderer::clear_geometry_cache()
 
 void ViewportRenderer::synchronize_geometry_cache(const Scene& scene)
 {
+    if (cached_scene_identity_ != scene.identity())
+    {
+        clear_geometry_cache();
+        cached_scene_identity_ = scene.identity();
+    }
     std::unordered_set<ObjectId> live_ids;
     for (const SceneObject& object : scene.objects())
         live_ids.insert(object.id);

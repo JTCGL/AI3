@@ -124,13 +124,19 @@ TEST_CASE("transactional load advances revision only when document state changes
 
     ai3::Scene destination;
     const auto initial = destination.document_revision();
+    const auto initial_identity = destination.identity();
     REQUIRE(ai3::deserialize_scene_document(document, destination));
     CHECK(destination.document_revision() == initial + 1);
+    CHECK(destination.identity() != initial_identity);
     const auto loaded = destination.document_revision();
+    const auto loaded_identity = destination.identity();
     REQUIRE(ai3::deserialize_scene_document(document, destination));
     CHECK(destination.document_revision() == loaded);
+    CHECK(destination.identity() != loaded_identity);
+    const auto replacement_identity = destination.identity();
     CHECK_FALSE(ai3::deserialize_scene_document("invalid", destination));
     CHECK(destination.document_revision() == loaded);
+    CHECK(destination.identity() == replacement_identity);
 }
 
 TEST_CASE("mixed Scene Document preserves ordering identity hierarchy local state and semantics")

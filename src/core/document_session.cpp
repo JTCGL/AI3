@@ -152,6 +152,7 @@ WorkspacePersistenceResult DocumentSession::save_workspace()
 void DocumentSession::new_document()
 {
     scene_.reset_scene();
+    scene_.establish_new_identity();
     workspace_.transition_document();
     history_.rebaseline();
     document_path_.clear();

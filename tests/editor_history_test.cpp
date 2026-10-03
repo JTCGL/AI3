@@ -20,13 +20,16 @@ TEST_CASE("transactions group live mutations and support undo redo cancel and no
     ai3::Workspace workspace;
     ai3::EditHistory history(scene, workspace);
     ai3::EditOperations operations(scene, workspace, history);
+    const ai3::SceneIdentity identity = scene.identity();
     REQUIRE(transact(history, [&] { operations.create_sphere("Sphere"); }));
     CHECK(history.can_undo());
     CHECK(scene.objects().size() == 1);
     REQUIRE(history.undo());
     CHECK(scene.objects().empty());
+    CHECK(scene.identity() == identity);
     REQUIRE(history.redo());
     CHECK(scene.objects().size() == 1);
+    CHECK(scene.identity() == identity);
 
     REQUIRE(history.begin_transaction());
     operations.rename_object(1, "Intermediate");
@@ -46,6 +49,7 @@ TEST_CASE("transactions group live mutations and support undo redo cancel and no
     operations.set_sphere(1, {4.0F});
     REQUIRE(history.cancel_transaction());
     CHECK(scene.find_object(1)->sphere.radius_meters == doctest::Approx(1.0F));
+    CHECK(scene.identity() == identity);
 }
 
 TEST_CASE("history restores exact authoritative scene state and allocator metadata")
